@@ -1,6 +1,6 @@
 {
   "name": "tv2026",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "IPTV VOD movie downloader & player (Xtream Codes) — Electron desktop app",
   "author": "charles.meunier@speos.be",
   "license": "MIT",

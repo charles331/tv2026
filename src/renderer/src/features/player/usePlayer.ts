@@ -31,6 +31,8 @@ export interface PlayerController {
   setVolume: (volume: number, muted?: boolean) => Promise<void>
   toggleMute: () => Promise<void>
   setFullscreen: (fullscreen: boolean) => Promise<void>
+  cycleSubtitle: () => Promise<void>
+  cycleAudio: () => Promise<void>
 }
 
 export function usePlayer(): PlayerController {
@@ -114,6 +116,9 @@ export function usePlayer(): PlayerController {
     [apply]
   )
 
+  const cycleSubtitle = useCallback(() => apply(api().player.cycleSubtitle()), [apply])
+  const cycleAudio = useCallback(() => apply(api().player.cycleAudio()), [apply])
+
   return {
     status,
     unavailable,
@@ -124,6 +129,8 @@ export function usePlayer(): PlayerController {
     seek,
     setVolume,
     toggleMute,
-    setFullscreen
+    setFullscreen,
+    cycleSubtitle,
+    cycleAudio
   }
 }

@@ -328,5 +328,15 @@ export const handlers: IpcHandlers = {
     return ok(await playerController.setFullscreen({ fullscreen: optionalBoolean(req, 'fullscreen') ?? false }))
   },
 
-  [InvokeChannels.PLAYER_STATUS]: () => ok(playerController.getStatus())
+  [InvokeChannels.PLAYER_STATUS]: () => ok(playerController.getStatus()),
+
+  [InvokeChannels.PLAYER_CYCLE_SUBTITLE]: async () => ok(await playerController.cycleSubtitle()),
+  [InvokeChannels.PLAYER_CYCLE_AUDIO]: async () => ok(await playerController.cycleAudio()),
+
+  [InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const visible = optionalBoolean(req, 'visible')
+    assert(visible !== undefined, 'visible is required')
+    return ok(await playerController.setSubtitleVisible(visible))
+  }
 }

@@ -45,7 +45,10 @@ export const InvokeChannels = {
   PLAYER_SEEK: 'player:seek',
   PLAYER_VOLUME: 'player:volume',
   PLAYER_FULLSCREEN: 'player:fullscreen',
-  PLAYER_STATUS: 'player:status'
+  PLAYER_STATUS: 'player:status',
+  PLAYER_CYCLE_SUBTITLE: 'player:cycleSubtitle',
+  PLAYER_CYCLE_AUDIO: 'player:cycleAudio',
+  PLAYER_SET_SUBTITLE_VISIBLE: 'player:setSubtitleVisible'
 } as const
 
 /** One-way event channels (main -> renderer). */

@@ -163,6 +163,18 @@ const api: RendererApi = {
       invoke(InvokeChannels.PLAYER_STATUS) as Promise<
         Result<IpcResponse<typeof InvokeChannels.PLAYER_STATUS>>
       >,
+    cycleSubtitle: () =>
+      invoke(InvokeChannels.PLAYER_CYCLE_SUBTITLE) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_CYCLE_SUBTITLE>>
+      >,
+    cycleAudio: () =>
+      invoke(InvokeChannels.PLAYER_CYCLE_AUDIO) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_CYCLE_AUDIO>>
+      >,
+    setSubtitleVisible: (req) =>
+      invoke(InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE>>
+      >,
     onPosition: (cb) => subscribe(EventChannels.PLAYER_POSITION, cb),
     onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb)
   },

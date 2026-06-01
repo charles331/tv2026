@@ -40,6 +40,7 @@ import type {
   PlayerStatus,
   PlayRequest,
   SeekRequest,
+  SubtitleVisibleRequest,
   VolumeRequest
 } from '../types/player'
 
@@ -95,6 +96,12 @@ export interface PlayerApi {
   setVolume(req: VolumeRequest): Promise<Result<PlayerStatus>>
   setFullscreen(req: FullscreenRequest): Promise<Result<PlayerStatus>>
   status(): Promise<Result<PlayerStatus>>
+  /** Cycle to the next embedded subtitle track. */
+  cycleSubtitle(): Promise<Result<PlayerStatus>>
+  /** Cycle to the next audio track. */
+  cycleAudio(): Promise<Result<PlayerStatus>>
+  /** Show/hide subtitles. */
+  setSubtitleVisible(req: SubtitleVisibleRequest): Promise<Result<PlayerStatus>>
   onPosition(cb: (e: PlayerPositionEvent) => void): Unsubscribe
   onState(cb: (e: PlayerStateEvent) => void): Unsubscribe
 }

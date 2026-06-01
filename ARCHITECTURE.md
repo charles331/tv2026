@@ -258,18 +258,30 @@ const off = connectionLock.onPreemptRequested(async (yield_) => {
 `node-mpv` (même code Windows/POSIX, contrôle total du cycle de vie). Un seul
 process mpv à la fois.
 
-- **Surface vidéo** : embarquage via `--wid=<HWND>` dans la fenêtre principale
-  (`mainWindow.getNativeWindowHandle()`), au-dessus de la zone `#mpv-surface`.
-  Repli sur une fenêtre mpv propre si le handle est indisponible (toujours
-  pilotée par IPC). La validation visuelle (positionnement/superposition) se fait
-  **sur Windows** (pas de GUI/mpv en WSL2).
+- **Surface vidéo : fenêtre mpv DÉDIÉE (pas d'embarquage `--wid`).** L'embarquage
+  dans le HWND Electron est **non fiable** sous Electron/Windows : le compositeur
+  GPU de Chromium repeint toute la fenêtre par-dessus la sous-fenêtre vidéo de
+  mpv → **son présent mais image noire**, et une fenêtre mpv embarquée ne peut pas
+  passer en plein écran. mpv ouvre donc sa propre fenêtre, avec son OSC
+  (`--osc=yes`) et ses raccourcis (`--input-default-bindings=yes` : `f` plein
+  écran, `j`/`J` sous-titres, `#` piste audio, clic droit). Args principaux :
+  `--force-window=yes --keep-open=yes --idle=yes --autofit=70% --keepaspect=yes
+  --hwdec=auto-safe --title=TV2026 — <titre> --sub-auto=fuzzy --network-timeout=30`.
+  La zone `#mpv-surface` du renderer n'est plus un cadre vidéo : elle affiche
+  « Lecture en cours dans la fenêtre vidéo » + un rappel des raccourcis. Le rendu
+  vidéo réel se valide **sur Windows** (pas de GUI/mpv en WSL2).
 - **ConnectionLock** : la source `stream` fait `connectionLock.acquire('playback')`
   AVANT d'ouvrir l'URL provider (la file de DL se met alors en pause) ; release à
   l'arrêt/fin/erreur. La source `local` ne prend PAS le verrou (hors-ligne).
 - **Évènements** : `event:player:position` (position/durée throttlées 500 ms) et
   `event:player:state` (idle/loading/playing/paused/ended/error) via
   `observe_property` (`time-pos`, `duration`, `pause`, `volume`, `mute`,
-  `fullscreen`, `eof-reached`).
+  `fullscreen`, `eof-reached`). `fullscreen` agit sur la fenêtre mpv → le bouton
+  plein écran de l'app fonctionne.
+- **Canaux pistes** (s'ajoutent à play/pause/resume/stop/seek/volume/fullscreen/
+  status) : `player:cycleSubtitle` (`['cycle','sub']`), `player:cycleAudio`
+  (`['cycle','audio']`), `player:setSubtitleVisible` (`set sub-visibility`). Tous
+  renvoient un `PlayerStatus`.
 - **Cycle de vie** : kill mpv + release lock sur `stop()`, fin de fichier, erreur,
   fermeture de fenêtre (`closed`) et `before-quit` → jamais d'orphelin.
 

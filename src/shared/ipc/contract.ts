@@ -43,6 +43,7 @@ import type {
   PlayerStatus,
   PlayRequest,
   SeekRequest,
+  SubtitleVisibleRequest,
   VolumeRequest
 } from '../types/player'
 import type { Page } from '../types/common'
@@ -94,6 +95,12 @@ export interface IpcContract {
   [InvokeChannels.PLAYER_VOLUME]: { request: VolumeRequest; response: PlayerStatus }
   [InvokeChannels.PLAYER_FULLSCREEN]: { request: FullscreenRequest; response: PlayerStatus }
   [InvokeChannels.PLAYER_STATUS]: { request: void; response: PlayerStatus }
+  [InvokeChannels.PLAYER_CYCLE_SUBTITLE]: { request: void; response: PlayerStatus }
+  [InvokeChannels.PLAYER_CYCLE_AUDIO]: { request: void; response: PlayerStatus }
+  [InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE]: {
+    request: SubtitleVisibleRequest
+    response: PlayerStatus
+  }
 }
 
 /** Map of event channel -> payload pushed from main to renderer. */

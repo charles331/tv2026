@@ -11,13 +11,15 @@
  *    and gives precise control over the process lifecycle and property
  *    observation — which is what makes orphan-free, robust playback reliable.
  *
- * 2. Video surface: mpv is embedded into the app's main window via `--wid`
- *    (mpv attaches its video output to the supplied native window handle). On
- *    Electron/Windows this is the classic embedding approach: we pass the
- *    BrowserWindow's HWND so mpv renders over the `#mpv-surface` region of the
- *    renderer. If the window handle is unavailable, mpv falls back to its own
- *    window (still fully controllable over IPC). Visual layering/positioning
- *    can only be validated on the Windows target (no GUI/mpv here in WSL2).
+ * 2. Video surface: mpv renders in its OWN dedicated video window (NOT embedded
+ *    via `--wid`). Embedding into the Electron HWND is unreliable on
+ *    Electron/Windows — Chromium's GPU compositor repaints the whole window over
+ *    mpv's child window, giving sound but a black rectangle, and an embedded mpv
+ *    window cannot go fullscreen. A standalone mpv window with its native OSC +
+ *    default key bindings enabled fixes the black video, fullscreen, and
+ *    subtitle/audio track switching. The app's chrome still drives mpv over IPC
+ *    (play/pause/seek/volume/fullscreen + cycle sub/audio); the renderer shows a
+ *    "playing in the video window" state instead of a fake in-app surface.
  *
  * 3. Connection lock:
  *    - 'stream': acquires connectionLock.acquire('playback') BEFORE opening the
@@ -38,7 +40,6 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import type { BrowserWindow } from 'electron'
 
 import type {
   EventContract,
@@ -87,7 +88,6 @@ export class PlayerError extends Error {
 
 export class PlayerController {
   private emit: PlayerEventEmitter = () => {}
-  private getMainWindow: () => BrowserWindow | null = () => null
 
   private proc: ChildProcess | null = null
   private ipc: MpvIpc | null = null
@@ -98,10 +98,12 @@ export class PlayerController {
   private status: PlayerStatus = idleStatus()
   private lastPositionEmit = 0
 
-  /** Wire the typed emitter + a way to fetch the main window for `--wid`. */
-  attach(emit: PlayerEventEmitter, getMainWindow: () => BrowserWindow | null): void {
+  /**
+   * Wire the typed event emitter (called once from main/index.ts). mpv renders
+   * in its own window now, so the controller no longer needs the BrowserWindow.
+   */
+  attach(emit: PlayerEventEmitter): void {
     this.emit = emit
-    this.getMainWindow = getMainWindow
   }
 
   /** Current snapshot of the player state. */
@@ -232,16 +234,29 @@ export class PlayerController {
     // authoritative playing/paused state once mpv starts decoding.
   }
 
-  /** Compose mpv CLI args: idle control mode + embedded surface + tuned output. */
-  private buildMpvArgs(ipcPath: string, url: string, _req: PlayRequest): string[] {
-    const args = [
+  /**
+   * Compose mpv CLI args for a STANDALONE video window (no `--wid` embedding).
+   * The window carries mpv's native OSC + default key bindings so the user can
+   * fullscreen (f), cycle subtitles (j/J), cycle audio (#), right-click menu,
+   * etc., directly — while the app chrome drives the same actions over IPC.
+   */
+  private buildMpvArgs(ipcPath: string, url: string, req: PlayRequest): string[] {
+    const winTitle = req.title ? `TV2026 — ${req.title}` : 'TV2026'
+    return [
       `--input-ipc-server=${ipcPath}`,
       '--idle=yes', // stay alive between files / after end-file
-      '--force-window=yes', // ensure a render surface exists immediately
+      '--force-window=yes', // open the video window immediately
       '--keep-open=yes', // don't quit at end-of-file; we control teardown
-      '--osc=no', // our renderer draws the chrome
-      '--input-default-bindings=no',
       '--no-terminal',
+      // Native UX inside mpv's own window:
+      '--osc=yes', // on-screen controller
+      '--input-default-bindings=yes', // f=fullscreen, j/J=subs, #=audio, etc.
+      // Comfortable standalone window.
+      `--title=${winTitle}`,
+      '--autofit=70%',
+      '--keepaspect=yes',
+      // Smooth playback.
+      '--hwdec=auto-safe',
       // Network resilience for streaming sources.
       '--network-timeout=30',
       '--user-agent=tv2026',
@@ -249,37 +264,6 @@ export class PlayerController {
       '--sub-auto=fuzzy',
       url
     ]
-
-    // Embed mpv's video output into the app window (Windows: HWND via --wid).
-    const wid = this.nativeWindowId()
-    if (wid !== null) {
-      args.splice(1, 0, `--wid=${wid}`)
-    }
-    return args
-  }
-
-  /**
-   * The native window handle to embed mpv into, as the integer mpv's --wid
-   * expects. On Windows getNativeWindowHandle() returns an 8-byte buffer
-   * holding the HWND pointer. Returns null if unavailable (mpv then opens its
-   * own window, still IPC-controlled).
-   */
-  private nativeWindowId(): number | string | null {
-    try {
-      const win = this.getMainWindow()
-      if (!win || win.isDestroyed()) return null
-      const handle = win.getNativeWindowHandle()
-      if (handle.length === 8) {
-        // 64-bit pointer (Windows x64 HWND / X11 returns smaller — handled below).
-        return handle.readBigUInt64LE().toString()
-      }
-      if (handle.length === 4) {
-        return handle.readUInt32LE(0)
-      }
-      return null
-    } catch {
-      return null
-    }
   }
 
   // ---------------------------------------------------------------- IPC wiring
@@ -425,8 +409,28 @@ export class PlayerController {
   }
 
   async setFullscreen(req: FullscreenRequest): Promise<PlayerStatus> {
+    // mpv owns its window now, so toggling its `fullscreen` property fullscreens
+    // the actual video window (the observer syncs status.fullscreen back).
     await this.ipc?.setProperty('fullscreen', req.fullscreen).catch(() => undefined)
     this.status.fullscreen = req.fullscreen
+    return this.getStatus()
+  }
+
+  /** Cycle to the next subtitle track (mpv `cycle sub`). */
+  async cycleSubtitle(): Promise<PlayerStatus> {
+    await this.ipc?.command(['cycle', 'sub']).catch(() => undefined)
+    return this.getStatus()
+  }
+
+  /** Cycle to the next audio track (mpv `cycle audio`). */
+  async cycleAudio(): Promise<PlayerStatus> {
+    await this.ipc?.command(['cycle', 'audio']).catch(() => undefined)
+    return this.getStatus()
+  }
+
+  /** Toggle / set subtitle visibility (mpv `sub-visibility`). */
+  async setSubtitleVisible(visible: boolean): Promise<PlayerStatus> {
+    await this.ipc?.setProperty('sub-visibility', visible).catch(() => undefined)
     return this.getStatus()
   }
 
