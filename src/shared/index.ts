@@ -1,0 +1,9 @@
+/** Barrel for the shared contract layer. Import from '@shared' everywhere. */
+export * from './types/common'
+export * from './types/settings'
+export * from './types/catalog'
+export * from './types/downloads'
+export * from './types/player'
+export * from './ipc/channels'
+export * from './ipc/contract'
+export * from './ipc/api'
