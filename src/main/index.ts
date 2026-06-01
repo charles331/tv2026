@@ -140,10 +140,10 @@ if (!gotLock) {
     downloadManager.attachEmitter(makeEmitter(getWindows))
     downloadManager.start()
 
-    // Wire the mpv player: typed event emitter + the main window for --wid
-    // embedding. Playback acquires the connection lock; the download queue
-    // pauses while the player holds it (handled in DownloadManager via the lock).
-    playerController.attach(makeEmitter(getWindows), () => mainWindow)
+    // Wire the mpv player: typed event emitter. mpv renders in its own video
+    // window. Playback acquires the connection lock; the download queue pauses
+    // while the player holds it (handled in DownloadManager via the lock).
+    playerController.attach(makeEmitter(getWindows))
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)

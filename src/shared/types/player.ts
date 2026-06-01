@@ -54,6 +54,10 @@ export interface FullscreenRequest {
   fullscreen: boolean
 }
 
+export interface SubtitleVisibleRequest {
+  visible: boolean
+}
+
 /** Position tick pushed main -> renderer on the player position channel. */
 export interface PlayerPositionEvent {
   positionSecs: number

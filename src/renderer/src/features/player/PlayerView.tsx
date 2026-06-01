@@ -10,19 +10,21 @@ import {
   IconVolumeMute,
   IconFullscreen,
   IconSubtitles,
-  IconChevronLeft
+  IconChevronLeft,
+  IconFilm
 } from '../../components/ui'
 import { formatDuration } from '../../lib/format'
 import { usePlayer } from './usePlayer'
 
 /**
- * Player chrome: the controls + window framing around the mpv video surface.
+ * Player chrome: the transport controls for the mpv player.
  *
- * The actual video output is rendered by mpv (native window / embedded surface)
- * and will be finalized by the mpv integrator. Here we provide the container,
- * the "préparation" placeholder, and fully-wired transport controls over
- * `window.api.player`. When the backend is a stub it returns NOT_IMPLEMENTED and
- * we show an explicit "lecteur en cours de préparation" state.
+ * mpv renders the video in its OWN dedicated window (embedding into the Electron
+ * window via --wid is unreliable — Chromium repaints over it → black video).
+ * So the in-app surface is NOT a video frame: it shows a "lecture en cours dans
+ * la fenêtre vidéo" state, while these controls drive mpv over IPC
+ * (play/pause/seek/volume/fullscreen + subtitle & audio track cycling). The same
+ * actions are also available directly in the mpv window (right-click / f, j, #).
  */
 export function PlayerView({
   request,
@@ -73,38 +75,60 @@ export function PlayerView({
         <h2 className="truncate text-sm font-medium text-gray-200">{title}</h2>
       </div>
 
-      {/* Video surface area (mpv renders here later) */}
+      {/* Surface area — mpv renders in its own window, so this is informational,
+          NOT a video frame. */}
       <div className="relative flex flex-1 items-center justify-center">
         <div id="mpv-surface" className="absolute inset-0" />
-        {(isLoading || unavailable || status.state === 'idle') && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            {unavailable ? (
-              <>
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-gray-400">
-                  <IconPlay size={26} />
-                </div>
-                <div>
-                  <p className="text-base font-medium text-gray-200">
-                    Lecteur en cours de préparation
-                  </p>
-                  <p className="mt-1 max-w-sm text-sm text-gray-500">
-                    Le moteur de lecture mpv n’est pas encore disponible. Les contrôles s’activeront
-                    automatiquement une fois le lecteur intégré.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <Spinner size={32} />
-                <p className="text-sm text-gray-400">Préparation de la lecture…</p>
-              </>
-            )}
-          </div>
-        )}
-        {status.state === 'error' && (
+        {status.state === 'error' ? (
           <div className="max-w-sm text-center">
             <p className="text-base font-medium text-red-300">Erreur de lecture</p>
             <p className="mt-1 text-sm text-gray-400">{player.error ?? status.error}</p>
+          </div>
+        ) : unavailable ? (
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-gray-400">
+              <IconPlay size={26} />
+            </div>
+            <div>
+              <p className="text-base font-medium text-gray-200">Lecteur indisponible</p>
+              <p className="mt-1 max-w-sm text-sm text-gray-500">
+                Le moteur de lecture mpv n’est pas disponible. Vérifiez que mpv est bien installé
+                avec l’application.
+              </p>
+            </div>
+          </div>
+        ) : isLoading ? (
+          <div className="flex flex-col items-center gap-4 text-center">
+            <Spinner size={32} />
+            <p className="text-sm text-gray-400">Préparation de la lecture…</p>
+          </div>
+        ) : status.state === 'idle' ? (
+          <div className="flex flex-col items-center gap-4 text-center text-gray-400">
+            <IconFilm size={40} />
+            <p className="text-sm">Aucune lecture en cours.</p>
+          </div>
+        ) : (
+          /* playing / paused / ended — video is in mpv's own window */
+          <div className="flex max-w-md flex-col items-center gap-4 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/15 text-accent">
+              <IconFilm size={30} />
+            </div>
+            <div>
+              <p className="text-base font-medium text-gray-100">
+                {status.state === 'paused'
+                  ? 'En pause'
+                  : status.state === 'ended'
+                    ? 'Lecture terminée'
+                    : 'Lecture en cours dans la fenêtre vidéo'}
+              </p>
+              <p className="mt-1 truncate text-sm text-gray-400">{title}</p>
+              <p className="mt-3 text-xs leading-relaxed text-gray-500">
+                La vidéo s’affiche dans une fenêtre dédiée. Utilisez les contrôles ci-dessous, ou
+                directement dans la fenêtre vidéo : <span className="text-gray-400">f</span> plein
+                écran, <span className="text-gray-400">j</span> sous-titres,{' '}
+                <span className="text-gray-400">#</span> piste audio, clic droit pour le menu.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -192,16 +216,28 @@ export function PlayerView({
             <button
               type="button"
               disabled={unavailable}
-              title="Sous-titres"
+              onClick={() => void player.cycleSubtitle()}
+              title="Sous-titres (piste suivante)"
               className="text-gray-300 transition-colors hover:text-white disabled:opacity-40"
-              aria-label="Sous-titres"
+              aria-label="Changer de sous-titres"
             >
               <IconSubtitles size={18} />
             </button>
             <button
               type="button"
               disabled={unavailable}
+              onClick={() => void player.cycleAudio()}
+              title="Piste audio suivante"
+              className="text-xs font-semibold text-gray-300 transition-colors hover:text-white disabled:opacity-40"
+              aria-label="Changer de piste audio"
+            >
+              AUD
+            </button>
+            <button
+              type="button"
+              disabled={unavailable}
               onClick={() => void player.setFullscreen(!status.fullscreen)}
+              title="Plein écran (fenêtre vidéo)"
               className="text-gray-300 transition-colors hover:text-white disabled:opacity-40"
               aria-label="Plein écran"
             >
