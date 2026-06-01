@@ -1,0 +1,78 @@
+name: Build Windows
+
+# Pousser un tag de version (ex. `git tag v0.1.0 && git push origin v0.1.0`)
+# déclenche un build Windows et publie une Release GitHub avec l'installeur.
+# `workflow_dispatch` permet aussi de lancer un build à la main (sans publier).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write # nécessaire pour créer/mettre à jour la Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # --frozen-lockfile = respecte pnpm-lock.yaml à l'identique.
+        # Le postinstall recompile better-sqlite3 pour l'ABI Electron.
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle mpv (best-effort)
+        # Récupère un build mpv Windows x64 et le place dans resources/bin/win/
+        # pour que la lecture vidéo marche dans l'app publiée. Non bloquant :
+        # si ça échoue, le build continue (le téléchargement reste fonctionnel).
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path resources/bin/win | Out-Null
+          $headers = @{ 'User-Agent' = 'gh-actions'; 'Authorization' = "Bearer $env:GITHUB_TOKEN" }
+          $rel = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest'
+          $asset = $rel.assets | Where-Object { $_.name -like 'mpv-x86_64-*' -and $_.name -like '*.7z' } | Select-Object -First 1
+          Write-Host "mpv asset: $($asset.name)"
+          Invoke-WebRequest -Headers $headers -Uri $asset.browser_download_url -OutFile mpv.7z
+          7z x mpv.7z -ompv-extract -y | Out-Null
+          $exe = Get-ChildItem -Path mpv-extract -Recurse -Filter mpv.exe | Select-Object -First 1
+          Copy-Item $exe.FullName -Destination resources/bin/win/mpv.exe -Force
+          Get-ChildItem -Path $exe.Directory -Filter *.dll | Copy-Item -Destination resources/bin/win/ -Force
+          Write-Host "mpv bundled:"; Get-ChildItem resources/bin/win/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & publish
+        # --publish always : crée/complète la Release GitHub correspondant au tag.
+        # GH_TOKEN est fourni automatiquement par Actions.
+        run: |
+          pnpm run build
+          pnpm exec electron-builder --win --config electron-builder.yml --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts (build manuel)
+        # Pour les builds workflow_dispatch (pas de tag) : récupère l'installeur
+        # depuis l'onglet du run même sans Release.
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TV2026-windows
+          path: |
+            release/*.exe
+            release/*.yml

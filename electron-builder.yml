@@ -1,0 +1,71 @@
+# electron-builder configuration — Windows target (NSIS .exe + portable).
+#
+# IMPORTANT — native module + mpv:
+#  * better-sqlite3 is a NATIVE module. It must be rebuilt for the TARGET
+#    (Windows / Electron ABI), not for the WSL2 dev host. The `postinstall`
+#    and `rebuild` npm scripts call `electron-builder install-app-deps`, which
+#    rebuilds native deps against the bundled Electron. When packaging FROM
+#    WSL2 FOR Windows you must build on Windows (or a Windows CI runner / wine
+#    + prebuilt binaries), because cross-compiling a Windows .node from Linux
+#    is not supported by node-gyp. Recommended: run `npm run package` on a
+#    Windows machine (or GitHub Actions windows-latest).
+#  * The mpv binary (mpv.exe + any required DLLs) is bundled from
+#    resources/bin/win/ via extraResources below. mpv-player-integrator places
+#    the Windows mpv build there. At runtime it resolves to
+#    process.resourcesPath/bin/mpv.exe.
+
+appId: be.speos.tv2026
+productName: TV2026
+copyright: Copyright © 2026 charles.meunier@speos.be
+
+directories:
+  output: release
+  buildResources: build
+
+# Built JS from electron-vite lives in out/. Include package.json + node_modules
+# (native better-sqlite3) — asarUnpack keeps the .node loadable.
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+
+# Bundle the mpv Windows binary (placed by mpv-player-integrator).
+extraResources:
+  - from: resources/bin/win
+    to: bin
+    filter:
+      - '**/*'
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: TV2026
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+# Native module rebuild against the Electron ABI before packaging.
+npmRebuild: true
+
+# Where updates are published / fetched from. electron-updater reads the
+# latest.yml of the GitHub Release to auto-update installed apps.
+publish:
+  provider: github
+  owner: charles331
+  repo: tv2026
