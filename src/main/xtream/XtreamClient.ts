@@ -343,7 +343,12 @@ export class XtreamClient {
       trailer: trailer ? `https://www.youtube.com/watch?v=${trailer}` : null,
       containerExtension: nonEmpty(movie.container_extension ?? null) ?? 'mkv',
       sizeBytes: toInt(info.movie_size),
-      bitrate: toInt(info.bitrate)
+      bitrate: toInt(info.bitrate),
+      // TMDB id comes from the provider; the live rating is filled in later by
+      // catalogService when a TMDB API key is configured.
+      tmdbId: toInt(info.tmdb_id),
+      tmdbRating: null,
+      tmdbVoteCount: null
     }
   }
 

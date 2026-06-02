@@ -15,6 +15,7 @@ import type {
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
+  TmdbKeyStatus,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -64,6 +65,14 @@ export interface SettingsApi {
   get(): Promise<Result<AppSettings>>
   set(patch: Partial<AppSettings>): Promise<Result<AppSettings>>
   pickDownloadDir(): Promise<Result<{ path: string | null }>>
+}
+
+export interface TmdbApi {
+  /** Whether a TMDB key is stored (never reveals the key itself). */
+  getStatus(): Promise<Result<TmdbKeyStatus>>
+  /** Store/replace the TMDB key (encrypted). Empty string clears it. */
+  setKey(key: string): Promise<Result<TmdbKeyStatus>>
+  clearKey(): Promise<Result<TmdbKeyStatus>>
 }
 
 export interface CatalogApi {
@@ -124,6 +133,7 @@ export interface RendererApi {
   app: AppApi
   connection: ConnectionApi
   settings: SettingsApi
+  tmdb: TmdbApi
   catalog: CatalogApi
   downloads: DownloadsApi
   player: PlayerApi

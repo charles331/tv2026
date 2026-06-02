@@ -23,7 +23,7 @@
  */
 
 import { createWriteStream } from 'fs'
-import { rename, stat, statfs, unlink, mkdir } from 'fs/promises'
+import { stat, statfs, unlink, mkdir } from 'fs/promises'
 import { dirname } from 'path'
 import { pipeline } from 'stream/promises'
 import { Transform } from 'stream'
@@ -48,7 +48,8 @@ import {
   headerValue,
   parseContentRangeTotal,
   describeError,
-  formatBytes
+  formatBytes,
+  renameWithRetry
 } from './helpers'
 
 const USER_AGENT =
@@ -384,6 +385,18 @@ export class DownloadManager {
         downloadsRepo.updateProgress(item.id, resumeFrom, item.totalBytes)
       }
 
+      // Fast-path: the .part already holds the complete file (e.g. the transfer
+      // finished but the final rename failed — a transient Windows lock, EBUSY).
+      // Just finalize it; no need to re-open a connection or re-download.
+      if (item.totalBytes && resumeFrom >= item.totalBytes) {
+        downloadsRepo.updateProgress(item.id, item.totalBytes, item.totalBytes)
+        await renameWithRetry(part, dest)
+        downloadsRepo.updateStatus(item.id, 'completed')
+        this.emitState(item.id, item.streamId, 'completed', { destPath: dest })
+        downloadsRepo.archiveToHistory(item.id, 'completed')
+        return
+      }
+
       const headers: Record<string, string> = {
         'user-agent': USER_AGENT,
         accept: '*/*'
@@ -499,8 +512,8 @@ export class DownloadManager {
         throw new TransferInterrupt(this.active.interruptReason)
       }
 
-      // ---- complete: atomic rename .part -> final ----
-      await rename(part, dest)
+      // ---- complete: atomic rename .part -> final (retry transient Win locks) ----
+      await renameWithRetry(part, dest)
       downloadsRepo.updateStatus(item.id, 'completed')
       this.emitState(item.id, item.streamId, 'completed', { destPath: dest })
       downloadsRepo.archiveToHistory(item.id, 'completed')

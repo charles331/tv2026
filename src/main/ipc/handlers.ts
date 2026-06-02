@@ -29,6 +29,7 @@ import { settingsRepo, catalogRepo, downloadsRepo } from '../store'
 import { downloadManager } from '../downloads/DownloadManager'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
+import * as tmdbKey from '../secrets/tmdbKey'
 import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
 import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
 import {
@@ -150,6 +151,24 @@ export const handlers: IpcHandlers = {
     const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
     if (res.canceled || res.filePaths.length === 0) return ok({ path: null })
     return ok({ path: res.filePaths[0]! })
+  },
+
+  // ---------------- TMDB API key (encrypted secret) ----------------
+  [InvokeChannels.TMDB_GET_STATUS]: () => ok(tmdbKey.getTmdbKeyStatus()),
+
+  [InvokeChannels.TMDB_SET_KEY]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const key = requireString(req, 'key', 128)
+    if (key.trim() && !tmdbKey.isEncryptionAvailable()) {
+      return err('UNKNOWN', 'OS encryption (safeStorage) is unavailable; cannot store the key securely.')
+    }
+    tmdbKey.setTmdbKey(key)
+    return ok(tmdbKey.getTmdbKeyStatus())
+  },
+
+  [InvokeChannels.TMDB_CLEAR_KEY]: () => {
+    tmdbKey.clearTmdbKey()
+    return ok(tmdbKey.getTmdbKeyStatus())
   },
 
   // ---------------- catalogue (real: cache reads + provider refresh/getInfo) ----------------
