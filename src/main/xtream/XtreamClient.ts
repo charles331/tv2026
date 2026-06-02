@@ -24,12 +24,17 @@ import { request, Agent } from 'undici'
 import type { XtreamCredentials } from '@shared/index'
 import type { VodCategory, VodInfo, VodStream } from '@shared/index'
 import type { Episode, Season, SeriesCategory, SeriesInfo, SeriesStream } from '@shared/index'
+import type { EpgEntry, LiveCategory, LiveStream } from '@shared/index'
 import type {
   RawAccountResponse,
+  RawEpgListing,
   RawEpisode,
+  RawLiveCategory,
+  RawLiveStream,
   RawSeries,
   RawSeriesCategory,
   RawSeriesInfoResponse,
+  RawShortEpgResponse,
   RawVodCategory,
   RawVodInfoResponse,
   RawVodStream,
@@ -317,6 +322,61 @@ export class XtreamClient {
     return this.mapSeriesInfo(seriesId, raw)
   }
 
+  // ---------------- live ----------------
+
+  /** Fetch all live categories. */
+  async getLiveCategories(): Promise<LiveCategory[]> {
+    const raw = await this.apiGet<RawLiveCategory[]>({ action: 'get_live_categories' })
+    if (!Array.isArray(raw)) {
+      throw new XtreamError('MALFORMED', 'get_live_categories did not return an array.')
+    }
+    return raw.map((c) => ({
+      categoryId: String(c.category_id),
+      categoryName: c.category_name ?? '',
+      parentId: toInt(c.parent_id) ?? 0
+    }))
+  }
+
+  /** Fetch live channels, optionally filtered by category. */
+  async getLiveStreams(categoryId?: string): Promise<LiveStream[]> {
+    const params: Record<string, string> = { action: 'get_live_streams' }
+    if (categoryId) params.category_id = categoryId
+    const raw = await this.apiGet<RawLiveStream[]>(params)
+    if (!Array.isArray(raw)) {
+      throw new XtreamError('MALFORMED', 'get_live_streams did not return an array.')
+    }
+    const out: LiveStream[] = []
+    for (const s of raw) {
+      const mapped = this.mapLiveStream(s, categoryId)
+      if (mapped) out.push(mapped)
+    }
+    return out
+  }
+
+  /** Fetch the short EPG (now/next) for one channel. Empty array if none. */
+  async getShortEpg(streamId: number, limit = 2): Promise<EpgEntry[]> {
+    const raw = await this.apiGet<RawShortEpgResponse>({
+      action: 'get_short_epg',
+      stream_id: String(streamId),
+      limit: String(limit)
+    })
+    const listings = raw?.epg_listings
+    if (!Array.isArray(listings)) return []
+    return listings.map((l) => this.mapEpg(l))
+  }
+
+  /**
+   * Build the stable live stream URL: `/live/USER/PASS/{streamId}.{ext}`.
+   * Default extension is `ts` (mpv also handles `m3u8`). Same redirect/lock
+   * rules as the other stream URLs (playback acquires the ConnectionLock).
+   */
+  buildLiveUrl(streamId: number, ext = 'ts'): string {
+    const cleanExt = ext.replace(/^\.+/, '').trim() || 'ts'
+    return `${this.baseUrl}/live/${encodeURIComponent(this.creds.username)}/${encodeURIComponent(
+      this.creds.password
+    )}/${streamId}.${cleanExt}`
+  }
+
   /**
    * Build the stable episode file URL: `/series/USER/PASS/{episodeId}.{ext}`.
    * Same redirect/Range/ConnectionLock rules as buildMovieUrl. `episodeId` is the
@@ -516,5 +576,42 @@ export class XtreamClient {
       rating: toNum(epInfo.rating),
       image: nonEmpty(epInfo.movie_image ?? null) ?? nonEmpty(epInfo.cover_big ?? null)
     }
+  }
+
+  // ---------------- live mappers ----------------
+
+  /** Returns null for channels without a usable stream_id. */
+  private mapLiveStream(s: RawLiveStream, fallbackCategoryId?: string): LiveStream | null {
+    const streamId = toInt(s.stream_id)
+    if (streamId === null) return null
+    return {
+      streamId,
+      name: s.name ?? '',
+      icon: nonEmpty(s.stream_icon ?? null),
+      number: toInt(s.num),
+      epgChannelId: nonEmpty(s.epg_channel_id ?? null),
+      categoryId: nonEmpty(s.category_id ?? null) ?? fallbackCategoryId ?? '',
+      hasArchive: toInt(s.tv_archive) === 1
+    }
+  }
+
+  private mapEpg(l: RawEpgListing): EpgEntry {
+    return {
+      title: decodeBase64(l.title) || '(sans titre)',
+      description: nonEmpty(decodeBase64(l.description)),
+      startSecs: toInt(l.start_timestamp),
+      endSecs: toInt(l.stop_timestamp),
+      nowPlaying: toInt(l.now_playing) === 1
+    }
+  }
+}
+
+/** Decode a base64 string (EPG titles/descriptions are base64). Safe on junk. */
+function decodeBase64(v: string | null | undefined): string {
+  if (!v) return ''
+  try {
+    return Buffer.from(v, 'base64').toString('utf-8')
+  } catch {
+    return ''
   }
 }
