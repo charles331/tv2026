@@ -19,6 +19,7 @@ import type {
   ConnectionTestResult,
   CredentialsStatus,
   TmdbKeyStatus,
+  UpdateCheckOutcome,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -76,6 +77,7 @@ import type { InvokeChannels, EventChannels } from './channels'
 export interface IpcContract {
   // app
   [InvokeChannels.APP_INFO]: { request: void; response: AppInfo }
+  [InvokeChannels.APP_CHECK_UPDATES]: { request: void; response: UpdateCheckOutcome }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }

@@ -34,6 +34,7 @@ import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
 import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
 import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
 import { refreshLive, getShortEpg } from '../xtream/liveService'
+import { checkForUpdatesNow } from '../updater'
 import {
   assert,
   assertPathWithin,
@@ -84,6 +85,8 @@ function joinPath(dir: string, fileName: string): string {
 export const handlers: IpcHandlers = {
   // ---------------- app (real) ----------------
   [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion() }),
+
+  [InvokeChannels.APP_CHECK_UPDATES]: async () => ok(await checkForUpdatesNow()),
 
   // ---------------- connection / settings (real) ----------------
   [InvokeChannels.CONNECTION_TEST]: async () => {

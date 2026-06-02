@@ -13,6 +13,7 @@
 export const InvokeChannels = {
   // --- app ---
   APP_INFO: 'app:info', // app metadata (version) for the renderer
+  APP_CHECK_UPDATES: 'app:checkUpdates', // manual "check for updates" trigger
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',

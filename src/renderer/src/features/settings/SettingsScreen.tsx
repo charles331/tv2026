@@ -62,6 +62,8 @@ export function SettingsScreen({
   const [tmdbMessage, setTmdbMessage] = useState<string | null>(null)
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateMessage, setUpdateMessage] = useState<{ tone: 'ok' | 'info' | 'error'; text: string } | null>(null)
 
   // Prefill from stored (non-secret) status.
   useEffect(() => {
@@ -249,6 +251,25 @@ export function SettingsScreen({
       setLiveError(describeError(err))
     } finally {
       setRefreshingLive(false)
+    }
+  }, [])
+
+  const handleCheckUpdates = useCallback(async () => {
+    setCheckingUpdate(true)
+    setUpdateMessage(null)
+    try {
+      const r = await api().app.checkForUpdates()
+      if (!r.ok) {
+        setUpdateMessage({ tone: 'error', text: describeError(new Error(r.error.message)) })
+        return
+      }
+      const o = r.data
+      const tone = o.status === 'error' ? 'error' : o.status === 'available' ? 'ok' : 'info'
+      setUpdateMessage({ tone, text: o.message ?? o.status })
+    } catch (err) {
+      setUpdateMessage({ tone: 'error', text: describeError(err) })
+    } finally {
+      setCheckingUpdate(false)
     }
   }, [])
 
@@ -534,10 +555,34 @@ export function SettingsScreen({
         <div className="flex items-center gap-3">
           <h2 className="text-base font-medium text-gray-100">Nouveautés</h2>
           {appVersion && <Badge tone="neutral">Version {appVersion}</Badge>}
+          <Button
+            className="ml-auto"
+            variant="secondary"
+            size="sm"
+            icon={!checkingUpdate ? <IconRefresh size={14} /> : undefined}
+            loading={checkingUpdate}
+            onClick={handleCheckUpdates}
+          >
+            Vérifier les mises à jour
+          </Button>
         </div>
         <p className="mt-1 text-xs text-gray-500">
           Historique des modifications de l’application.
         </p>
+        {updateMessage && (
+          <p
+            className={
+              'mt-2 text-sm ' +
+              (updateMessage.tone === 'error'
+                ? 'text-red-300'
+                : updateMessage.tone === 'ok'
+                  ? 'text-emerald-300'
+                  : 'text-gray-400')
+            }
+          >
+            {updateMessage.text}
+          </p>
+        )}
 
         <ol className="mt-4 space-y-4">
           {CHANGELOG.map((entry) => {
