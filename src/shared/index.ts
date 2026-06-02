@@ -2,6 +2,7 @@
 export * from './types/common'
 export * from './types/settings'
 export * from './types/catalog'
+export * from './types/series'
 export * from './types/downloads'
 export * from './types/player'
 export * from './ipc/channels'
