@@ -85,18 +85,32 @@ Releases, la télécharge en arrière-plan, et l'installe à la prochaine fermet
 > La cible est **Windows**. `better-sqlite3` est un module natif qui doit être
 > compilé pour Windows : **on ne peut pas produire le `.exe` depuis Linux/WSL2**.
 
-### Option A — via GitHub Actions (recommandé)
+### Option A — via GitHub Actions (recommandé, automatique)
 
-Le workflow [`.github/workflows/build-windows.yml`](.github/workflows/build-windows.yml)
-compile et publie automatiquement une Release à chaque tag de version :
+Les Releases sont **entièrement automatisées** par
+[`.github/workflows/release.yml`](.github/workflows/release.yml) (semantic-release).
+À chaque **fusion sur `main`**, les messages de commit ([Conventional
+Commits](https://www.conventionalcommits.org/)) déterminent la prochaine version
+(semver), l'installeur Windows est construit, et une **Release GitHub publiée**
+automatiquement (avec notes de version + `latest.yml` pour l'auto-MAJ).
 
-```bash
-# adapter la "version" dans package.json, puis :
-git tag v0.1.0
-git push origin v0.1.0
-```
+| Préfixe de commit | Effet sur la version |
+|---|---|
+| `fix:` / `perf:` / `docs:` / `chore:` … | **patch** (0.1.1 → 0.1.2) |
+| `feat:` | **minor** (0.1.1 → 0.2.0) |
+| `feat!:` ou `BREAKING CHANGE:` | **major** (0.1.1 → 1.0.0) |
 
-Un build manuel (sans publier) est aussi possible via l'onglet **Actions → Run workflow**.
+> Aucun `git tag` ni bump manuel de `package.json` : tout est piloté par les commits.
+
+> 🛡️ **Garde-fou.** [`pr-title.yml`](.github/workflows/pr-title.yml) valide que le
+> **titre de chaque PR** respecte la convention. **Fusionnez en _squash_** : le
+> titre de la PR devient alors le commit lu par semantic-release. Pour bloquer la
+> fusion d'un titre non conforme, exigez ce check dans *Settings → Branches →
+> Branch protection*.
+
+Un build de test **sans publication** (artefact téléchargeable) reste possible via
+[`build-windows.yml`](.github/workflows/build-windows.yml) → onglet
+**Actions → Build Windows (manuel) → Run workflow**.
 
 ### Option B — sur une machine Windows
 

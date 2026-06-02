@@ -1,22 +1,39 @@
-name: Build Windows (manuel)
+name: Release
 
-# Build Windows de test, À LA DEMANDE, qui NE PUBLIE PAS de Release.
-# L'installeur/portable est disponible en artefact du run (onglet Actions).
-# Les Releases officielles sont gérées automatiquement par `release.yml`
-# (semantic-release sur `main`).
+# À chaque fusion sur `main`, semantic-release analyse les commits (Conventional
+# Commits), calcule la prochaine version (semver), construit l'installeur Windows
+# et publie une Release GitHub avec des notes générées automatiquement.
+# Aucun bump manuel de version : c'est entièrement piloté par les messages de commit.
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
+# semantic-release a besoin d'écrire le tag/la release ; les autres permissions
+# servent aux commentaires de PR/issues éventuels.
 permissions:
-  contents: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+# Une seule release à la fois (évite deux runs concurrents sur main).
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  build-windows:
+  release:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # semantic-release a besoin de tout l'historique + des tags pour
+          # déterminer la dernière version publiée.
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,13 +47,13 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        # --frozen-lockfile = respecte pnpm-lock.yaml à l'identique.
-        # Le postinstall recompile better-sqlite3 pour l'ABI Electron.
+        # Le postinstall recompile better-sqlite3 pour l'ABI Electron (nécessaire
+        # au packaging Windows).
         run: pnpm install --frozen-lockfile
 
       - name: Bundle mpv (best-effort)
-        # Récupère un build mpv Windows x64 et le place dans resources/bin/win/
-        # pour que la lecture vidéo marche dans l'app. Non bloquant.
+        # Récupère un build mpv Windows x64 dans resources/bin/win/ pour que la
+        # lecture vidéo marche dans l'app publiée. Non bloquant.
         continue-on-error: true
         shell: pwsh
         run: |
@@ -54,15 +71,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & package (sans publication)
-        run: |
-          pnpm run build
-          pnpm exec electron-builder --win --config electron-builder.yml --publish never
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: TV2026-windows
-          path: |
-            release/*.exe
-            release/*.yml
+      - name: Semantic Release
+        # Calcule la version, set la version dans package.json, build + package
+        # (electron-builder --publish never), puis crée la Release GitHub avec les
+        # notes et y attache l'installeur, le portable et latest.yml (auto-update).
+        run: pnpm exec semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

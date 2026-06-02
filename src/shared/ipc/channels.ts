@@ -11,6 +11,9 @@
 
 /** Request/response channels (renderer -> main, awaitable). */
 export const InvokeChannels = {
+  // --- app ---
+  APP_INFO: 'app:info', // app metadata (version) for the renderer
+
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',
   CREDENTIALS_GET: 'credentials:get', // returns status only, never the password

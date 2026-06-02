@@ -42,6 +42,14 @@ import { EventChannels } from '@shared/index'
 import { downloadsRepo } from '../store'
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
+import {
+  HttpStatusError,
+  partPath,
+  headerValue,
+  parseContentRangeTotal,
+  describeError,
+  formatBytes
+} from './helpers'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) tv2026/0.1 Safari/537.36'
@@ -615,17 +623,6 @@ export const downloadManager = new DownloadManager()
 
 // ----------------------------------------------------------------- helpers
 
-class HttpStatusError extends Error {
-  constructor(readonly statusCode: number) {
-    super(`provider returned HTTP ${statusCode}`)
-    this.name = 'HttpStatusError'
-  }
-}
-
-function partPath(finalPath: string): string {
-  return `${finalPath}.part`
-}
-
 async function fileSizeOrZero(p: string): Promise<number> {
   try {
     const s = await stat(p)
@@ -633,48 +630,4 @@ async function fileSizeOrZero(p: string): Promise<number> {
   } catch {
     return 0
   }
-}
-
-function headerValue(h: string | string[] | undefined): string | undefined {
-  if (Array.isArray(h)) return h[0]
-  return h
-}
-
-/** Parse the total length out of `Content-Range: bytes 200-1023/1234`. */
-function parseContentRangeTotal(cr: string | undefined): number | null {
-  if (!cr) return null
-  const m = /\/(\d+)\s*$/.exec(cr.trim())
-  if (!m) return null
-  const n = Number(m[1])
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
-function describeError(e: unknown): string {
-  if (e instanceof HttpStatusError) {
-    if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 512) {
-      return 'Authentication failed or the download token expired. Try again.'
-    }
-    if (e.statusCode === 404) return 'The movie file was not found on the provider.'
-    return `Provider returned HTTP ${e.statusCode}.`
-  }
-  const err = e as NodeJS.ErrnoException
-  if (err?.code === 'ENOSPC') return 'Disk full — no space left to continue the download.'
-  if (err?.code === 'ENOENT') return 'Destination path is unavailable.'
-  if (err?.code === 'EACCES') return 'Permission denied writing to the destination.'
-  if (err?.name === 'ConnectTimeoutError' || err?.name === 'HeadersTimeoutError') {
-    return 'Network timeout reaching the provider.'
-  }
-  if (err?.message) return `Download error: ${err.message}`
-  return 'Unknown download error.'
-}
-
-function formatBytes(n: number): string {
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
-  let v = n
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${v.toFixed(1)} ${units[i]}`
 }
