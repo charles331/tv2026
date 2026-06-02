@@ -7,12 +7,15 @@ export function AppNav({
   route,
   onNavigate,
   activeDownloads,
-  busyReason
+  busyReason,
+  settingsHasUnseen
 }: {
   route: Route
   onNavigate: (route: Route) => void
   activeDownloads: number
   busyReason: 'download' | 'playback' | null
+  /** Show a "what's new" dot on the Réglages item after an update. */
+  settingsHasUnseen?: boolean
 }): ReactElement {
   return (
     <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-surface-sunken py-4">
@@ -47,10 +50,11 @@ export function AppNav({
         />
       )}
       <NavButton
-        label="Réglages"
+        label={settingsHasUnseen ? 'Réglages — nouveautés disponibles' : 'Réglages'}
         active={route === 'settings'}
         onClick={() => onNavigate('settings')}
         icon={<IconSettings size={20} />}
+        dot={settingsHasUnseen}
       />
     </nav>
   )
@@ -61,13 +65,16 @@ function NavButton({
   active,
   onClick,
   icon,
-  badge
+  badge,
+  dot
 }: {
   label: string
   active: boolean
   onClick: () => void
   icon: ReactNode
   badge?: number
+  /** Small notification dot (no count), e.g. "what's new". */
+  dot?: boolean
 }): ReactElement {
   return (
     <button
@@ -87,6 +94,9 @@ function NavButton({
         <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
           {badge}
         </span>
+      )}
+      {badge == null && dot && (
+        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-surface-sunken bg-accent" />
       )}
     </button>
   )

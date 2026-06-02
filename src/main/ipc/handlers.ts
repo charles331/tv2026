@@ -14,7 +14,7 @@
  */
 
 import { join as pathJoin } from 'path'
-import { dialog } from 'electron'
+import { app, dialog } from 'electron'
 import type { IpcHandlers } from '@shared/index'
 import { InvokeChannels, ok, err } from '@shared/index'
 import type {
@@ -79,6 +79,9 @@ function joinPath(dir: string, fileName: string): string {
  * domains return a NOT_IMPLEMENTED Result so the renderer can show a clear state.
  */
 export const handlers: IpcHandlers = {
+  // ---------------- app (real) ----------------
+  [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion() }),
+
   // ---------------- connection / settings (real) ----------------
   [InvokeChannels.CONNECTION_TEST]: async () => {
     try {
@@ -138,6 +141,8 @@ export const handlers: IpcHandlers = {
     }
     if ('diskSpaceWarningBytes' in req)
       patch.diskSpaceWarningBytes = requireInt(req, 'diskSpaceWarningBytes')
+    if ('lastSeenVersion' in req)
+      patch.lastSeenVersion = optionalString(req, 'lastSeenVersion', 32) ?? null
     return ok(settingsRepo.setSettings(patch))
   },
 

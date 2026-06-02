@@ -1,0 +1,66 @@
+name: Lint PR title
+
+# Garde-fou Conventional Commits : valide que le TITRE de la pull request suit la
+# convention `type(scope): sujet`. Avec un merge en "squash", ce titre devient le
+# message de commit sur `main` que semantic-release analyse pour calculer la
+# prochaine version — d'où l'importance de le contraindre.
+#
+# Implémentation volontairement SANS action externe ni appel API : le titre est
+# lu depuis la charge utile de l'événement (variable d'env), donc aucune
+# permission spéciale n'est requise (évite "Resource not accessible by
+# integration"). Les types autorisés sont alignés sur .releaserc.json.
+#
+# Pour rendre le check bloquant : Settings → Branches (ou Rules) → exiger
+# "Valider le titre de la PR".
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  lint-pr-title:
+    name: Valider le titre de la PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier le format Conventional Commits
+        # PR_TITLE est passé en variable d'environnement (pas d'interpolation
+        # directe dans le script) pour éviter toute injection shell.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          echo "Titre de la PR : $PR_TITLE"
+
+          # type(scope facultatif)!?: sujet non vide
+          pattern='^(feat|fix|perf|revert|refactor|docs|style|test|build|ci|chore)(\([a-z0-9 ._/-]+\))?!?: .+'
+
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "::error title=Titre de PR non conforme::'$PR_TITLE'"
+            {
+              echo "Le titre de la PR doit suivre la convention Conventional Commits :"
+              echo "    type(scope facultatif): sujet"
+              echo ""
+              echo "Exemples valides :"
+              echo "    feat: ajoute la section nouveautés"
+              echo "    fix(player): corrige le plein écran"
+              echo "    chore!: migration majeure"
+              echo ""
+              echo "Types autorisés : feat fix perf revert refactor docs style test build ci chore"
+            } >&2
+            exit 1
+          fi
+
+          if [[ "$PR_TITLE" =~ \.$ ]]; then
+            echo "::error title=Titre de PR non conforme::le sujet ne doit pas se terminer par un point."
+            exit 1
+          fi
+
+          echo "✅ Titre conforme."

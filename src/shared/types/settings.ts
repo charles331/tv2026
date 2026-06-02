@@ -48,6 +48,12 @@ export interface AppSettings {
   diskSpaceWarningBytes: number
   /** Auto-pause downloads while the player is streaming. Always true (constraint). */
   pauseDownloadsWhilePlaying: boolean
+  /**
+   * Last app version for which the user has seen the changelog. Drives the
+   * "what's new" badge after an update. `null` until first set; a fresh install
+   * is silently pinned to the current version so no badge shows on day one.
+   */
+  lastSeenVersion: string | null
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -56,5 +62,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   maxConcurrentDownloads: 1,
   diskSpaceWarningBytes: 2 * 1024 * 1024 * 1024, // 2 GiB
-  pauseDownloadsWhilePlaying: true
+  pauseDownloadsWhilePlaying: true,
+  lastSeenVersion: null
+}
+
+/** Lightweight, non-secret app metadata exposed to the renderer. */
+export interface AppInfo {
+  /** Semantic version of the running app (from package.json). */
+  version: string
 }

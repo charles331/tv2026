@@ -39,6 +39,13 @@ function subscribe<C extends EventChannel>(
 }
 
 const api: RendererApi = {
+  app: {
+    info: () =>
+      invoke(InvokeChannels.APP_INFO) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_INFO>>
+      >
+  },
+
   connection: {
     test: () => invoke(InvokeChannels.CONNECTION_TEST) as Promise<Result<IpcResponse<typeof InvokeChannels.CONNECTION_TEST>>>,
     getCredentials: () =>
