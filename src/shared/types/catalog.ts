@@ -60,6 +60,8 @@ export interface VodInfo {
   tmdbRating: number | null
   /** Number of TMDB votes backing `tmdbRating`. */
   tmdbVoteCount: number | null
+  /** IMDb id (e.g. "tt26749549") from TMDB, for an external link. */
+  imdbId: string | null
 }
 
 /** Catalogue listing request, with optional category filter. */

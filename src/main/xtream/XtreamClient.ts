@@ -348,7 +348,8 @@ export class XtreamClient {
       // catalogService when a TMDB API key is configured.
       tmdbId: toInt(info.tmdb_id),
       tmdbRating: null,
-      tmdbVoteCount: null
+      tmdbVoteCount: null,
+      imdbId: null
     }
   }
 
