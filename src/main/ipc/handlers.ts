@@ -354,6 +354,7 @@ export const handlers: IpcHandlers = {
     assert(kind === 'local' || kind === 'stream', 'kind must be "local" or "stream"')
     const playReq: PlayRequest = {
       kind: kind as PlaySourceKind,
+      mediaKind: optionalString(req, 'mediaKind') === 'series' ? 'series' : 'movie',
       filePath: optionalString(req, 'filePath'),
       streamId: optionalNumber(req, 'streamId'),
       containerExtension: optionalString(req, 'containerExtension', 16),

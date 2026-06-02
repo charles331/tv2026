@@ -82,6 +82,13 @@ export const IconFilm = (p: IconProps): ReactElement => (
   </svg>
 )
 
+export const IconTv = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <rect x="3" y="7" width="18" height="13" rx="2" />
+    <path d="m8 3 4 4 4-4" />
+  </svg>
+)
+
 export const IconQueue = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <path d="M4 6h12M4 12h12M4 18h7" />
