@@ -93,6 +93,7 @@ export function MovieDetail({
   const rating = info?.rating ?? stream.rating
   const tmdbRating = info?.tmdbRating ?? null
   const tmdbVotes = info?.tmdbVoteCount ?? null
+  const imdbId = info?.imdbId ?? null
   const poster = info?.posterUrl ?? stream.streamIcon
   const backdrop = info?.backdropUrls?.[0] ?? null
   const trailer = trailerUrl(info?.trailer)
@@ -143,7 +144,16 @@ export function MovieDetail({
               <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                 {year != null && <span>{year}</span>}
-                {tmdbRating != null && tmdbRating > 0 ? (
+                {rating != null && rating > 0 && (
+                  <span
+                    className="flex items-center gap-1 text-amber-300"
+                    title="Note du fournisseur IPTV"
+                  >
+                    <IconStar size={13} /> {formatRating(rating)}
+                    <span className="text-[10px] font-semibold text-amber-300/60">fournisseur</span>
+                  </span>
+                )}
+                {tmdbRating != null && tmdbRating > 0 && (
                   <span
                     className="flex items-center gap-1 text-amber-300"
                     title={
@@ -155,16 +165,17 @@ export function MovieDetail({
                     <IconStar size={13} /> {formatRating(tmdbRating)}
                     <span className="text-[10px] font-semibold text-amber-300/70">TMDB</span>
                   </span>
-                ) : (
-                  rating != null &&
-                  rating > 0 && (
-                    <span
-                      className="flex items-center gap-1 text-amber-300"
-                      title="Note du fournisseur IPTV"
-                    >
-                      <IconStar size={13} /> {formatRating(rating)}
-                    </span>
-                  )
+                )}
+                {imdbId && (
+                  <a
+                    href={`https://www.imdb.com/title/${imdbId}/`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded bg-[#f5c518]/15 px-1.5 py-0.5 text-[11px] font-semibold text-[#f5c518] transition-colors hover:bg-[#f5c518]/25"
+                    title="Voir sur IMDb"
+                  >
+                    IMDb <IconExternal size={11} />
+                  </a>
                 )}
                 {info?.durationSecs != null && info.durationSecs > 0 && (
                   <span>{formatDuration(info.durationSecs)}</span>
