@@ -5,9 +5,13 @@ name: Lint PR title
 # message de commit sur `main` que semantic-release analyse pour calculer la
 # prochaine version — d'où l'importance de le contraindre.
 #
-# Les `types` autorisés sont alignés sur les releaseRules de .releaserc.json.
-# Pour rendre le check bloquant, exigez-le dans Settings → Branches →
-# Branch protection rules (Require status checks → "Valider le titre de la PR").
+# Implémentation volontairement SANS action externe ni appel API : le titre est
+# lu depuis la charge utile de l'événement (variable d'env), donc aucune
+# permission spéciale n'est requise (évite "Resource not accessible by
+# integration"). Les types autorisés sont alignés sur .releaserc.json.
+#
+# Pour rendre le check bloquant : Settings → Branches (ou Rules) → exiger
+# "Valider le titre de la PR".
 on:
   pull_request:
     types:
@@ -19,7 +23,7 @@ on:
       - main
 
 permissions:
-  pull-requests: read
+  contents: read
 
 jobs:
   lint-pr-title:
@@ -27,29 +31,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Vérifier le format Conventional Commits
-        uses: amannn/action-semantic-pull-request@v5
+        # PR_TITLE est passé en variable d'environnement (pas d'interpolation
+        # directe dans le script) pour éviter toute injection shell.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Types autorisés (doivent rester alignés sur .releaserc.json).
-          types: |
-            feat
-            fix
-            perf
-            revert
-            refactor
-            docs
-            style
-            test
-            build
-            ci
-            chore
-          # Le scope est facultatif (ex. `feat(player): ...` ou `feat: ...`).
-          requireScope: false
-          # Le sujet ne doit pas être vide ni se terminer par un point.
-          subjectPattern: ^(?!.*\.$).+$
-          subjectPatternError: |
-            Le sujet "{subject}" est invalide : il doit être non vide et ne pas
-            se terminer par un point.
-          # Message d'aide affiché en cas de titre non conforme.
-          wip: true
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          echo "Titre de la PR : $PR_TITLE"
+
+          # type(scope facultatif)!?: sujet non vide
+          pattern='^(feat|fix|perf|revert|refactor|docs|style|test|build|ci|chore)(\([a-z0-9 ._/-]+\))?!?: .+'
+
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "::error title=Titre de PR non conforme::'$PR_TITLE'"
+            {
+              echo "Le titre de la PR doit suivre la convention Conventional Commits :"
+              echo "    type(scope facultatif): sujet"
+              echo ""
+              echo "Exemples valides :"
+              echo "    feat: ajoute la section nouveautés"
+              echo "    fix(player): corrige le plein écran"
+              echo "    chore!: migration majeure"
+              echo ""
+              echo "Types autorisés : feat fix perf revert refactor docs style test build ci chore"
+            } >&2
+            exit 1
+          fi
+
+          if [[ "$PR_TITLE" =~ \.$ ]]; then
+            echo "::error title=Titre de PR non conforme::le sujet ne doit pas se terminer par un point."
+            exit 1
+          fi
+
+          echo "✅ Titre conforme."
