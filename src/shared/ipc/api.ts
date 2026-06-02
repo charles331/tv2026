@@ -36,6 +36,14 @@ import type {
   SeriesStream
 } from '../types/series'
 import type {
+  EpgEntry,
+  ListLiveRequest,
+  LiveCategory,
+  LiveStream,
+  RefreshLiveResult,
+  SearchLiveRequest
+} from '../types/live'
+import type {
   AddDownloadRequest,
   DownloadItem,
   DownloadKind,
@@ -100,6 +108,15 @@ export interface SeriesApi {
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshSeriesResult>>
 }
 
+export interface LiveApi {
+  listCategories(): Promise<Result<LiveCategory[]>>
+  list(req: ListLiveRequest): Promise<Result<Page<LiveStream>>>
+  search(req: SearchLiveRequest): Promise<Result<Page<LiveStream>>>
+  refresh(req: RefreshCatalogRequest): Promise<Result<RefreshLiveResult>>
+  /** Now/next programmes for a channel (empty when no EPG). */
+  epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
+}
+
 export interface DownloadsApi {
   add(req: AddDownloadRequest): Promise<Result<DownloadItem>>
   list(): Promise<Result<DownloadItem[]>>
@@ -153,6 +170,7 @@ export interface RendererApi {
   tmdb: TmdbApi
   catalog: CatalogApi
   series: SeriesApi
+  live: LiveApi
   downloads: DownloadsApi
   player: PlayerApi
   connectionLock: ConnectionLockApi
