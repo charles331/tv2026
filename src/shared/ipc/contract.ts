@@ -18,6 +18,7 @@ import type {
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
+  TmdbKeyStatus,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -66,6 +67,11 @@ export interface IpcContract {
   [InvokeChannels.SETTINGS_GET]: { request: void; response: AppSettings }
   [InvokeChannels.SETTINGS_SET]: { request: Partial<AppSettings>; response: AppSettings }
   [InvokeChannels.PICK_DOWNLOAD_DIR]: { request: void; response: { path: string | null } }
+
+  // TMDB API key (encrypted; renderer only ever sees a status)
+  [InvokeChannels.TMDB_GET_STATUS]: { request: void; response: TmdbKeyStatus }
+  [InvokeChannels.TMDB_SET_KEY]: { request: { key: string }; response: TmdbKeyStatus }
+  [InvokeChannels.TMDB_CLEAR_KEY]: { request: void; response: TmdbKeyStatus }
 
   // catalogue
   [InvokeChannels.CATALOG_LIST_CATEGORIES]: { request: void; response: VodCategory[] }

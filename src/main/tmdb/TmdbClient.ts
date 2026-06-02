@@ -3,8 +3,9 @@
  * TMDB id, so the UI can show an up-to-date community score instead of the
  * provider's stale/placeholder `rating`.
  *
- * Uses the TMDB API v3 with the user's own API key (settings.tmdbApiKey). Only
- * read-only public data is requested. All failures are swallowed (return null):
+ * Uses the TMDB API v3 with the user's own API key (stored encrypted via
+ * secrets/tmdbKey). Only read-only public data is requested. All failures are
+ * swallowed (return null):
  * the rating is a nice-to-have, never a hard dependency.
  *
  * Docs: https://developer.themoviedb.org/reference/movie-details

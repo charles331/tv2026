@@ -77,6 +77,21 @@ const api: RendererApi = {
       >
   },
 
+  tmdb: {
+    getStatus: () =>
+      invoke(InvokeChannels.TMDB_GET_STATUS) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.TMDB_GET_STATUS>>
+      >,
+    setKey: (key) =>
+      invoke(InvokeChannels.TMDB_SET_KEY, { key }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.TMDB_SET_KEY>>
+      >,
+    clearKey: () =>
+      invoke(InvokeChannels.TMDB_CLEAR_KEY) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.TMDB_CLEAR_KEY>>
+      >
+  },
+
   catalog: {
     listCategories: () =>
       invoke(InvokeChannels.CATALOG_LIST_CATEGORIES) as Promise<

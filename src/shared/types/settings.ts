@@ -54,12 +54,6 @@ export interface AppSettings {
    * is silently pinned to the current version so no badge shows on day one.
    */
   lastSeenVersion: string | null
-  /**
-   * TMDB API key (v3) used to fetch live movie ratings on the detail page. Null
-   * disables the feature (the provider's own rating is shown instead). Low
-   * sensitivity (read-only public data) — stored in plain settings, not secrets.
-   */
-  tmdbApiKey: string | null
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -69,8 +63,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentDownloads: 1,
   diskSpaceWarningBytes: 2 * 1024 * 1024 * 1024, // 2 GiB
   pauseDownloadsWhilePlaying: true,
-  lastSeenVersion: null,
-  tmdbApiKey: null
+  lastSeenVersion: null
+}
+
+/** Whether a TMDB API key is stored (without revealing it). */
+export interface TmdbKeyStatus {
+  hasKey: boolean
+  /** True if OS-level encryption (safeStorage) is available. */
+  encryptionAvailable: boolean
 }
 
 /** Lightweight, non-secret app metadata exposed to the renderer. */
