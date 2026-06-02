@@ -234,6 +234,24 @@ export function SettingsScreen({
     }
   }, [])
 
+  const [refreshingLive, setRefreshingLive] = useState(false)
+  const [liveMessage, setLiveMessage] = useState<string | null>(null)
+  const [liveError, setLiveError] = useState<string | null>(null)
+
+  const handleRefreshLive = useCallback(async () => {
+    setRefreshingLive(true)
+    setLiveError(null)
+    setLiveMessage(null)
+    try {
+      const result = unwrap(await api().live.refresh({ force: true }))
+      setLiveMessage(`Direct à jour : ${result.categories} catégories, ${result.channels} chaînes.`)
+    } catch (err) {
+      setLiveError(describeError(err))
+    } finally {
+      setRefreshingLive(false)
+    }
+  }, [])
+
   const statusInfo = testResult ? STATUS_LABELS[testResult.status] : null
   const encryptionUnavailable = creds && !creds.encryptionAvailable
 
@@ -424,6 +442,32 @@ export function SettingsScreen({
         </div>
         {seriesError && <p className="mt-3 text-sm text-red-300">{seriesError}</p>}
         {seriesMessage && <p className="mt-3 text-sm text-emerald-300">{seriesMessage}</p>}
+      </section>
+
+      {/* Rafraîchir le direct */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Direct (TV)</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Récupère les catégories et la liste des chaînes en direct. Le programme (EPG) est chargé
+          à la volée à l’ouverture de la section Direct.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant="primary"
+            icon={!refreshingLive ? <IconRefresh size={16} /> : undefined}
+            onClick={handleRefreshLive}
+            loading={refreshingLive}
+          >
+            {refreshingLive ? 'Rafraîchissement…' : 'Rafraîchir le direct'}
+          </Button>
+          {refreshingLive && (
+            <span className="flex items-center gap-2 text-sm text-gray-400">
+              <Spinner size={14} /> Patientez, ne fermez pas l’application.
+            </span>
+          )}
+        </div>
+        {liveError && <p className="mt-3 text-sm text-red-300">{liveError}</p>}
+        {liveMessage && <p className="mt-3 text-sm text-emerald-300">{liveMessage}</p>}
       </section>
 
       {/* Notes TMDB */}
