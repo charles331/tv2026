@@ -116,3 +116,83 @@ export interface RawVodMovieData {
   category_id?: string | null
   container_extension?: string | null
 }
+
+/** One entry from `action=get_series_categories` (same shape as VOD). */
+export interface RawSeriesCategory {
+  category_id: string
+  category_name: string
+  parent_id?: StrNum
+}
+
+/** One entry from `action=get_series`. */
+export interface RawSeries {
+  num?: number
+  name?: string
+  series_id?: StrNum
+  cover?: string | null
+  plot?: string | null
+  cast?: string | null
+  director?: string | null
+  genre?: string | null
+  releaseDate?: string | null
+  release_date?: string | null
+  last_modified?: StrNum
+  rating?: StrNum
+  rating_5based?: StrNum
+  backdrop_path?: string[] | string | null
+  youtube_trailer?: string | null
+  tmdb?: StrNum
+  category_id?: string | null
+  category_ids?: number[]
+}
+
+/** `action=get_series_info&series_id=ID` envelope. */
+export interface RawSeriesInfoResponse {
+  info?: RawSeriesInfoDetail
+  seasons?: RawSeason[]
+  /** Episodes keyed by season number (as a string), each a list of episodes. */
+  episodes?: Record<string, RawEpisode[]>
+}
+
+export interface RawSeriesInfoDetail {
+  name?: string
+  title?: string
+  cover?: string | null
+  cover_big?: string | null
+  plot?: string | null
+  cast?: string | null
+  director?: string | null
+  genre?: string | null
+  releaseDate?: string | null
+  release_date?: string | null
+  rating?: StrNum
+  rating_5based?: StrNum
+  backdrop_path?: string[] | string | null
+  youtube_trailer?: string | null
+}
+
+export interface RawSeason {
+  season_number?: StrNum
+  name?: string | null
+  cover?: string | null
+  air_date?: string | null
+}
+
+export interface RawEpisode {
+  /** Episode stream id used in `/series/U/P/{id}.{ext}`. */
+  id?: StrNum
+  episode_num?: StrNum
+  title?: string
+  container_extension?: string | null
+  season?: StrNum
+  info?: RawEpisodeInfo
+}
+
+export interface RawEpisodeInfo {
+  duration_secs?: StrNum
+  duration?: string | null
+  plot?: string | null
+  rating?: StrNum
+  movie_image?: string | null
+  cover_big?: string | null
+}

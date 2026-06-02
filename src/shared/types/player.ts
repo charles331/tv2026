@@ -9,9 +9,11 @@ export type PlaySourceKind = 'local' | 'stream'
 
 export interface PlayRequest {
   kind: PlaySourceKind
+  /** Movie vs series episode — selects the provider URL for kind === 'stream'. */
+  mediaKind?: 'movie' | 'series'
   /** For kind === 'local': absolute file path. */
   filePath?: string
-  /** For kind === 'stream': the stream id to build the provider URL from. */
+  /** For kind === 'stream': the stream id (movie stream id or episode id). */
   streamId?: number
   containerExtension?: string
   /** Display title for window/overlay. */
