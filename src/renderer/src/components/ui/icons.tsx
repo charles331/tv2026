@@ -89,6 +89,13 @@ export const IconTv = (p: IconProps): ReactElement => (
   </svg>
 )
 
+export const IconBroadcast = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+    <path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 19.1a10 10 0 0 0 0-14.2" />
+  </svg>
+)
+
 export const IconQueue = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <path d="M4 6h12M4 12h12M4 18h7" />

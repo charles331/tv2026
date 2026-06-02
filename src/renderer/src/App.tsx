@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import type { Episode, CredentialsStatus, PlayRequest, SeriesStream, VodInfo, VodStream } from '@shared/index'
+import type {
+  Episode,
+  CredentialsStatus,
+  LiveStream,
+  PlayRequest,
+  SeriesStream,
+  VodInfo,
+  VodStream
+} from '@shared/index'
 import { api } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
@@ -9,6 +17,7 @@ import { LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
 import { SeriesScreen } from './features/series/SeriesScreen'
 import { SeriesDetail } from './features/series/SeriesDetail'
+import { LiveScreen } from './features/live/LiveScreen'
 import { DownloadsScreen } from './features/downloads/DownloadsScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { MovieDetail } from './features/movie/MovieDetail'
@@ -91,6 +100,17 @@ function AppShell(): ReactElement {
     )
   }, [])
 
+  const handlePlayChannel = useCallback((channel: LiveStream) => {
+    // Live is stream-only (it acquires the connection lock → downloads pause).
+    setPlayRequest({
+      kind: 'stream',
+      mediaKind: 'live',
+      streamId: channel.streamId,
+      containerExtension: 'ts',
+      title: channel.name
+    })
+  }, [])
+
   const handlePlayEpisode = useCallback(async (episode: Episode, seriesName: string) => {
     setSelectedSeries(null)
     const title = `${seriesName} S${String(episode.season).padStart(2, '0')}E${String(
@@ -146,6 +166,9 @@ function AppShell(): ReactElement {
             onSelectSeries={setSelectedSeries}
             onGoToSettings={() => setRoute('settings')}
           />
+        )}
+        {route === 'live' && (
+          <LiveScreen onPlayChannel={handlePlayChannel} onGoToSettings={() => setRoute('settings')} />
         )}
         {route === 'downloads' && <DownloadsScreen />}
         {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
