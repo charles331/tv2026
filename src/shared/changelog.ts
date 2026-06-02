@@ -18,6 +18,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.0',
+    date: '2026-06-02',
+    changes: [
+      'Note TMDB en direct sur les fiches films (clé API TMDB facultative, stockée chiffrée).',
+      'Correctif : un téléchargement bloqué au renommage sous Windows (antivirus/indexeur, « EBUSY ») se termine désormais tout seul, sans tout retélécharger.'
+    ]
+  },
+  {
+    version: '0.2.1',
+    date: '2026-06-02',
+    changes: [
+      'Releases : l’installeur et la version portable ont enfin des libellés distincts.'
+    ]
+  },
+  {
+    version: '0.2.0',
+    date: '2026-06-02',
+    changes: [
+      'Nouvelle section « Nouveautés » dans les réglages, avec un repère après chaque mise à jour.',
+      'Publication automatique des nouvelles versions (basée sur les messages de commit).'
+    ]
+  },
+  {
     version: '0.1.1',
     date: '2026-06-02',
     changes: ['Correctif de lecture : la vidéo s’ouvre désormais dans une fenêtre mpv dédiée.']
