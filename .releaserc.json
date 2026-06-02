@@ -36,7 +36,8 @@
       "@semantic-release/github",
       {
         "assets": [
-          { "path": "release/*.exe", "label": "TV2026 Windows (installeur + portable)" },
+          { "path": "release/*-x64.exe", "label": "Installeur Windows x64 (.exe)" },
+          { "path": "release/*-portable.exe", "label": "Version portable Windows x64 (.exe)" },
           { "path": "release/*.exe.blockmap" },
           { "path": "release/latest.yml" }
         ],
