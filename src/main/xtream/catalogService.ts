@@ -13,7 +13,7 @@
 import type { RefreshCatalogResult, VodInfo } from '@shared/index'
 import { catalogRepo } from '../store'
 import { getXtreamClient } from './index'
-import { fetchTmdbRating } from '../tmdb/TmdbClient'
+import { fetchTmdbMovie } from '../tmdb/TmdbClient'
 import { getTmdbKey } from '../secrets/tmdbKey'
 
 /** A populated cache exists if it has at least one stream. */
@@ -67,33 +67,40 @@ const VOD_INFO_TTL_MS = 30 * 24 * 60 * 60 * 1000
  */
 export async function getVodInfo(streamId: number): Promise<VodInfo> {
   const cached = catalogRepo.getCachedVodInfo(streamId, VOD_INFO_TTL_MS)
-  if (cached) return enrichWithTmdbRating(cached)
+  if (cached) return enrichFromTmdb(cached)
 
   const client = getXtreamClient()
   try {
     const info = await client.getVodInfo(streamId)
     catalogRepo.cacheVodInfo(info)
-    return enrichWithTmdbRating(info)
+    return enrichFromTmdb(info)
   } finally {
     await client.close()
   }
 }
 
 /**
- * Add the live TMDB rating when a TMDB API key is configured and we have a TMDB
- * id but no rating yet. Best-effort: any failure leaves the provider rating in
- * place. The enriched result is re-cached so subsequent views are instant.
+ * Augment movie detail with the live TMDB rating + IMDb id when a TMDB API key
+ * is configured and we have a TMDB id. Kept ALONGSIDE the provider's own rating
+ * (both are shown in the UI). Best-effort: any failure leaves the info as-is.
+ * The enriched result is re-cached so subsequent views are instant.
  */
-async function enrichWithTmdbRating(info: VodInfo): Promise<VodInfo> {
-  if (info.tmdbRating != null) return info
+async function enrichFromTmdb(info: VodInfo): Promise<VodInfo> {
   if (info.tmdbId == null) return info
+  // Already enriched (rating + imdb resolved) — nothing to do.
+  if (info.tmdbRating != null && info.imdbId != null) return info
   const apiKey = getTmdbKey()
   if (!apiKey) return info
 
-  const tmdb = await fetchTmdbRating(apiKey, info.tmdbId)
+  const tmdb = await fetchTmdbMovie(apiKey, info.tmdbId)
   if (!tmdb) return info
 
-  const enriched: VodInfo = { ...info, tmdbRating: tmdb.rating, tmdbVoteCount: tmdb.voteCount }
+  const enriched: VodInfo = {
+    ...info,
+    tmdbRating: tmdb.rating ?? info.tmdbRating,
+    tmdbVoteCount: tmdb.voteCount ?? info.tmdbVoteCount,
+    imdbId: tmdb.imdbId ?? info.imdbId ?? null
+  }
   catalogRepo.cacheVodInfo(enriched)
   return enriched
 }
