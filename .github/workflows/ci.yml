@@ -1,0 +1,58 @@
+name: CI
+
+# Vérifications de qualité sur chaque PR vers `main` (et sur les push `main`) :
+# lint, typecheck, et tests unitaires. N'installe PAS les binaires natifs
+# (--ignore-scripts) car lint/typecheck/test n'en ont pas besoin → CI rapide.
+#
+# Pour rendre ce check bloquant : exigez "Lint, typecheck & tests" dans la
+# protection de branche.
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# Annule les runs obsolètes quand on pousse de nouveaux commits sur la même réf.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, typecheck & tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # --frozen-lockfile : intégrité du lockfile. --ignore-scripts : on saute
+        # le rebuild natif de better-sqlite3 / le téléchargement d'Electron,
+        # inutiles pour lint/typecheck/test.
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Lint (ESLint)
+        run: pnpm run lint
+
+      - name: Typecheck (tsc)
+        run: pnpm run typecheck
+
+      - name: Tests (Vitest)
+        run: pnpm test
