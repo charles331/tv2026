@@ -197,6 +197,7 @@ export class DownloadManager {
    */
   add(opts: {
     streamId: number
+    kind: 'movie' | 'series'
     name: string
     containerExtension: string
     fileName: string
@@ -204,6 +205,7 @@ export class DownloadManager {
   }): DownloadItem {
     const item = downloadsRepo.addDownload({
       streamId: opts.streamId,
+      kind: opts.kind,
       name: opts.name,
       fileName: opts.fileName,
       destPath: opts.destPath,
@@ -359,10 +361,14 @@ export class DownloadManager {
    * `.part` exists, validate the response, and pipe to disk with backpressure.
    */
   private async transfer(item: DownloadItem): Promise<void> {
-    // Re-resolve the canonical movie URL on every (re)start — the signed 302
-    // target expires and is NEVER persisted.
+    // Re-resolve the canonical URL on every (re)start — the signed 302 target
+    // expires and is NEVER persisted. Movies and series episodes use different
+    // provider endpoints; item.streamId holds the episode id for series.
     const client = getXtreamClient()
-    const url = client.buildMovieUrl(item.streamId, item.containerExtension)
+    const url =
+      item.kind === 'series'
+        ? client.buildEpisodeUrl(item.streamId, item.containerExtension)
+        : client.buildMovieUrl(item.streamId, item.containerExtension)
     // The client is only used to build the URL from decrypted credentials; the
     // transfer uses its own redirect-following dispatcher.
     await client.close().catch(() => undefined)

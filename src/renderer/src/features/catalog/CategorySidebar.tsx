@@ -7,7 +7,9 @@ export function CategorySidebar({
   loading,
   error,
   selectedId,
-  onSelect
+  onSelect,
+  title = 'Catégories',
+  allLabel = 'Tous les films'
 }: {
   categories: VodCategory[]
   loading: boolean
@@ -15,11 +17,15 @@ export function CategorySidebar({
   /** null = all categories. */
   selectedId: string | null
   onSelect: (categoryId: string | null) => void
+  /** Sidebar heading (default "Catégories"). */
+  title?: string
+  /** Label of the "all" entry (default "Tous les films"). */
+  allLabel?: string
 }): ReactElement {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-white/10 bg-surface-raised/60">
       <div className="px-4 py-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">Catégories</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</h2>
       </div>
       <nav className="flex-1 overflow-y-auto px-2 pb-3">
         {loading ? (
@@ -32,7 +38,7 @@ export function CategorySidebar({
           <ul className="space-y-0.5">
             <li>
               <CategoryButton
-                label="Tous les films"
+                label={allLabel}
                 active={selectedId === null}
                 onClick={() => onSelect(null)}
               />

@@ -25,13 +25,14 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
-import { settingsRepo, catalogRepo, downloadsRepo } from '../store'
+import { settingsRepo, catalogRepo, seriesRepo, downloadsRepo } from '../store'
 import { downloadManager } from '../downloads/DownloadManager'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
 import * as tmdbKey from '../secrets/tmdbKey'
 import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
 import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
+import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
 import {
   assert,
   assertPathWithin,
@@ -223,6 +224,54 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  // ---------------- series (cache reads + provider refresh/getInfo) ----------------
+  [InvokeChannels.SERIES_LIST_CATEGORIES]: () => ok(seriesRepo.listCategories()),
+
+  [InvokeChannels.SERIES_LIST]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    return ok(
+      seriesRepo.listSeries({
+        page: requireInt(req, 'page'),
+        pageSize: requireInt(req, 'pageSize'),
+        categoryId: optionalString(req, 'categoryId') ?? null,
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
+      })
+    )
+  },
+
+  [InvokeChannels.SERIES_GET_INFO]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const seriesId = requireInt(req, 'seriesId')
+    try {
+      return ok(await getSeriesInfo(seriesId))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
+  [InvokeChannels.SERIES_SEARCH]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    return ok(
+      seriesRepo.searchSeries({
+        query: requireString(req, 'query', 256),
+        categoryId: optionalString(req, 'categoryId') ?? null,
+        page: requireInt(req, 'page'),
+        pageSize: requireInt(req, 'pageSize')
+      })
+    )
+  },
+
+  [InvokeChannels.SERIES_REFRESH]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const force = Boolean((req as { force?: unknown }).force)
+    try {
+      return ok(await refreshSeries(force))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
   // ---------------- downloads (real engine via DownloadManager) ----------------
   [InvokeChannels.DOWNLOAD_ADD]: (req) => {
     assert(isObject(req), 'request must be an object')
@@ -236,11 +285,13 @@ export const handlers: IpcHandlers = {
     const streamId = requireInt(req, 'streamId')
     const name = requireString(req, 'name', 512)
     const ext = requireString(req, 'containerExtension', 16)
+    const kind: 'movie' | 'series' = optionalString(req, 'kind') === 'series' ? 'series' : 'movie'
     const cleanExt = ext.replace(/^\.+/, '').trim() || 'mkv'
     const fileName = optionalString(req, 'fileName') ?? `${name}.${cleanExt}`
     const safeName = sanitizeFileName(fileName)
     const item = downloadManager.add({
       streamId,
+      kind,
       name,
       containerExtension: cleanExt,
       fileName: safeName,
@@ -288,7 +339,8 @@ export const handlers: IpcHandlers = {
   [InvokeChannels.DOWNLOAD_LOCAL_PATH]: (req) => {
     assert(isObject(req), 'request must be an object')
     const streamId = requireInt(req, 'streamId')
-    const recorded = downloadsRepo.getCompletedPath(streamId)
+    const kind: 'movie' | 'series' = optionalString(req, 'kind') === 'series' ? 'series' : 'movie'
+    const recorded = downloadsRepo.getCompletedPath(streamId, kind)
     // Only report a path if a completed download is recorded AND the file is
     // still present on disk; otherwise the caller falls back to streaming.
     if (recorded && existsSync(recorded)) return ok({ path: recorded })
@@ -302,6 +354,7 @@ export const handlers: IpcHandlers = {
     assert(kind === 'local' || kind === 'stream', 'kind must be "local" or "stream"')
     const playReq: PlayRequest = {
       kind: kind as PlaySourceKind,
+      mediaKind: optionalString(req, 'mediaKind') === 'series' ? 'series' : 'movie',
       filePath: optionalString(req, 'filePath'),
       streamId: optionalNumber(req, 'streamId'),
       containerExtension: optionalString(req, 'containerExtension', 16),

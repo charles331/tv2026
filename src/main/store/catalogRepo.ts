@@ -154,7 +154,8 @@ export function listStreams(req: ListStreamsRequest): Page<VodStream> {
     .prepare(
       `SELECT s.*,
               EXISTS(SELECT 1 FROM download_history h
-                     WHERE h.stream_id = s.stream_id AND h.status = 'completed') AS downloaded
+                     WHERE h.stream_id = s.stream_id AND h.kind = 'movie'
+                       AND h.status = 'completed') AS downloaded
        FROM vod_streams s ${where}
        ORDER BY ${sortCol} ${dir}
        LIMIT ? OFFSET ?`
@@ -185,7 +186,8 @@ export function searchStreams(req: SearchRequest): Page<VodStream> {
     .prepare(
       `SELECT s.*,
               EXISTS(SELECT 1 FROM download_history h
-                     WHERE h.stream_id = s.stream_id AND h.status = 'completed') AS downloaded
+                     WHERE h.stream_id = s.stream_id AND h.kind = 'movie'
+                       AND h.status = 'completed') AS downloaded
        FROM vod_streams s
        WHERE name LIKE ? ESCAPE '\\' ${catClause}
        ORDER BY name COLLATE NOCASE ASC

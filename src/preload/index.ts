@@ -115,6 +115,29 @@ const api: RendererApi = {
       >
   },
 
+  series: {
+    listCategories: () =>
+      invoke(InvokeChannels.SERIES_LIST_CATEGORIES) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.SERIES_LIST_CATEGORIES>>
+      >,
+    list: (req) =>
+      invoke(InvokeChannels.SERIES_LIST, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.SERIES_LIST>>
+      >,
+    getInfo: (seriesId) =>
+      invoke(InvokeChannels.SERIES_GET_INFO, { seriesId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.SERIES_GET_INFO>>
+      >,
+    search: (req) =>
+      invoke(InvokeChannels.SERIES_SEARCH, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.SERIES_SEARCH>>
+      >,
+    refresh: (req) =>
+      invoke(InvokeChannels.SERIES_REFRESH, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.SERIES_REFRESH>>
+      >
+  },
+
   downloads: {
     add: (req) =>
       invoke(InvokeChannels.DOWNLOAD_ADD, req) as Promise<
@@ -144,8 +167,8 @@ const api: RendererApi = {
       invoke(InvokeChannels.DOWNLOAD_CLEAR_COMPLETED) as Promise<
         Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_CLEAR_COMPLETED>>
       >,
-    localPath: (streamId) =>
-      invoke(InvokeChannels.DOWNLOAD_LOCAL_PATH, { streamId }) as Promise<
+    localPath: (streamId, kind) =>
+      invoke(InvokeChannels.DOWNLOAD_LOCAL_PATH, { streamId, kind }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_LOCAL_PATH>>
       >,
     onProgress: (cb) => subscribe(EventChannels.DOWNLOAD_PROGRESS, cb),

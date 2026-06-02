@@ -6,6 +6,7 @@ import {
   ProgressBar,
   IconPause,
   IconResume,
+  IconRefresh,
   IconX,
   IconGrip
 } from '../../components/ui'
@@ -145,6 +146,17 @@ export function DownloadRow({
               onClick={() => onResume(item.id)}
             >
               Reprendre
+            </Button>
+          )}
+          {item.status === 'failed' && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconRefresh size={14} />}
+              onClick={() => onResume(item.id)}
+              title="Relancer le téléchargement (reprend là où il s’est arrêté)"
+            >
+              Réessayer
             </Button>
           )}
           {item.status !== 'completed' && item.status !== 'canceled' && (
