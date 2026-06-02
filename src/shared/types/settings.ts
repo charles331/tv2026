@@ -78,3 +78,18 @@ export interface AppInfo {
   /** Semantic version of the running app (from package.json). */
   version: string
 }
+
+/** Outcome of a manual "check for updates" request. */
+export interface UpdateCheckOutcome {
+  status:
+    | 'dev-disabled' // not a packaged build → auto-update inactive
+    | 'up-to-date' // already on the latest release
+    | 'available' // a newer release exists; it downloads and installs on quit
+    | 'error' // the check failed (offline, no release, etc.)
+  /** Version currently running. */
+  currentVersion: string
+  /** Latest version seen on the update feed, if known. */
+  latestVersion?: string
+  /** Human-readable detail for the UI. */
+  message?: string
+}

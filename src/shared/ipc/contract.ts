@@ -19,6 +19,7 @@ import type {
   ConnectionTestResult,
   CredentialsStatus,
   TmdbKeyStatus,
+  UpdateCheckOutcome,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -38,6 +39,15 @@ import type {
   SeriesInfo,
   SeriesStream
 } from '../types/series'
+import type {
+  EpgEntry,
+  ListLiveRequest,
+  LiveCategory,
+  LiveStream,
+  RefreshLiveResult,
+  SearchLiveRequest,
+  ShortEpgRequest
+} from '../types/live'
 import type {
   AddDownloadRequest,
   DownloadItem,
@@ -67,6 +77,7 @@ import type { InvokeChannels, EventChannels } from './channels'
 export interface IpcContract {
   // app
   [InvokeChannels.APP_INFO]: { request: void; response: AppInfo }
+  [InvokeChannels.APP_CHECK_UPDATES]: { request: void; response: UpdateCheckOutcome }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
@@ -98,6 +109,13 @@ export interface IpcContract {
   [InvokeChannels.SERIES_GET_INFO]: { request: { seriesId: number }; response: SeriesInfo }
   [InvokeChannels.SERIES_SEARCH]: { request: SearchSeriesRequest; response: Page<SeriesStream> }
   [InvokeChannels.SERIES_REFRESH]: { request: RefreshCatalogRequest; response: RefreshSeriesResult }
+
+  // live
+  [InvokeChannels.LIVE_LIST_CATEGORIES]: { request: void; response: LiveCategory[] }
+  [InvokeChannels.LIVE_LIST]: { request: ListLiveRequest; response: Page<LiveStream> }
+  [InvokeChannels.LIVE_SEARCH]: { request: SearchLiveRequest; response: Page<LiveStream> }
+  [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
+  [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
 
   // downloads
   [InvokeChannels.DOWNLOAD_ADD]: { request: AddDownloadRequest; response: DownloadItem }

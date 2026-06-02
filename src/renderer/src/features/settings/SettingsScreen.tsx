@@ -62,6 +62,8 @@ export function SettingsScreen({
   const [tmdbMessage, setTmdbMessage] = useState<string | null>(null)
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateMessage, setUpdateMessage] = useState<{ tone: 'ok' | 'info' | 'error'; text: string } | null>(null)
 
   // Prefill from stored (non-secret) status.
   useEffect(() => {
@@ -231,6 +233,43 @@ export function SettingsScreen({
       setSeriesError(describeError(err))
     } finally {
       setRefreshingSeries(false)
+    }
+  }, [])
+
+  const [refreshingLive, setRefreshingLive] = useState(false)
+  const [liveMessage, setLiveMessage] = useState<string | null>(null)
+  const [liveError, setLiveError] = useState<string | null>(null)
+
+  const handleRefreshLive = useCallback(async () => {
+    setRefreshingLive(true)
+    setLiveError(null)
+    setLiveMessage(null)
+    try {
+      const result = unwrap(await api().live.refresh({ force: true }))
+      setLiveMessage(`Direct à jour : ${result.categories} catégories, ${result.channels} chaînes.`)
+    } catch (err) {
+      setLiveError(describeError(err))
+    } finally {
+      setRefreshingLive(false)
+    }
+  }, [])
+
+  const handleCheckUpdates = useCallback(async () => {
+    setCheckingUpdate(true)
+    setUpdateMessage(null)
+    try {
+      const r = await api().app.checkForUpdates()
+      if (!r.ok) {
+        setUpdateMessage({ tone: 'error', text: describeError(new Error(r.error.message)) })
+        return
+      }
+      const o = r.data
+      const tone = o.status === 'error' ? 'error' : o.status === 'available' ? 'ok' : 'info'
+      setUpdateMessage({ tone, text: o.message ?? o.status })
+    } catch (err) {
+      setUpdateMessage({ tone: 'error', text: describeError(err) })
+    } finally {
+      setCheckingUpdate(false)
     }
   }, [])
 
@@ -426,6 +465,32 @@ export function SettingsScreen({
         {seriesMessage && <p className="mt-3 text-sm text-emerald-300">{seriesMessage}</p>}
       </section>
 
+      {/* Rafraîchir le direct */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Direct (TV)</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Récupère les catégories et la liste des chaînes en direct. Le programme (EPG) est chargé
+          à la volée à l’ouverture de la section Direct.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant="primary"
+            icon={!refreshingLive ? <IconRefresh size={16} /> : undefined}
+            onClick={handleRefreshLive}
+            loading={refreshingLive}
+          >
+            {refreshingLive ? 'Rafraîchissement…' : 'Rafraîchir le direct'}
+          </Button>
+          {refreshingLive && (
+            <span className="flex items-center gap-2 text-sm text-gray-400">
+              <Spinner size={14} /> Patientez, ne fermez pas l’application.
+            </span>
+          )}
+        </div>
+        {liveError && <p className="mt-3 text-sm text-red-300">{liveError}</p>}
+        {liveMessage && <p className="mt-3 text-sm text-emerald-300">{liveMessage}</p>}
+      </section>
+
       {/* Notes TMDB */}
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Notes des films (TMDB)</h2>
@@ -490,10 +555,34 @@ export function SettingsScreen({
         <div className="flex items-center gap-3">
           <h2 className="text-base font-medium text-gray-100">Nouveautés</h2>
           {appVersion && <Badge tone="neutral">Version {appVersion}</Badge>}
+          <Button
+            className="ml-auto"
+            variant="secondary"
+            size="sm"
+            icon={!checkingUpdate ? <IconRefresh size={14} /> : undefined}
+            loading={checkingUpdate}
+            onClick={handleCheckUpdates}
+          >
+            Vérifier les mises à jour
+          </Button>
         </div>
         <p className="mt-1 text-xs text-gray-500">
           Historique des modifications de l’application.
         </p>
+        {updateMessage && (
+          <p
+            className={
+              'mt-2 text-sm ' +
+              (updateMessage.tone === 'error'
+                ? 'text-red-300'
+                : updateMessage.tone === 'ok'
+                  ? 'text-emerald-300'
+                  : 'text-gray-400')
+            }
+          >
+            {updateMessage.text}
+          </p>
+        )}
 
         <ol className="mt-4 space-y-4">
           {CHANGELOG.map((entry) => {

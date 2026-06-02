@@ -18,6 +18,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.5.0',
+    date: '2026-06-02',
+    changes: [
+      'Direct (TV) : nouvelle section pour parcourir les chaînes par catégorie, avec le programme en cours / à suivre (EPG) et la lecture en direct.'
+    ]
+  },
+  {
     version: '0.4.0',
     date: '2026-06-02',
     changes: [
