@@ -54,6 +54,12 @@ export interface VodInfo {
   sizeBytes: number | null
   /** Provider-reported bitrate. */
   bitrate: number | null
+  /** TMDB id from the provider, if known — used to fetch the live TMDB rating. */
+  tmdbId: number | null
+  /** Live TMDB rating (0-10), fetched on demand when a TMDB API key is set. */
+  tmdbRating: number | null
+  /** Number of TMDB votes backing `tmdbRating`. */
+  tmdbVoteCount: number | null
 }
 
 /** Catalogue listing request, with optional category filter. */

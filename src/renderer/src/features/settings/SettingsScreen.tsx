@@ -3,7 +3,8 @@ import type {
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
-  RefreshCatalogResult
+  RefreshCatalogResult,
+  TmdbKeyStatus
 } from '@shared/index'
 import { CHANGELOG } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
@@ -55,6 +56,11 @@ export function SettingsScreen({
 
   const [pickingDir, setPickingDir] = useState(false)
 
+  const [tmdbKey, setTmdbKey] = useState('')
+  const [tmdbStatus, setTmdbStatus] = useState<TmdbKeyStatus | null>(null)
+  const [savingTmdb, setSavingTmdb] = useState(false)
+  const [tmdbMessage, setTmdbMessage] = useState<string | null>(null)
+
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
   // Prefill from stored (non-secret) status.
@@ -72,6 +78,11 @@ export function SettingsScreen({
       .settings.get()
       .then((r) => {
         if (r.ok) setSettings(r.data)
+      })
+    void api()
+      .tmdb.getStatus()
+      .then((r) => {
+        if (r.ok) setTmdbStatus(r.data)
       })
     void api()
       .app.info()
@@ -150,6 +161,41 @@ export function SettingsScreen({
       setCredsError(describeError(err))
     } finally {
       setPickingDir(false)
+    }
+  }, [])
+
+  const handleSaveTmdb = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault()
+      setSavingTmdb(true)
+      setTmdbMessage(null)
+      try {
+        const next = unwrap(await api().tmdb.setKey(tmdbKey.trim()))
+        setTmdbStatus(next)
+        setTmdbKey('')
+        setTmdbMessage(
+          next.hasKey
+            ? 'Clé TMDB enregistrée (chiffrée). Les notes TMDB s’afficheront sur les fiches films.'
+            : 'Clé TMDB effacée. Les fiches affichent à nouveau la note du fournisseur.'
+        )
+      } catch (err) {
+        setTmdbMessage(describeError(err))
+      } finally {
+        setSavingTmdb(false)
+      }
+    },
+    [tmdbKey]
+  )
+
+  const handleClearTmdb = useCallback(async () => {
+    setTmdbMessage(null)
+    try {
+      const next = unwrap(await api().tmdb.clearKey())
+      setTmdbStatus(next)
+      setTmdbKey('')
+      setTmdbMessage('Clé TMDB effacée.')
+    } catch (err) {
+      setTmdbMessage(describeError(err))
     }
   }, [])
 
@@ -332,6 +378,65 @@ export function SettingsScreen({
             Catalogue à jour : {refreshResult.categories} catégories, {refreshResult.streams} films.
           </p>
         )}
+      </section>
+
+      {/* Notes TMDB */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Notes des films (TMDB)</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Par défaut, la note affichée vient du fournisseur (souvent figée ou approximative).
+          Renseignez une clé API <strong>TMDB</strong> (gratuite) pour afficher la note communautaire
+          à jour sur les fiches films. Laissez vide pour désactiver.
+        </p>
+        <p className="mt-1 text-xs text-gray-500">
+          Obtenir une clé :{' '}
+          <a
+            href="https://www.themoviedb.org/settings/api"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent-hover underline"
+          >
+            themoviedb.org → Paramètres → API
+          </a>{' '}
+          (clé « API Key (v3 auth) »).
+        </p>
+
+        {tmdbStatus && !tmdbStatus.encryptionAvailable && (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Le chiffrement OS n’est pas disponible sur cette machine — la clé ne pourra pas être
+            stockée de façon sécurisée.
+          </div>
+        )}
+
+        <form className="mt-4 space-y-3" onSubmit={handleSaveTmdb}>
+          <Field
+            label="Clé API TMDB (v3)"
+            hint={
+              tmdbStatus?.hasKey
+                ? 'Une clé est déjà enregistrée (chiffrée). Saisissez-en une nouvelle pour la remplacer.'
+                : undefined
+            }
+          >
+            <TextInput
+              type="password"
+              autoComplete="off"
+              placeholder={tmdbStatus?.hasKey ? '•••••••• (clé enregistrée)' : 'ex. 0123456789abcdef…'}
+              value={tmdbKey}
+              onChange={(e) => setTmdbKey(e.target.value)}
+            />
+          </Field>
+          {tmdbMessage && <p className="text-sm text-emerald-300">{tmdbMessage}</p>}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" variant="secondary" loading={savingTmdb} disabled={!tmdbKey.trim()}>
+              Enregistrer la clé
+            </Button>
+            {tmdbStatus?.hasKey && (
+              <Button type="button" variant="ghost" onClick={handleClearTmdb}>
+                Effacer
+              </Button>
+            )}
+          </div>
+        </form>
       </section>
 
       {/* Nouveautés (changelog) */}

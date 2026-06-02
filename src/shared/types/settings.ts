@@ -66,6 +66,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lastSeenVersion: null
 }
 
+/** Whether a TMDB API key is stored (without revealing it). */
+export interface TmdbKeyStatus {
+  hasKey: boolean
+  /** True if OS-level encryption (safeStorage) is available. */
+  encryptionAvailable: boolean
+}
+
 /** Lightweight, non-secret app metadata exposed to the renderer. */
 export interface AppInfo {
   /** Semantic version of the running app (from package.json). */

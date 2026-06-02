@@ -23,6 +23,11 @@ export const InvokeChannels = {
   SETTINGS_SET: 'settings:set',
   PICK_DOWNLOAD_DIR: 'settings:pickDownloadDir',
 
+  // --- TMDB API key (encrypted secret) ---
+  TMDB_GET_STATUS: 'tmdb:getStatus',
+  TMDB_SET_KEY: 'tmdb:setKey',
+  TMDB_CLEAR_KEY: 'tmdb:clearKey',
+
   // --- catalogue ---
   CATALOG_LIST_CATEGORIES: 'catalog:listCategories',
   CATALOG_LIST_STREAMS: 'catalog:listStreams',
