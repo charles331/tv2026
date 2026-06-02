@@ -5,6 +5,7 @@ import type {
   CredentialsStatus,
   RefreshCatalogResult
 } from '@shared/index'
+import { CHANGELOG } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import {
   Button,
@@ -54,6 +55,8 @@ export function SettingsScreen({
 
   const [pickingDir, setPickingDir] = useState(false)
 
+  const [appVersion, setAppVersion] = useState<string | null>(null)
+
   // Prefill from stored (non-secret) status.
   useEffect(() => {
     void api()
@@ -69,6 +72,11 @@ export function SettingsScreen({
       .settings.get()
       .then((r) => {
         if (r.ok) setSettings(r.data)
+      })
+    void api()
+      .app.info()
+      .then((r) => {
+        if (r.ok) setAppVersion(r.data.version)
       })
   }, [])
 
@@ -324,6 +332,40 @@ export function SettingsScreen({
             Catalogue à jour : {refreshResult.categories} catégories, {refreshResult.streams} films.
           </p>
         )}
+      </section>
+
+      {/* Nouveautés (changelog) */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-medium text-gray-100">Nouveautés</h2>
+          {appVersion && <Badge tone="neutral">Version {appVersion}</Badge>}
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          Historique des modifications de l’application.
+        </p>
+
+        <ol className="mt-4 space-y-4">
+          {CHANGELOG.map((entry) => {
+            const isCurrent = entry.version === appVersion
+            return (
+              <li
+                key={entry.version}
+                className="rounded-lg border border-white/10 bg-surface-sunken p-4"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-100">v{entry.version}</span>
+                  {isCurrent && <Badge tone="success">Actuelle</Badge>}
+                  <span className="ml-auto text-xs text-gray-500">{entry.date}</span>
+                </div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-300">
+                  {entry.changes.map((change, i) => (
+                    <li key={i}>{change}</li>
+                  ))}
+                </ul>
+              </li>
+            )
+          })}
+        </ol>
       </section>
     </div>
   )

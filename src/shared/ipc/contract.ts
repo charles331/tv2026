@@ -14,6 +14,7 @@
 
 import type { Result } from '../types/common'
 import type {
+  AppInfo,
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
@@ -54,6 +55,9 @@ import type { InvokeChannels, EventChannels } from './channels'
  * `response` is the *unwrapped* success type; the wire type is Result<response>.
  */
 export interface IpcContract {
+  // app
+  [InvokeChannels.APP_INFO]: { request: void; response: AppInfo }
+
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
   [InvokeChannels.CREDENTIALS_GET]: { request: void; response: CredentialsStatus }
