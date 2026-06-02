@@ -11,6 +11,7 @@
 import type { Result } from '../types/common'
 import type { Page } from '../types/common'
 import type {
+  AppInfo,
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
@@ -46,6 +47,11 @@ import type {
 
 /** Unsubscribe function returned by event subscriptions. */
 export type Unsubscribe = () => void
+
+export interface AppApi {
+  /** App metadata (version) for the renderer. */
+  info(): Promise<Result<AppInfo>>
+}
 
 export interface ConnectionApi {
   test(): Promise<Result<ConnectionTestResult>>
@@ -115,6 +121,7 @@ export interface ConnectionLockApi {
 
 /** The complete API exposed at `window.api`. */
 export interface RendererApi {
+  app: AppApi
   connection: ConnectionApi
   settings: SettingsApi
   catalog: CatalogApi

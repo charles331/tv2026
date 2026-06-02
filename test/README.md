@@ -28,6 +28,7 @@ pnpm test:coverage  # avec couverture v8
 | `main/xtream.test.ts` | `src/main/xtream/XtreamClient.ts` | `maskUrl`, `buildMovieUrl`, coercition string→nombre, `auth:0`/HTTP 512/401/403 → `AUTH_FAILED`, corps malformé → `MALFORMED`, mapping catégories/streams/info (`undici` mocké) |
 | `main/downloadHelpers.test.ts` | `src/main/downloads/helpers.ts` | `parseContentRangeTotal` (reprise), `describeError`, `formatBytes`, `partPath`, `headerValue` |
 | `renderer/format.test.ts` | `src/renderer/src/lib/format.ts` | formatage octets/vitesse/durée/ETA/%/note/date/trailer (locale fr) |
+| `shared/changelog.test.ts` | `src/shared/changelog.ts` | intégrité du changelog : entrées bien formées, dates ISO, versions uniques, version courante de `package.json` documentée |
 
 ## Hors périmètre (tests d'intégration, à part)
 

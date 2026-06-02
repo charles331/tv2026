@@ -3,6 +3,7 @@ import type { CredentialsStatus, PlayRequest, VodInfo, VodStream } from '@shared
 import { api } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
+import { useChangelogStatus } from './lib/changelog'
 import { AppNav, type Route } from './components/AppNav'
 import { LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
@@ -28,6 +29,7 @@ function AppShell(): ReactElement {
 
   const { items } = useDownloads()
   const busy = useConnectionBusy()
+  const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
 
   const activeDownloads = useMemo(
     () =>
@@ -55,6 +57,12 @@ function AppShell(): ReactElement {
   useEffect(() => {
     if (credsLoaded && creds && !creds.hasCredentials) setRoute('settings')
   }, [credsLoaded, creds])
+
+  // The changelog lives in Settings; opening it acknowledges the current version
+  // and clears the "what's new" badge.
+  useEffect(() => {
+    if (route === 'settings') markChangelogSeen()
+  }, [route, markChangelogSeen])
 
   const handlePlay = useCallback(async (stream: VodStream, info: VodInfo | null) => {
     setSelected(null)
@@ -95,6 +103,7 @@ function AppShell(): ReactElement {
         onNavigate={setRoute}
         activeDownloads={activeDownloads}
         busyReason={busy.busy ? busy.reason : null}
+        settingsHasUnseen={changelogHasUnseen}
       />
 
       <main className="min-w-0 flex-1">

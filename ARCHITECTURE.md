@@ -60,6 +60,7 @@ Sources :
 
 | Domaine | `window.api.*` | Canal | Requête | Réponse |
 |---|---|---|---|---|
+| App | `app.info()` | `app:info` | — | `AppInfo` (`{ version }`) |
 | Connexion | `connection.test()` | `connection:test` | — | `ConnectionTestResult` |
 | Connexion | `connection.getCredentials()` | `credentials:get` | — | `CredentialsStatus` |
 | Connexion | `connection.setCredentials(c)` | `credentials:set` | `XtreamCredentials` | `CredentialsStatus` |
