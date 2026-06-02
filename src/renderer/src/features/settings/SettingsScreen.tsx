@@ -55,6 +55,10 @@ export function SettingsScreen({
 
   const [pickingDir, setPickingDir] = useState(false)
 
+  const [tmdbKey, setTmdbKey] = useState('')
+  const [savingTmdb, setSavingTmdb] = useState(false)
+  const [tmdbMessage, setTmdbMessage] = useState<string | null>(null)
+
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
   // Prefill from stored (non-secret) status.
@@ -71,7 +75,10 @@ export function SettingsScreen({
     void api()
       .settings.get()
       .then((r) => {
-        if (r.ok) setSettings(r.data)
+        if (r.ok) {
+          setSettings(r.data)
+          setTmdbKey(r.data.tmdbApiKey ?? '')
+        }
       })
     void api()
       .app.info()
@@ -152,6 +159,29 @@ export function SettingsScreen({
       setPickingDir(false)
     }
   }, [])
+
+  const handleSaveTmdb = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault()
+      setSavingTmdb(true)
+      setTmdbMessage(null)
+      try {
+        const next = unwrap(await api().settings.set({ tmdbApiKey: tmdbKey.trim() || null }))
+        setSettings(next)
+        setTmdbKey(next.tmdbApiKey ?? '')
+        setTmdbMessage(
+          next.tmdbApiKey
+            ? 'Clé TMDB enregistrée. Les notes TMDB s’afficheront sur les fiches films.'
+            : 'Clé TMDB effacée. Les fiches affichent à nouveau la note du fournisseur.'
+        )
+      } catch (err) {
+        setTmdbMessage(describeError(err))
+      } finally {
+        setSavingTmdb(false)
+      }
+    },
+    [tmdbKey]
+  )
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -332,6 +362,44 @@ export function SettingsScreen({
             Catalogue à jour : {refreshResult.categories} catégories, {refreshResult.streams} films.
           </p>
         )}
+      </section>
+
+      {/* Notes TMDB */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Notes des films (TMDB)</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Par défaut, la note affichée vient du fournisseur (souvent figée ou approximative).
+          Renseignez une clé API <strong>TMDB</strong> (gratuite) pour afficher la note communautaire
+          à jour sur les fiches films. Laissez vide pour désactiver.
+        </p>
+        <p className="mt-1 text-xs text-gray-500">
+          Obtenir une clé :{' '}
+          <a
+            href="https://www.themoviedb.org/settings/api"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent-hover underline"
+          >
+            themoviedb.org → Paramètres → API
+          </a>{' '}
+          (clé « API Key (v3 auth) »).
+        </p>
+
+        <form className="mt-4 space-y-3" onSubmit={handleSaveTmdb}>
+          <Field label="Clé API TMDB (v3)">
+            <TextInput
+              type="password"
+              autoComplete="off"
+              placeholder="ex. 0123456789abcdef0123456789abcdef"
+              value={tmdbKey}
+              onChange={(e) => setTmdbKey(e.target.value)}
+            />
+          </Field>
+          {tmdbMessage && <p className="text-sm text-emerald-300">{tmdbMessage}</p>}
+          <Button type="submit" variant="secondary" loading={savingTmdb}>
+            Enregistrer la clé
+          </Button>
+        </form>
       </section>
 
       {/* Nouveautés (changelog) */}

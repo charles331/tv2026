@@ -143,6 +143,11 @@ export const handlers: IpcHandlers = {
       patch.diskSpaceWarningBytes = requireInt(req, 'diskSpaceWarningBytes')
     if ('lastSeenVersion' in req)
       patch.lastSeenVersion = optionalString(req, 'lastSeenVersion', 32) ?? null
+    if ('tmdbApiKey' in req) {
+      const key = optionalString(req, 'tmdbApiKey', 128)
+      // Trim; empty string clears the key (disables the feature).
+      patch.tmdbApiKey = key && key.trim() ? key.trim() : null
+    }
     return ok(settingsRepo.setSettings(patch))
   },
 

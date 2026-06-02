@@ -91,6 +91,8 @@ export function MovieDetail({
   const title = info?.title || info?.name || stream.name
   const year = info?.year ?? stream.year
   const rating = info?.rating ?? stream.rating
+  const tmdbRating = info?.tmdbRating ?? null
+  const tmdbVotes = info?.tmdbVoteCount ?? null
   const poster = info?.posterUrl ?? stream.streamIcon
   const backdrop = info?.backdropUrls?.[0] ?? null
   const trailer = trailerUrl(info?.trailer)
@@ -141,10 +143,28 @@ export function MovieDetail({
               <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                 {year != null && <span>{year}</span>}
-                {rating != null && rating > 0 && (
-                  <span className="flex items-center gap-1 text-amber-300">
-                    <IconStar size={13} /> {formatRating(rating)}
+                {tmdbRating != null && tmdbRating > 0 ? (
+                  <span
+                    className="flex items-center gap-1 text-amber-300"
+                    title={
+                      tmdbVotes != null
+                        ? `Note TMDB — ${tmdbVotes.toLocaleString('fr-FR')} votes`
+                        : 'Note TMDB'
+                    }
+                  >
+                    <IconStar size={13} /> {formatRating(tmdbRating)}
+                    <span className="text-[10px] font-semibold text-amber-300/70">TMDB</span>
                   </span>
+                ) : (
+                  rating != null &&
+                  rating > 0 && (
+                    <span
+                      className="flex items-center gap-1 text-amber-300"
+                      title="Note du fournisseur IPTV"
+                    >
+                      <IconStar size={13} /> {formatRating(rating)}
+                    </span>
+                  )
                 )}
                 {info?.durationSecs != null && info.durationSecs > 0 && (
                   <span>{formatDuration(info.durationSecs)}</span>
