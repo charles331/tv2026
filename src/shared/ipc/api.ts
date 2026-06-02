@@ -28,8 +28,17 @@ import type {
   VodStream
 } from '../types/catalog'
 import type {
+  ListSeriesRequest,
+  RefreshSeriesResult,
+  SearchSeriesRequest,
+  SeriesCategory,
+  SeriesInfo,
+  SeriesStream
+} from '../types/series'
+import type {
   AddDownloadRequest,
   DownloadItem,
+  DownloadKind,
   DownloadProgressEvent,
   DownloadStateEvent,
   LocalPathResult,
@@ -83,6 +92,14 @@ export interface CatalogApi {
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshCatalogResult>>
 }
 
+export interface SeriesApi {
+  listCategories(): Promise<Result<SeriesCategory[]>>
+  list(req: ListSeriesRequest): Promise<Result<Page<SeriesStream>>>
+  getInfo(seriesId: number): Promise<Result<SeriesInfo>>
+  search(req: SearchSeriesRequest): Promise<Result<Page<SeriesStream>>>
+  refresh(req: RefreshCatalogRequest): Promise<Result<RefreshSeriesResult>>
+}
+
 export interface DownloadsApi {
   add(req: AddDownloadRequest): Promise<Result<DownloadItem>>
   list(): Promise<Result<DownloadItem[]>>
@@ -95,7 +112,7 @@ export interface DownloadsApi {
    * Resolve the on-disk path of an already-downloaded movie for local playback.
    * Returns `{ path: null }` if not downloaded or the file no longer exists.
    */
-  localPath(streamId: number): Promise<Result<LocalPathResult>>
+  localPath(streamId: number, kind?: DownloadKind): Promise<Result<LocalPathResult>>
   /** Subscribe to per-item byte/speed/ETA progress ticks. */
   onProgress(cb: (e: DownloadProgressEvent) => void): Unsubscribe
   /** Subscribe to status transitions (completed/failed/etc.). */
@@ -135,6 +152,7 @@ export interface RendererApi {
   settings: SettingsApi
   tmdb: TmdbApi
   catalog: CatalogApi
+  series: SeriesApi
   downloads: DownloadsApi
   player: PlayerApi
   connectionLock: ConnectionLockApi

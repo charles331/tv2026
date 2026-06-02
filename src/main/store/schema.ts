@@ -93,6 +93,46 @@ export const MIGRATIONS: readonly Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_dlh_stream ON download_history(stream_id);
     `
+  },
+  {
+    version: 2,
+    description: 'series cache + download kind (movie/series episode)',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS series_categories (
+        category_id   TEXT PRIMARY KEY,
+        category_name TEXT NOT NULL,
+        parent_id     INTEGER NOT NULL DEFAULT 0,
+        updated_at    INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS series (
+        series_id     INTEGER PRIMARY KEY,
+        name          TEXT NOT NULL,
+        cover         TEXT,
+        rating        REAL,
+        category_id   TEXT,
+        year          INTEGER,
+        last_modified INTEGER,
+        plot          TEXT,
+        genre         TEXT,
+        updated_at    INTEGER NOT NULL,
+        FOREIGN KEY (category_id) REFERENCES series_categories(category_id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_series_category ON series(category_id);
+      CREATE INDEX IF NOT EXISTS idx_series_name     ON series(name COLLATE NOCASE);
+      CREATE INDEX IF NOT EXISTS idx_series_modified  ON series(last_modified);
+
+      CREATE TABLE IF NOT EXISTS series_info_cache (
+        series_id  INTEGER PRIMARY KEY,
+        info_json  TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL,
+        FOREIGN KEY (series_id) REFERENCES series(series_id) ON DELETE CASCADE
+      );
+
+      -- Distinguish movie downloads from series episodes (different stream URL).
+      ALTER TABLE download_queue   ADD COLUMN kind TEXT NOT NULL DEFAULT 'movie';
+      ALTER TABLE download_history ADD COLUMN kind TEXT NOT NULL DEFAULT 'movie';
+    `
   }
 ]
 

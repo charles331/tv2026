@@ -12,10 +12,19 @@ export type DownloadStatus =
   | 'failed'
   | 'canceled'
 
+/** What kind of stream a download targets (different provider URL per kind). */
+export type DownloadKind = 'movie' | 'series'
+
 export interface DownloadItem {
   /** Internal queue id (DB primary key). */
   id: number
+  /**
+   * Provider stream id: a movie stream_id for `kind: 'movie'`, or an episode id
+   * for `kind: 'series'` (used in the /series/.. URL).
+   */
   streamId: number
+  /** Movie vs series episode — selects the provider URL builder. */
+  kind: DownloadKind
   /** Display name for the item. */
   name: string
   /** Final filename (resolved from template), e.g. "Dune (2021).mkv". */
@@ -44,6 +53,8 @@ export interface AddDownloadRequest {
   streamId: number
   name: string
   containerExtension: string
+  /** Movie (default) or series episode. */
+  kind?: DownloadKind
   /** Optional override of the destination filename. */
   fileName?: string
 }
