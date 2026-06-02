@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
-import { cn, IconFilm, IconQueue, IconSettings } from './ui'
+import { cn, IconFilm, IconTv, IconQueue, IconSettings } from './ui'
 
-export type Route = 'catalog' | 'downloads' | 'settings'
+export type Route = 'catalog' | 'series' | 'downloads' | 'settings'
 
 export function AppNav({
   route,
@@ -27,6 +27,12 @@ export function AppNav({
         active={route === 'catalog'}
         onClick={() => onNavigate('catalog')}
         icon={<IconFilm size={20} />}
+      />
+      <NavButton
+        label="Séries"
+        active={route === 'series'}
+        onClick={() => onNavigate('series')}
+        icon={<IconTv size={20} />}
       />
       <NavButton
         label="Téléchargements"

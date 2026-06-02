@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import type { CredentialsStatus, PlayRequest, VodInfo, VodStream } from '@shared/index'
+import type { Episode, CredentialsStatus, PlayRequest, SeriesStream, VodInfo, VodStream } from '@shared/index'
 import { api } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
@@ -7,6 +7,8 @@ import { useChangelogStatus } from './lib/changelog'
 import { AppNav, type Route } from './components/AppNav'
 import { LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
+import { SeriesScreen } from './features/series/SeriesScreen'
+import { SeriesDetail } from './features/series/SeriesDetail'
 import { DownloadsScreen } from './features/downloads/DownloadsScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { MovieDetail } from './features/movie/MovieDetail'
@@ -25,6 +27,7 @@ function AppShell(): ReactElement {
   const [creds, setCreds] = useState<CredentialsStatus | null>(null)
   const [credsLoaded, setCredsLoaded] = useState(false)
   const [selected, setSelected] = useState<VodStream | null>(null)
+  const [selectedSeries, setSelectedSeries] = useState<SeriesStream | null>(null)
   const [playRequest, setPlayRequest] = useState<PlayRequest | null>(null)
 
   const { items } = useDownloads()
@@ -88,6 +91,34 @@ function AppShell(): ReactElement {
     )
   }, [])
 
+  const handlePlayEpisode = useCallback(async (episode: Episode, seriesName: string) => {
+    setSelectedSeries(null)
+    const title = `${seriesName} S${String(episode.season).padStart(2, '0')}E${String(
+      episode.episodeNum
+    ).padStart(2, '0')}`
+
+    // Prefer an already-downloaded local episode (no provider connection taken).
+    let localFilePath: string | null = null
+    try {
+      const r = await api().downloads.localPath(episode.episodeId, 'series')
+      if (r.ok) localFilePath = r.data.path
+    } catch (e) {
+      console.warn('localPath épisode a échoué, lecture en streaming :', e)
+    }
+
+    setPlayRequest(
+      localFilePath
+        ? { kind: 'local', filePath: localFilePath, title }
+        : {
+            kind: 'stream',
+            mediaKind: 'series',
+            streamId: episode.episodeId,
+            containerExtension: episode.containerExtension,
+            title
+          }
+    )
+  }, [])
+
   if (!credsLoaded) {
     return (
       <div className="flex h-full items-center justify-center bg-surface">
@@ -110,12 +141,26 @@ function AppShell(): ReactElement {
         {route === 'catalog' && (
           <CatalogScreen onSelectMovie={setSelected} onGoToSettings={() => setRoute('settings')} />
         )}
+        {route === 'series' && (
+          <SeriesScreen
+            onSelectSeries={setSelectedSeries}
+            onGoToSettings={() => setRoute('settings')}
+          />
+        )}
         {route === 'downloads' && <DownloadsScreen />}
         {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
       </main>
 
       {selected && (
         <MovieDetail stream={selected} onClose={() => setSelected(null)} onPlay={handlePlay} />
+      )}
+
+      {selectedSeries && (
+        <SeriesDetail
+          series={selectedSeries}
+          onClose={() => setSelectedSeries(null)}
+          onPlayEpisode={handlePlayEpisode}
+        />
       )}
 
       {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
