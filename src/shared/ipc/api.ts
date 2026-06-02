@@ -16,6 +16,7 @@ import type {
   ConnectionTestResult,
   CredentialsStatus,
   TmdbKeyStatus,
+  UpdateCheckOutcome,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -35,6 +36,14 @@ import type {
   SeriesInfo,
   SeriesStream
 } from '../types/series'
+import type {
+  EpgEntry,
+  ListLiveRequest,
+  LiveCategory,
+  LiveStream,
+  RefreshLiveResult,
+  SearchLiveRequest
+} from '../types/live'
 import type {
   AddDownloadRequest,
   DownloadItem,
@@ -61,6 +70,8 @@ export type Unsubscribe = () => void
 export interface AppApi {
   /** App metadata (version) for the renderer. */
   info(): Promise<Result<AppInfo>>
+  /** Manually check for an app update (downloads + installs on quit if newer). */
+  checkForUpdates(): Promise<Result<UpdateCheckOutcome>>
 }
 
 export interface ConnectionApi {
@@ -98,6 +109,15 @@ export interface SeriesApi {
   getInfo(seriesId: number): Promise<Result<SeriesInfo>>
   search(req: SearchSeriesRequest): Promise<Result<Page<SeriesStream>>>
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshSeriesResult>>
+}
+
+export interface LiveApi {
+  listCategories(): Promise<Result<LiveCategory[]>>
+  list(req: ListLiveRequest): Promise<Result<Page<LiveStream>>>
+  search(req: SearchLiveRequest): Promise<Result<Page<LiveStream>>>
+  refresh(req: RefreshCatalogRequest): Promise<Result<RefreshLiveResult>>
+  /** Now/next programmes for a channel (empty when no EPG). */
+  epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
 }
 
 export interface DownloadsApi {
@@ -153,6 +173,7 @@ export interface RendererApi {
   tmdb: TmdbApi
   catalog: CatalogApi
   series: SeriesApi
+  live: LiveApi
   downloads: DownloadsApi
   player: PlayerApi
   connectionLock: ConnectionLockApi

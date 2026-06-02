@@ -43,6 +43,10 @@ const api: RendererApi = {
     info: () =>
       invoke(InvokeChannels.APP_INFO) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_INFO>>
+      >,
+    checkForUpdates: () =>
+      invoke(InvokeChannels.APP_CHECK_UPDATES) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_CHECK_UPDATES>>
       >
   },
 
@@ -135,6 +139,29 @@ const api: RendererApi = {
     refresh: (req) =>
       invoke(InvokeChannels.SERIES_REFRESH, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.SERIES_REFRESH>>
+      >
+  },
+
+  live: {
+    listCategories: () =>
+      invoke(InvokeChannels.LIVE_LIST_CATEGORIES) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_LIST_CATEGORIES>>
+      >,
+    list: (req) =>
+      invoke(InvokeChannels.LIVE_LIST, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_LIST>>
+      >,
+    search: (req) =>
+      invoke(InvokeChannels.LIVE_SEARCH, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_SEARCH>>
+      >,
+    refresh: (req) =>
+      invoke(InvokeChannels.LIVE_REFRESH, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_REFRESH>>
+      >,
+    epg: (streamId, limit) =>
+      invoke(InvokeChannels.LIVE_EPG, { streamId, limit }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_EPG>>
       >
   },
 

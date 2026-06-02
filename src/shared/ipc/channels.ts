@@ -13,6 +13,7 @@
 export const InvokeChannels = {
   // --- app ---
   APP_INFO: 'app:info', // app metadata (version) for the renderer
+  APP_CHECK_UPDATES: 'app:checkUpdates', // manual "check for updates" trigger
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',
@@ -41,6 +42,13 @@ export const InvokeChannels = {
   SERIES_GET_INFO: 'series:getInfo',
   SERIES_SEARCH: 'series:search',
   SERIES_REFRESH: 'series:refresh',
+
+  // --- live ---
+  LIVE_LIST_CATEGORIES: 'live:listCategories',
+  LIVE_LIST: 'live:list',
+  LIVE_SEARCH: 'live:search',
+  LIVE_REFRESH: 'live:refresh',
+  LIVE_EPG: 'live:epg',
 
   // --- downloads ---
   DOWNLOAD_ADD: 'download:add',

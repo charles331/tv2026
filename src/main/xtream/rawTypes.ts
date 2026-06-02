@@ -196,3 +196,47 @@ export interface RawEpisodeInfo {
   movie_image?: string | null
   cover_big?: string | null
 }
+
+/** One entry from `action=get_live_categories` (same shape as VOD). */
+export interface RawLiveCategory {
+  category_id: string
+  category_name: string
+  parent_id?: StrNum
+}
+
+/** One entry from `action=get_live_streams`. */
+export interface RawLiveStream {
+  num?: StrNum
+  name?: string
+  stream_type?: string
+  stream_id?: StrNum
+  stream_icon?: string | null
+  epg_channel_id?: string | null
+  added?: StrNum
+  category_id?: string | null
+  tv_archive?: StrNum
+  custom_sid?: string | null
+  direct_source?: string | null
+}
+
+/** `action=get_short_epg&stream_id=ID` envelope. */
+export interface RawShortEpgResponse {
+  epg_listings?: RawEpgListing[]
+}
+
+export interface RawEpgListing {
+  id?: StrNum
+  epg_id?: StrNum
+  /** Base64-encoded. */
+  title?: string | null
+  /** Base64-encoded. */
+  description?: string | null
+  lang?: string | null
+  start?: string | null
+  end?: string | null
+  channel_id?: string | null
+  start_timestamp?: StrNum
+  stop_timestamp?: StrNum
+  now_playing?: StrNum
+  has_archive?: StrNum
+}

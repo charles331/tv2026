@@ -25,7 +25,7 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
-import { settingsRepo, catalogRepo, seriesRepo, downloadsRepo } from '../store'
+import { settingsRepo, catalogRepo, seriesRepo, liveRepo, downloadsRepo } from '../store'
 import { downloadManager } from '../downloads/DownloadManager'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
@@ -33,6 +33,8 @@ import * as tmdbKey from '../secrets/tmdbKey'
 import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
 import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
 import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
+import { refreshLive, getShortEpg } from '../xtream/liveService'
+import { checkForUpdatesNow } from '../updater'
 import {
   assert,
   assertPathWithin,
@@ -83,6 +85,8 @@ function joinPath(dir: string, fileName: string): string {
 export const handlers: IpcHandlers = {
   // ---------------- app (real) ----------------
   [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion() }),
+
+  [InvokeChannels.APP_CHECK_UPDATES]: async () => ok(await checkForUpdatesNow()),
 
   // ---------------- connection / settings (real) ----------------
   [InvokeChannels.CONNECTION_TEST]: async () => {
@@ -272,6 +276,55 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  // ---------------- live (cache reads + provider refresh + on-demand EPG) ----------------
+  [InvokeChannels.LIVE_LIST_CATEGORIES]: () => ok(liveRepo.listCategories()),
+
+  [InvokeChannels.LIVE_LIST]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    return ok(
+      liveRepo.listChannels({
+        page: requireInt(req, 'page'),
+        pageSize: requireInt(req, 'pageSize'),
+        categoryId: optionalString(req, 'categoryId') ?? null,
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'number',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
+      })
+    )
+  },
+
+  [InvokeChannels.LIVE_SEARCH]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    return ok(
+      liveRepo.searchChannels({
+        query: requireString(req, 'query', 256),
+        categoryId: optionalString(req, 'categoryId') ?? null,
+        page: requireInt(req, 'page'),
+        pageSize: requireInt(req, 'pageSize')
+      })
+    )
+  },
+
+  [InvokeChannels.LIVE_REFRESH]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const force = Boolean((req as { force?: unknown }).force)
+    try {
+      return ok(await refreshLive(force))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
+  [InvokeChannels.LIVE_EPG]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const streamId = requireInt(req, 'streamId')
+    const limit = optionalNumber(req, 'limit')
+    try {
+      return ok(await getShortEpg(streamId, limit && limit > 0 ? Math.trunc(limit) : 2))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
   // ---------------- downloads (real engine via DownloadManager) ----------------
   [InvokeChannels.DOWNLOAD_ADD]: (req) => {
     assert(isObject(req), 'request must be an object')
@@ -354,7 +407,10 @@ export const handlers: IpcHandlers = {
     assert(kind === 'local' || kind === 'stream', 'kind must be "local" or "stream"')
     const playReq: PlayRequest = {
       kind: kind as PlaySourceKind,
-      mediaKind: optionalString(req, 'mediaKind') === 'series' ? 'series' : 'movie',
+      mediaKind: ((): 'movie' | 'series' | 'live' => {
+        const m = optionalString(req, 'mediaKind')
+        return m === 'series' || m === 'live' ? m : 'movie'
+      })(),
       filePath: optionalString(req, 'filePath'),
       streamId: optionalNumber(req, 'streamId'),
       containerExtension: optionalString(req, 'containerExtension', 16),
