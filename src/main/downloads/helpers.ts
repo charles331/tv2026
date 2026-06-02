@@ -1,8 +1,10 @@
 /**
  * Pure helpers for the download engine, extracted from DownloadManager so they
- * can be unit-tested in isolation (no undici / SQLite / Electron imports).
- * Behaviour is identical to the previous in-file definitions.
+ * can be unit-tested in isolation (no undici / SQLite / Electron imports — only
+ * Node's fs builtin for the rename retry below).
  */
+
+import { rename as fsRename } from 'fs/promises'
 
 /** Raised when the provider answers an unexpected (non-2xx/206) HTTP status. */
 export class HttpStatusError extends Error {
@@ -62,4 +64,55 @@ export function formatBytes(n: number): string {
     i++
   }
   return `${v.toFixed(1)} ${units[i]}`
+}
+
+/**
+ * Filesystem error codes that, on Windows, usually mean a freshly-written file
+ * is briefly locked by another process (antivirus scan, Windows Search indexer)
+ * rather than a permanent failure — so a rename should be retried.
+ */
+const TRANSIENT_RENAME_CODES = new Set(['EBUSY', 'EPERM', 'EACCES'])
+
+export interface RenameRetryOptions {
+  /** Total attempts before giving up (default 10). */
+  attempts?: number
+  /** Base backoff in ms; doubles each retry up to maxDelayMs (default 200). */
+  baseDelayMs?: number
+  /** Cap on a single backoff delay (default 3000). */
+  maxDelayMs?: number
+  /** Injectable for tests; defaults to fs.promises.rename. */
+  renameFn?: (from: string, to: string) => Promise<void>
+  /** Injectable for tests; defaults to setTimeout-based sleep. */
+  sleepFn?: (ms: number) => Promise<void>
+}
+
+/**
+ * Rename with retry/backoff to survive transient Windows file locks (EBUSY /
+ * EPERM / EACCES) right after a large download finishes — typically antivirus
+ * or the search indexer holding the new file for a moment. Non-transient errors
+ * (e.g. ENOSPC) are thrown immediately. Gives up after `attempts`, re-throwing
+ * the last error so the caller can mark the download failed (the .part is kept).
+ */
+export async function renameWithRetry(
+  from: string,
+  to: string,
+  opts: RenameRetryOptions = {}
+): Promise<void> {
+  const attempts = opts.attempts ?? 10
+  const baseDelayMs = opts.baseDelayMs ?? 200
+  const maxDelayMs = opts.maxDelayMs ?? 3000
+  const renameFn = opts.renameFn ?? fsRename
+  const sleepFn = opts.sleepFn ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await renameFn(from, to)
+      return
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException)?.code
+      const transient = code !== undefined && TRANSIENT_RENAME_CODES.has(code)
+      if (!transient || i === attempts - 1) throw e
+      await sleepFn(Math.min(maxDelayMs, baseDelayMs * 2 ** i))
+    }
+  }
 }
