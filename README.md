@@ -102,6 +102,12 @@ automatiquement (avec notes de version + `latest.yml` pour l'auto-MAJ).
 
 > Aucun `git tag` ni bump manuel de `package.json` : tout est piloté par les commits.
 
+> 🛡️ **Garde-fou.** [`pr-title.yml`](.github/workflows/pr-title.yml) valide que le
+> **titre de chaque PR** respecte la convention. **Fusionnez en _squash_** : le
+> titre de la PR devient alors le commit lu par semantic-release. Pour bloquer la
+> fusion d'un titre non conforme, exigez ce check dans *Settings → Branches →
+> Branch protection*.
+
 Un build de test **sans publication** (artefact téléchargeable) reste possible via
 [`build-windows.yml`](.github/workflows/build-windows.yml) → onglet
 **Actions → Build Windows (manuel) → Run workflow**.

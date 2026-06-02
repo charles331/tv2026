@@ -1,0 +1,55 @@
+name: Lint PR title
+
+# Garde-fou Conventional Commits : valide que le TITRE de la pull request suit la
+# convention `type(scope): sujet`. Avec un merge en "squash", ce titre devient le
+# message de commit sur `main` que semantic-release analyse pour calculer la
+# prochaine version — d'où l'importance de le contraindre.
+#
+# Les `types` autorisés sont alignés sur les releaseRules de .releaserc.json.
+# Pour rendre le check bloquant, exigez-le dans Settings → Branches →
+# Branch protection rules (Require status checks → "Valider le titre de la PR").
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+    branches:
+      - main
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint-pr-title:
+    name: Valider le titre de la PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier le format Conventional Commits
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Types autorisés (doivent rester alignés sur .releaserc.json).
+          types: |
+            feat
+            fix
+            perf
+            revert
+            refactor
+            docs
+            style
+            test
+            build
+            ci
+            chore
+          # Le scope est facultatif (ex. `feat(player): ...` ou `feat: ...`).
+          requireScope: false
+          # Le sujet ne doit pas être vide ni se terminer par un point.
+          subjectPattern: ^(?!.*\.$).+$
+          subjectPatternError: |
+            Le sujet "{subject}" est invalide : il doit être non vide et ne pas
+            se terminer par un point.
+          # Message d'aide affiché en cas de titre non conforme.
+          wip: true
