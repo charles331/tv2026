@@ -18,6 +18,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.4.0',
+    date: '2026-06-02',
+    changes: [
+      'Séries : navigation par catégories, recherche, fiche série avec saisons et épisodes, lecture et téléchargement par épisode.',
+      'Fiches films : la note du fournisseur et la note TMDB sont affichées toutes les deux, avec un lien vers IMDb.',
+      'Téléchargements : bouton « Réessayer » sur un téléchargement échoué (reprend là où il s’est arrêté).'
+    ]
+  },
+  {
     version: '0.3.0',
     date: '2026-06-02',
     changes: [
