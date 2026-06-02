@@ -43,6 +43,10 @@ const api: RendererApi = {
     info: () =>
       invoke(InvokeChannels.APP_INFO) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_INFO>>
+      >,
+    checkForUpdates: () =>
+      invoke(InvokeChannels.APP_CHECK_UPDATES) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_CHECK_UPDATES>>
       >
   },
 

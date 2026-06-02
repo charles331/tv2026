@@ -16,6 +16,7 @@ import type {
   ConnectionTestResult,
   CredentialsStatus,
   TmdbKeyStatus,
+  UpdateCheckOutcome,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -69,6 +70,8 @@ export type Unsubscribe = () => void
 export interface AppApi {
   /** App metadata (version) for the renderer. */
   info(): Promise<Result<AppInfo>>
+  /** Manually check for an app update (downloads + installs on quit if newer). */
+  checkForUpdates(): Promise<Result<UpdateCheckOutcome>>
 }
 
 export interface ConnectionApi {
