@@ -214,6 +214,26 @@ export function SettingsScreen({
     }
   }, [onCatalogRefreshed])
 
+  const [refreshingSeries, setRefreshingSeries] = useState(false)
+  const [seriesMessage, setSeriesMessage] = useState<string | null>(null)
+  const [seriesError, setSeriesError] = useState<string | null>(null)
+
+  const handleRefreshSeries = useCallback(async () => {
+    setRefreshingSeries(true)
+    setSeriesError(null)
+    setSeriesMessage(null)
+    try {
+      const result = unwrap(await api().series.refresh({ force: true }))
+      setSeriesMessage(
+        `Séries à jour : ${result.categories} catégories, ${result.series} séries.`
+      )
+    } catch (err) {
+      setSeriesError(describeError(err))
+    } finally {
+      setRefreshingSeries(false)
+    }
+  }, [])
+
   const statusInfo = testResult ? STATUS_LABELS[testResult.status] : null
   const encryptionUnavailable = creds && !creds.encryptionAvailable
 
@@ -378,6 +398,32 @@ export function SettingsScreen({
             Catalogue à jour : {refreshResult.categories} catégories, {refreshResult.streams} films.
           </p>
         )}
+      </section>
+
+      {/* Rafraîchir les séries */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Séries</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Récupère les catégories et la liste des séries depuis le fournisseur vers le cache local.
+          Les saisons et épisodes sont chargés à l’ouverture d’une série.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant="primary"
+            icon={!refreshingSeries ? <IconRefresh size={16} /> : undefined}
+            onClick={handleRefreshSeries}
+            loading={refreshingSeries}
+          >
+            {refreshingSeries ? 'Rafraîchissement…' : 'Rafraîchir les séries'}
+          </Button>
+          {refreshingSeries && (
+            <span className="flex items-center gap-2 text-sm text-gray-400">
+              <Spinner size={14} /> Patientez, ne fermez pas l’application.
+            </span>
+          )}
+        </div>
+        {seriesError && <p className="mt-3 text-sm text-red-300">{seriesError}</p>}
+        {seriesMessage && <p className="mt-3 text-sm text-emerald-300">{seriesMessage}</p>}
       </section>
 
       {/* Notes TMDB */}

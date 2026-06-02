@@ -31,8 +31,17 @@ import type {
   VodStream
 } from '../types/catalog'
 import type {
+  ListSeriesRequest,
+  RefreshSeriesResult,
+  SearchSeriesRequest,
+  SeriesCategory,
+  SeriesInfo,
+  SeriesStream
+} from '../types/series'
+import type {
   AddDownloadRequest,
   DownloadItem,
+  DownloadKind,
   DownloadProgressEvent,
   DownloadStateEvent,
   LocalPathResult,
@@ -83,6 +92,13 @@ export interface IpcContract {
     response: RefreshCatalogResult
   }
 
+  // series
+  [InvokeChannels.SERIES_LIST_CATEGORIES]: { request: void; response: SeriesCategory[] }
+  [InvokeChannels.SERIES_LIST]: { request: ListSeriesRequest; response: Page<SeriesStream> }
+  [InvokeChannels.SERIES_GET_INFO]: { request: { seriesId: number }; response: SeriesInfo }
+  [InvokeChannels.SERIES_SEARCH]: { request: SearchSeriesRequest; response: Page<SeriesStream> }
+  [InvokeChannels.SERIES_REFRESH]: { request: RefreshCatalogRequest; response: RefreshSeriesResult }
+
   // downloads
   [InvokeChannels.DOWNLOAD_ADD]: { request: AddDownloadRequest; response: DownloadItem }
   [InvokeChannels.DOWNLOAD_LIST]: { request: void; response: DownloadItem[] }
@@ -92,7 +108,7 @@ export interface IpcContract {
   [InvokeChannels.DOWNLOAD_REORDER]: { request: ReorderQueueRequest; response: DownloadItem[] }
   [InvokeChannels.DOWNLOAD_CLEAR_COMPLETED]: { request: void; response: { removed: number } }
   [InvokeChannels.DOWNLOAD_LOCAL_PATH]: {
-    request: { streamId: number }
+    request: { streamId: number; kind?: DownloadKind }
     response: LocalPathResult
   }
 

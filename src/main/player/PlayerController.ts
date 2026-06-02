@@ -169,10 +169,15 @@ export class PlayerController {
     if (typeof req.streamId !== 'number') {
       throw new PlayerError('streamId manquant pour la lecture en streaming.')
     }
-    // Build the canonical (unsigned) movie URL from decrypted credentials.
-    // mpv follows the 302 -> signed URL itself (we never cache the signed one).
+    // Build the canonical (unsigned) URL from decrypted credentials. Series
+    // episodes use a different endpoint than movies. mpv follows the 302 ->
+    // signed URL itself (we never cache the signed one).
     const client = getXtreamClient()
-    const url = client.buildMovieUrl(req.streamId, req.containerExtension ?? 'mkv')
+    const ext = req.containerExtension ?? 'mkv'
+    const url =
+      req.mediaKind === 'series'
+        ? client.buildEpisodeUrl(req.streamId, ext)
+        : client.buildMovieUrl(req.streamId, ext)
     await client.close().catch(() => undefined)
 
     // Playback priority: acquiring 'playback' makes download-engineer pause its
