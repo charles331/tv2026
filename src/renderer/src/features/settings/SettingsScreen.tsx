@@ -3,7 +3,8 @@ import type {
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
-  RefreshCatalogResult
+  RefreshCatalogResult,
+  TmdbKeyStatus
 } from '@shared/index'
 import { CHANGELOG } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
@@ -56,6 +57,7 @@ export function SettingsScreen({
   const [pickingDir, setPickingDir] = useState(false)
 
   const [tmdbKey, setTmdbKey] = useState('')
+  const [tmdbStatus, setTmdbStatus] = useState<TmdbKeyStatus | null>(null)
   const [savingTmdb, setSavingTmdb] = useState(false)
   const [tmdbMessage, setTmdbMessage] = useState<string | null>(null)
 
@@ -75,10 +77,12 @@ export function SettingsScreen({
     void api()
       .settings.get()
       .then((r) => {
-        if (r.ok) {
-          setSettings(r.data)
-          setTmdbKey(r.data.tmdbApiKey ?? '')
-        }
+        if (r.ok) setSettings(r.data)
+      })
+    void api()
+      .tmdb.getStatus()
+      .then((r) => {
+        if (r.ok) setTmdbStatus(r.data)
       })
     void api()
       .app.info()
@@ -166,12 +170,12 @@ export function SettingsScreen({
       setSavingTmdb(true)
       setTmdbMessage(null)
       try {
-        const next = unwrap(await api().settings.set({ tmdbApiKey: tmdbKey.trim() || null }))
-        setSettings(next)
-        setTmdbKey(next.tmdbApiKey ?? '')
+        const next = unwrap(await api().tmdb.setKey(tmdbKey.trim()))
+        setTmdbStatus(next)
+        setTmdbKey('')
         setTmdbMessage(
-          next.tmdbApiKey
-            ? 'Clé TMDB enregistrée. Les notes TMDB s’afficheront sur les fiches films.'
+          next.hasKey
+            ? 'Clé TMDB enregistrée (chiffrée). Les notes TMDB s’afficheront sur les fiches films.'
             : 'Clé TMDB effacée. Les fiches affichent à nouveau la note du fournisseur.'
         )
       } catch (err) {
@@ -182,6 +186,18 @@ export function SettingsScreen({
     },
     [tmdbKey]
   )
+
+  const handleClearTmdb = useCallback(async () => {
+    setTmdbMessage(null)
+    try {
+      const next = unwrap(await api().tmdb.clearKey())
+      setTmdbStatus(next)
+      setTmdbKey('')
+      setTmdbMessage('Clé TMDB effacée.')
+    } catch (err) {
+      setTmdbMessage(describeError(err))
+    }
+  }, [])
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -385,20 +401,41 @@ export function SettingsScreen({
           (clé « API Key (v3 auth) »).
         </p>
 
+        {tmdbStatus && !tmdbStatus.encryptionAvailable && (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Le chiffrement OS n’est pas disponible sur cette machine — la clé ne pourra pas être
+            stockée de façon sécurisée.
+          </div>
+        )}
+
         <form className="mt-4 space-y-3" onSubmit={handleSaveTmdb}>
-          <Field label="Clé API TMDB (v3)">
+          <Field
+            label="Clé API TMDB (v3)"
+            hint={
+              tmdbStatus?.hasKey
+                ? 'Une clé est déjà enregistrée (chiffrée). Saisissez-en une nouvelle pour la remplacer.'
+                : undefined
+            }
+          >
             <TextInput
               type="password"
               autoComplete="off"
-              placeholder="ex. 0123456789abcdef0123456789abcdef"
+              placeholder={tmdbStatus?.hasKey ? '•••••••• (clé enregistrée)' : 'ex. 0123456789abcdef…'}
               value={tmdbKey}
               onChange={(e) => setTmdbKey(e.target.value)}
             />
           </Field>
           {tmdbMessage && <p className="text-sm text-emerald-300">{tmdbMessage}</p>}
-          <Button type="submit" variant="secondary" loading={savingTmdb}>
-            Enregistrer la clé
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" variant="secondary" loading={savingTmdb} disabled={!tmdbKey.trim()}>
+              Enregistrer la clé
+            </Button>
+            {tmdbStatus?.hasKey && (
+              <Button type="button" variant="ghost" onClick={handleClearTmdb}>
+                Effacer
+              </Button>
+            )}
+          </div>
         </form>
       </section>
 

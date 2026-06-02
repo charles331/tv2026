@@ -11,9 +11,10 @@
  */
 
 import type { RefreshCatalogResult, VodInfo } from '@shared/index'
-import { catalogRepo, settingsRepo } from '../store'
+import { catalogRepo } from '../store'
 import { getXtreamClient } from './index'
 import { fetchTmdbRating } from '../tmdb/TmdbClient'
+import { getTmdbKey } from '../secrets/tmdbKey'
 
 /** A populated cache exists if it has at least one stream. */
 export function isCatalogPopulated(): boolean {
@@ -86,7 +87,7 @@ export async function getVodInfo(streamId: number): Promise<VodInfo> {
 async function enrichWithTmdbRating(info: VodInfo): Promise<VodInfo> {
   if (info.tmdbRating != null) return info
   if (info.tmdbId == null) return info
-  const apiKey = settingsRepo.getSettings().tmdbApiKey
+  const apiKey = getTmdbKey()
   if (!apiKey) return info
 
   const tmdb = await fetchTmdbRating(apiKey, info.tmdbId)
