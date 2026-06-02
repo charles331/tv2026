@@ -138,6 +138,29 @@ const api: RendererApi = {
       >
   },
 
+  live: {
+    listCategories: () =>
+      invoke(InvokeChannels.LIVE_LIST_CATEGORIES) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_LIST_CATEGORIES>>
+      >,
+    list: (req) =>
+      invoke(InvokeChannels.LIVE_LIST, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_LIST>>
+      >,
+    search: (req) =>
+      invoke(InvokeChannels.LIVE_SEARCH, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_SEARCH>>
+      >,
+    refresh: (req) =>
+      invoke(InvokeChannels.LIVE_REFRESH, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_REFRESH>>
+      >,
+    epg: (streamId, limit) =>
+      invoke(InvokeChannels.LIVE_EPG, { streamId, limit }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_EPG>>
+      >
+  },
+
   downloads: {
     add: (req) =>
       invoke(InvokeChannels.DOWNLOAD_ADD, req) as Promise<

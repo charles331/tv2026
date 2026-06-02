@@ -42,6 +42,13 @@ export const InvokeChannels = {
   SERIES_SEARCH: 'series:search',
   SERIES_REFRESH: 'series:refresh',
 
+  // --- live ---
+  LIVE_LIST_CATEGORIES: 'live:listCategories',
+  LIVE_LIST: 'live:list',
+  LIVE_SEARCH: 'live:search',
+  LIVE_REFRESH: 'live:refresh',
+  LIVE_EPG: 'live:epg',
+
   // --- downloads ---
   DOWNLOAD_ADD: 'download:add',
   DOWNLOAD_LIST: 'download:list',

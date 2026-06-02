@@ -173,11 +173,14 @@ export class PlayerController {
     // episodes use a different endpoint than movies. mpv follows the 302 ->
     // signed URL itself (we never cache the signed one).
     const client = getXtreamClient()
-    const ext = req.containerExtension ?? 'mkv'
-    const url =
-      req.mediaKind === 'series'
-        ? client.buildEpisodeUrl(req.streamId, ext)
-        : client.buildMovieUrl(req.streamId, ext)
+    let url: string
+    if (req.mediaKind === 'live') {
+      url = client.buildLiveUrl(req.streamId, req.containerExtension ?? 'ts')
+    } else if (req.mediaKind === 'series') {
+      url = client.buildEpisodeUrl(req.streamId, req.containerExtension ?? 'mkv')
+    } else {
+      url = client.buildMovieUrl(req.streamId, req.containerExtension ?? 'mkv')
+    }
     await client.close().catch(() => undefined)
 
     // Playback priority: acquiring 'playback' makes download-engineer pause its

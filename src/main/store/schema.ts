@@ -133,6 +133,33 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE download_queue   ADD COLUMN kind TEXT NOT NULL DEFAULT 'movie';
       ALTER TABLE download_history ADD COLUMN kind TEXT NOT NULL DEFAULT 'movie';
     `
+  },
+  {
+    version: 3,
+    description: 'live TV cache (channels + categories)',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS live_categories (
+        category_id   TEXT PRIMARY KEY,
+        category_name TEXT NOT NULL,
+        parent_id     INTEGER NOT NULL DEFAULT 0,
+        updated_at    INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS live_streams (
+        stream_id      INTEGER PRIMARY KEY,
+        name           TEXT NOT NULL,
+        icon           TEXT,
+        number         INTEGER,
+        epg_channel_id TEXT,
+        category_id    TEXT,
+        has_archive    INTEGER NOT NULL DEFAULT 0,
+        updated_at     INTEGER NOT NULL,
+        FOREIGN KEY (category_id) REFERENCES live_categories(category_id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_live_category ON live_streams(category_id);
+      CREATE INDEX IF NOT EXISTS idx_live_name     ON live_streams(name COLLATE NOCASE);
+      CREATE INDEX IF NOT EXISTS idx_live_number    ON live_streams(number);
+    `
   }
 ]
 
