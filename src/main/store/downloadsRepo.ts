@@ -3,12 +3,13 @@
  * download-engineer drives state transitions through these functions.
  */
 
-import type { DownloadItem, DownloadStatus } from '@shared/index'
+import type { DownloadItem, DownloadKind, DownloadStatus } from '@shared/index'
 import { getDb } from './db'
 
 interface QueueRow {
   id: number
   stream_id: number
+  kind: DownloadKind
   name: string
   file_name: string
   dest_path: string
@@ -30,6 +31,7 @@ function mapItem(r: QueueRow): DownloadItem {
   return {
     id: r.id,
     streamId: r.stream_id,
+    kind: r.kind ?? 'movie',
     name: r.name,
     fileName: r.file_name,
     destPath: r.dest_path,
@@ -47,6 +49,7 @@ function mapItem(r: QueueRow): DownloadItem {
 
 export interface NewDownload {
   streamId: number
+  kind: DownloadKind
   name: string
   fileName: string
   destPath: string
@@ -63,11 +66,11 @@ export function addDownload(d: NewDownload): DownloadItem {
   const info = db
     .prepare(
       `INSERT INTO download_queue
-         (stream_id, name, file_name, dest_path, container_extension, status,
+         (stream_id, kind, name, file_name, dest_path, container_extension, status,
           received_bytes, queue_position, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)`
     )
-    .run(d.streamId, d.name, d.fileName, d.destPath, d.containerExtension, nextPos, now, now)
+    .run(d.streamId, d.kind, d.name, d.fileName, d.destPath, d.containerExtension, nextPos, now, now)
   return getDownload(Number(info.lastInsertRowid))!
 }
 
@@ -120,10 +123,11 @@ export function archiveToHistory(id: number, finalStatus: 'completed' | 'cancele
     if (!row) return
     db.prepare(
       `INSERT INTO download_history
-         (stream_id, name, file_name, dest_path, total_bytes, status, completed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+         (stream_id, kind, name, file_name, dest_path, total_bytes, status, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       row.stream_id,
+      row.kind ?? 'movie',
       row.name,
       row.file_name,
       row.dest_path,
@@ -144,13 +148,14 @@ export function clearFinished(): number {
   return info.changes
 }
 
-/** True if a completed download exists in history for the given stream. */
-export function isDownloaded(streamId: number): boolean {
+/** True if a completed download exists in history for the given stream + kind. */
+export function isDownloaded(streamId: number, kind: DownloadKind = 'movie'): boolean {
   const row = getDb()
     .prepare(
-      `SELECT 1 FROM download_history WHERE stream_id = ? AND status = 'completed' LIMIT 1`
+      `SELECT 1 FROM download_history
+       WHERE stream_id = ? AND kind = ? AND status = 'completed' LIMIT 1`
     )
-    .get(streamId)
+    .get(streamId, kind)
   return Boolean(row)
 }
 
@@ -160,20 +165,20 @@ export function isDownloaded(streamId: number): boolean {
  * history table; the most recently completed wins. Does NOT verify the file
  * exists on disk — the caller (handler) does that check.
  */
-export function getCompletedPath(streamId: number): string | null {
+export function getCompletedPath(streamId: number, kind: DownloadKind = 'movie'): string | null {
   const row = getDb()
     .prepare(
       `SELECT dest_path FROM (
          SELECT dest_path, updated_at AS ts FROM download_queue
-           WHERE stream_id = ? AND status = 'completed'
+           WHERE stream_id = ? AND kind = ? AND status = 'completed'
          UNION ALL
          SELECT dest_path, completed_at AS ts FROM download_history
-           WHERE stream_id = ? AND status = 'completed'
+           WHERE stream_id = ? AND kind = ? AND status = 'completed'
        )
        ORDER BY ts DESC
        LIMIT 1`
     )
-    .get(streamId, streamId) as { dest_path: string } | undefined
+    .get(streamId, kind, streamId, kind) as { dest_path: string } | undefined
   return row?.dest_path ?? null
 }
 

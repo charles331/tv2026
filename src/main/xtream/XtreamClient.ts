@@ -23,8 +23,13 @@
 import { request, Agent } from 'undici'
 import type { XtreamCredentials } from '@shared/index'
 import type { VodCategory, VodInfo, VodStream } from '@shared/index'
+import type { Episode, Season, SeriesCategory, SeriesInfo, SeriesStream } from '@shared/index'
 import type {
   RawAccountResponse,
+  RawEpisode,
+  RawSeries,
+  RawSeriesCategory,
+  RawSeriesInfoResponse,
   RawVodCategory,
   RawVodInfoResponse,
   RawVodStream,
@@ -269,6 +274,61 @@ export class XtreamClient {
     return this.mapInfo(vodId, raw)
   }
 
+  // ---------------- series ----------------
+
+  /** Fetch all series categories. */
+  async getSeriesCategories(): Promise<SeriesCategory[]> {
+    const raw = await this.apiGet<RawSeriesCategory[]>({ action: 'get_series_categories' })
+    if (!Array.isArray(raw)) {
+      throw new XtreamError('MALFORMED', 'get_series_categories did not return an array.')
+    }
+    return raw.map((c) => ({
+      categoryId: String(c.category_id),
+      categoryName: c.category_name ?? '',
+      parentId: toInt(c.parent_id) ?? 0
+    }))
+  }
+
+  /** Fetch series, optionally filtered by category. */
+  async getSeries(categoryId?: string): Promise<SeriesStream[]> {
+    const params: Record<string, string> = { action: 'get_series' }
+    if (categoryId) params.category_id = categoryId
+    const raw = await this.apiGet<RawSeries[]>(params)
+    if (!Array.isArray(raw)) {
+      throw new XtreamError('MALFORMED', 'get_series did not return an array.')
+    }
+    const out: SeriesStream[] = []
+    for (const s of raw) {
+      const mapped = this.mapSeries(s, categoryId)
+      if (mapped) out.push(mapped)
+    }
+    return out
+  }
+
+  /** Fetch full detail (seasons + episodes) for one series. NOT_FOUND if unknown. */
+  async getSeriesInfo(seriesId: number): Promise<SeriesInfo> {
+    const raw = await this.apiGet<RawSeriesInfoResponse>({
+      action: 'get_series_info',
+      series_id: String(seriesId)
+    })
+    if (!raw || typeof raw !== 'object' || !raw.episodes || Array.isArray(raw.info)) {
+      throw new XtreamError('NOT_FOUND', `No series detail found for id ${seriesId}.`)
+    }
+    return this.mapSeriesInfo(seriesId, raw)
+  }
+
+  /**
+   * Build the stable episode file URL: `/series/USER/PASS/{episodeId}.{ext}`.
+   * Same redirect/Range/ConnectionLock rules as buildMovieUrl. `episodeId` is the
+   * per-episode id (NOT the series id); `ext` is the episode containerExtension.
+   */
+  buildEpisodeUrl(episodeId: number, ext: string): string {
+    const cleanExt = ext.replace(/^\.+/, '').trim() || 'mkv'
+    return `${this.baseUrl}/series/${encodeURIComponent(this.creds.username)}/${encodeURIComponent(
+      this.creds.password
+    )}/${episodeId}.${cleanExt}`
+  }
+
   /**
    * Build the stable movie file URL: `/movie/USER/PASS/{streamId}.{ext}`.
    *
@@ -348,7 +408,8 @@ export class XtreamClient {
       // catalogService when a TMDB API key is configured.
       tmdbId: toInt(info.tmdb_id),
       tmdbRating: null,
-      tmdbVoteCount: null
+      tmdbVoteCount: null,
+      imdbId: null
     }
   }
 
@@ -369,5 +430,91 @@ export class XtreamClient {
       }
     }
     return null
+  }
+
+  // ---------------- series mappers ----------------
+
+  /** Returns null for entries without a usable series_id. */
+  private mapSeries(s: RawSeries, fallbackCategoryId?: string): SeriesStream | null {
+    const seriesId = toInt(s.series_id)
+    if (seriesId === null) return null
+    const name = s.name ?? ''
+    return {
+      seriesId,
+      name,
+      cover: nonEmpty(s.cover ?? null),
+      rating: toNum(s.rating),
+      categoryId: nonEmpty(s.category_id ?? null) ?? fallbackCategoryId ?? '',
+      year: this.extractYear(name, s.releaseDate ?? s.release_date ?? null),
+      lastModified: toInt(s.last_modified),
+      plot: nonEmpty(s.plot ?? null),
+      genre: nonEmpty(s.genre ?? null)
+    }
+  }
+
+  private mapSeriesInfo(seriesId: number, raw: RawSeriesInfoResponse): SeriesInfo {
+    const info = raw.info ?? {}
+    const backdrops = Array.isArray(info.backdrop_path)
+      ? info.backdrop_path.filter((b): b is string => typeof b === 'string' && b.length > 0)
+      : typeof info.backdrop_path === 'string' && info.backdrop_path
+        ? [info.backdrop_path]
+        : []
+    const name = nonEmpty(info.name) ?? nonEmpty(info.title) ?? ''
+    const trailer = nonEmpty(info.youtube_trailer)
+
+    // `episodes` is an object keyed by season number ("1", "2", …). Flatten into
+    // ordered seasons, each with ordered episodes.
+    const bySeason = new Map<number, Episode[]>()
+    for (const [seasonKey, list] of Object.entries(raw.episodes ?? {})) {
+      if (!Array.isArray(list)) continue
+      const seasonFromKey = Number(seasonKey)
+      for (const ep of list) {
+        const mapped = this.mapEpisode(ep, Number.isFinite(seasonFromKey) ? seasonFromKey : 0)
+        if (!mapped) continue
+        const arr = bySeason.get(mapped.season) ?? []
+        arr.push(mapped)
+        bySeason.set(mapped.season, arr)
+      }
+    }
+    const seasons: Season[] = [...bySeason.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([seasonNumber, episodes]) => ({
+        seasonNumber,
+        name: null,
+        episodes: episodes.sort((a, b) => a.episodeNum - b.episodeNum)
+      }))
+
+    return {
+      seriesId,
+      name,
+      plot: nonEmpty(info.plot),
+      cast: nonEmpty(info.cast),
+      director: nonEmpty(info.director),
+      genre: nonEmpty(info.genre),
+      year: this.extractYear(name, info.releaseDate ?? info.release_date ?? null),
+      rating: toNum(info.rating),
+      cover: nonEmpty(info.cover_big) ?? nonEmpty(info.cover),
+      backdropUrls: backdrops,
+      trailer: trailer ? `https://www.youtube.com/watch?v=${trailer}` : null,
+      seasons
+    }
+  }
+
+  /** Returns null for episodes without a usable id. */
+  private mapEpisode(ep: RawEpisode, seasonFromKey: number): Episode | null {
+    const episodeId = toInt(ep.id)
+    if (episodeId === null) return null
+    const epInfo = ep.info ?? {}
+    return {
+      episodeId,
+      title: nonEmpty(ep.title) ?? `Épisode ${toInt(ep.episode_num) ?? episodeId}`,
+      season: toInt(ep.season) ?? seasonFromKey,
+      episodeNum: toInt(ep.episode_num) ?? 0,
+      containerExtension: nonEmpty(ep.container_extension ?? null) ?? 'mkv',
+      durationSecs: toInt(epInfo.duration_secs),
+      plot: nonEmpty(epInfo.plot ?? null),
+      rating: toNum(epInfo.rating),
+      image: nonEmpty(epInfo.movie_image ?? null) ?? nonEmpty(epInfo.cover_big ?? null)
+    }
   }
 }
