@@ -160,6 +160,23 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_live_name     ON live_streams(name COLLATE NOCASE);
       CREATE INDEX IF NOT EXISTS idx_live_number    ON live_streams(number);
     `
+  },
+  {
+    version: 4,
+    description: 'favorites (movies / series / live) with snapshot for offline display',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS favorites (
+        kind                TEXT NOT NULL,            -- 'movie' | 'series' | 'live'
+        item_id             INTEGER NOT NULL,         -- stream_id (movie/live) or series_id
+        name                TEXT NOT NULL,            -- snapshot (survives a catalog purge)
+        image               TEXT,                     -- poster / cover / channel logo snapshot
+        container_extension TEXT,                     -- snapshot (movie/live; for play/download)
+        category_id         TEXT,                     -- snapshot
+        added_at            INTEGER NOT NULL,
+        PRIMARY KEY (kind, item_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_fav_kind ON favorites(kind, added_at);
+    `
   }
 ]
 

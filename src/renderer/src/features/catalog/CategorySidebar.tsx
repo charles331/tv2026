@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { VodCategory } from '@shared/index'
 import { cn, Spinner, TextInput, IconSearch } from '../../components/ui'
+import { FAVORITES_CATEGORY_ID } from '../../lib/favorites'
 
 const WIDTH_KEY = 'tv2026.categorySidebarWidth'
 const MIN_WIDTH = 180
@@ -26,18 +27,21 @@ export function CategorySidebar({
   selectedId,
   onSelect,
   title = 'Catégories',
-  allLabel = 'Tous les films'
+  allLabel = 'Tous les films',
+  favoritesCount
 }: {
   categories: VodCategory[]
   loading: boolean
   error: string | null
-  /** null = all categories. */
+  /** null = all categories; FAVORITES_CATEGORY_ID = favorites. */
   selectedId: string | null
   onSelect: (categoryId: string | null) => void
   /** Sidebar heading (default "Catégories"). */
   title?: string
   /** Label of the "all" entry (default "Tous les films"). */
   allLabel?: string
+  /** When defined, show a pinned "★ Favoris" entry at the very top with this count. */
+  favoritesCount?: number
 }): ReactElement {
   const asideRef = useRef<HTMLElement>(null)
   const [width, setWidth] = useState<number>(() => readStoredWidth())
@@ -103,6 +107,17 @@ export function CategorySidebar({
           <p className="px-2 py-3 text-xs text-red-300">{error}</p>
         ) : (
           <ul className="space-y-0.5">
+            {/* Pinned, always first, even while filtering. */}
+            {favoritesCount !== undefined && (
+              <li>
+                <CategoryButton
+                  label="★ Favoris"
+                  count={favoritesCount}
+                  active={selectedId === FAVORITES_CATEGORY_ID}
+                  onClick={() => onSelect(FAVORITES_CATEGORY_ID)}
+                />
+              </li>
+            )}
             {q === '' && (
               <li>
                 <CategoryButton

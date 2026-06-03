@@ -44,6 +44,7 @@ import type {
   RefreshLiveResult,
   SearchLiveRequest
 } from '../types/live'
+import type { AddFavoriteRequest, FavoriteItem, FavoriteKind } from '../types/favorites'
 import type {
   AddDownloadRequest,
   DownloadItem,
@@ -121,6 +122,15 @@ export interface LiveApi {
   epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
 }
 
+export interface FavoritesApi {
+  /** List favorites of a kind (newest first), each with its `available` flag. */
+  list(kind: FavoriteKind): Promise<Result<FavoriteItem[]>>
+  /** Pin a favorite (idempotent; refreshes the snapshot). */
+  add(req: AddFavoriteRequest): Promise<Result<{ ok: true }>>
+  /** Unpin a favorite. */
+  remove(kind: FavoriteKind, itemId: number): Promise<Result<{ ok: true }>>
+}
+
 export interface DownloadsApi {
   add(req: AddDownloadRequest): Promise<Result<DownloadItem>>
   list(): Promise<Result<DownloadItem[]>>
@@ -175,6 +185,7 @@ export interface RendererApi {
   catalog: CatalogApi
   series: SeriesApi
   live: LiveApi
+  favorites: FavoritesApi
   downloads: DownloadsApi
   player: PlayerApi
   connectionLock: ConnectionLockApi

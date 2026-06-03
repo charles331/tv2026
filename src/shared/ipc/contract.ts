@@ -48,6 +48,7 @@ import type {
   SearchLiveRequest,
   ShortEpgRequest
 } from '../types/live'
+import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from '../types/favorites'
 import type {
   AddDownloadRequest,
   DownloadItem,
@@ -116,6 +117,11 @@ export interface IpcContract {
   [InvokeChannels.LIVE_SEARCH]: { request: SearchLiveRequest; response: Page<LiveStream> }
   [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
   [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
+
+  // favorites
+  [InvokeChannels.FAVORITES_LIST]: { request: { kind: FavoriteKind }; response: FavoriteItem[] }
+  [InvokeChannels.FAVORITES_ADD]: { request: AddFavoriteRequest; response: { ok: true } }
+  [InvokeChannels.FAVORITES_REMOVE]: { request: FavoriteRef; response: { ok: true } }
 
   // downloads
   [InvokeChannels.DOWNLOAD_ADD]: { request: AddDownloadRequest; response: DownloadItem }

@@ -50,6 +50,11 @@ export const InvokeChannels = {
   LIVE_REFRESH: 'live:refresh',
   LIVE_EPG: 'live:epg',
 
+  // --- favorites ---
+  FAVORITES_LIST: 'favorites:list',
+  FAVORITES_ADD: 'favorites:add',
+  FAVORITES_REMOVE: 'favorites:remove',
+
   // --- downloads ---
   DOWNLOAD_ADD: 'download:add',
   DOWNLOAD_LIST: 'download:list',

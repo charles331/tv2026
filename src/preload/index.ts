@@ -165,6 +165,21 @@ const api: RendererApi = {
       >
   },
 
+  favorites: {
+    list: (kind) =>
+      invoke(InvokeChannels.FAVORITES_LIST, { kind }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.FAVORITES_LIST>>
+      >,
+    add: (req) =>
+      invoke(InvokeChannels.FAVORITES_ADD, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.FAVORITES_ADD>>
+      >,
+    remove: (kind, itemId) =>
+      invoke(InvokeChannels.FAVORITES_REMOVE, { kind, itemId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.FAVORITES_REMOVE>>
+      >
+  },
+
   downloads: {
     add: (req) =>
       invoke(InvokeChannels.DOWNLOAD_ADD, req) as Promise<

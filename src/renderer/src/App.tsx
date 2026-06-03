@@ -13,6 +13,7 @@ import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
 import { useChangelogStatus } from './lib/changelog'
 import { ToastProvider, useToast } from './lib/toast'
+import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { AppNav, type Route } from './components/AppNav'
 import { Button, LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
@@ -27,9 +28,11 @@ import { PlayerView } from './features/player/PlayerView'
 export function App(): ReactElement {
   return (
     <ToastProvider>
-      <DownloadsProvider>
-        <AppShell />
-      </DownloadsProvider>
+      <FavoritesProvider>
+        <DownloadsProvider>
+          <AppShell />
+        </DownloadsProvider>
+      </FavoritesProvider>
     </ToastProvider>
   )
 }
@@ -47,6 +50,7 @@ function AppShell(): ReactElement {
   const { items } = useDownloads()
   const busy = useConnectionBusy()
   const toast = useToast()
+  const { reload: reloadFavorites } = useFavorites()
   const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
 
   const activeDownloads = useMemo(
@@ -154,6 +158,8 @@ function AppShell(): ReactElement {
       const movies = unwrap(await api().catalog.refresh({ force: true }))
       const series = unwrap(await api().series.refresh({ force: true }))
       const live = unwrap(await api().live.refresh({ force: true }))
+      // Availability of favorites may have changed (sources added/removed).
+      await reloadFavorites()
       toast.show(
         `Catalogues à jour : ${movies.streams} films, ${series.series} séries, ${live.channels} chaînes.`,
         'success'
@@ -163,7 +169,7 @@ function AppShell(): ReactElement {
     } finally {
       setUpdatingAll(false)
     }
-  }, [toast])
+  }, [toast, reloadFavorites])
 
   if (!credsLoaded) {
     return (

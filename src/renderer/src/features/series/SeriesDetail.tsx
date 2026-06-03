@@ -15,6 +15,7 @@ import {
   IconCheck
 } from '../../components/ui'
 import { formatDuration, formatRating } from '../../lib/format'
+import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /** "S01E04" tag from a season/episode pair. */
 function tag(season: number, episodeNum: number): string {
@@ -140,6 +141,19 @@ export function SeriesDetail({
                   </span>
                 )}
                 {info?.genre && <span>{info.genre}</span>}
+              </div>
+              <div className="mt-4">
+                <FavoriteButton
+                  size="md"
+                  req={{
+                    kind: 'series',
+                    itemId: series.seriesId,
+                    name: title,
+                    image: poster,
+                    containerExtension: null,
+                    categoryId: series.categoryId
+                  }}
+                />
               </div>
             </div>
           </div>

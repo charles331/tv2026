@@ -18,6 +18,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.7.0',
+    date: '2026-06-03',
+    changes: [
+      'Favoris : ajoutez films, séries et chaînes en favori avec l’étoile (sur les fiches et les chaînes).',
+      'Chaque section affiche une catégorie « ★ Favoris » en tête, listant vos favoris.',
+      'Un favori dont la source a disparu après un rafraîchissement reste listé avec un statut « Hors ligne » (rouge).',
+      'Le logo en haut à gauche est désormais distinct du bouton Catalogue.'
+    ]
+  },
+  {
     version: '0.6.0',
     date: '2026-06-03',
     changes: [

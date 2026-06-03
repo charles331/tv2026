@@ -25,7 +25,7 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
-import { settingsRepo, catalogRepo, seriesRepo, liveRepo, downloadsRepo } from '../store'
+import { settingsRepo, catalogRepo, seriesRepo, liveRepo, favoritesRepo, downloadsRepo } from '../store'
 import { downloadManager } from '../downloads/DownloadManager'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
@@ -323,6 +323,37 @@ export const handlers: IpcHandlers = {
     } catch (e) {
       return fromXtreamError(e)
     }
+  },
+
+  // ---------------- favorites (local, SQLite) ----------------
+  [InvokeChannels.FAVORITES_LIST]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireString(req, 'kind', 16)
+    assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+    return ok(favoritesRepo.listFavorites(kind))
+  },
+
+  [InvokeChannels.FAVORITES_ADD]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireString(req, 'kind', 16)
+    assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+    favoritesRepo.addFavorite({
+      kind,
+      itemId: requireInt(req, 'itemId'),
+      name: requireString(req, 'name', 512),
+      image: optionalString(req, 'image', 2048) ?? null,
+      containerExtension: optionalString(req, 'containerExtension', 16) ?? null,
+      categoryId: optionalString(req, 'categoryId', 128) ?? null
+    })
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.FAVORITES_REMOVE]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireString(req, 'kind', 16)
+    assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+    favoritesRepo.removeFavorite(kind, requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
   },
 
   // ---------------- downloads (real engine via DownloadManager) ----------------
