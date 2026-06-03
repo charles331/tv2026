@@ -4,8 +4,8 @@
 
 Merci de **ne pas** ouvrir d'issue publique pour une faille de sécurité.
 
-Contactez en privé : **charles.meunier@speos.be** (ou via la fonction
-*Security advisories* de GitHub : onglet **Security → Report a vulnerability**).
+Utilisez la fonction privée de GitHub : onglet **Security → Report a vulnerability**
+(*Private vulnerability reporting*) sur le dépôt.
 
 Merci d'inclure une description, les étapes de reproduction et l'impact estimé.
 Une réponse vous sera apportée dès que possible.
