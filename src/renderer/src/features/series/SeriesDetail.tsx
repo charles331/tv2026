@@ -320,6 +320,7 @@ export function SeriesDetail({
                           variant="ghost"
                           icon={<IconDownload size={14} />}
                           loading={busyEpisodeId === ep.episodeId}
+                          disabled={bulkBusy !== null}
                           onClick={() => handleDownloadEpisode(ep)}
                         >
                           Télécharger

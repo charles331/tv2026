@@ -58,6 +58,21 @@ export interface NewDownload {
 
 export function addDownload(d: NewDownload): DownloadItem {
   const db = getDb()
+  // Dedupe: if an active (queued/downloading/paused) or still-listed completed
+  // download for the same stream + kind already exists, return it instead of
+  // enqueuing a duplicate — avoids two queue rows / two .part files for one
+  // stream (e.g. a per-episode click racing a "download the whole season" run).
+  // 'failed'/'canceled' rows are intentionally NOT matched, so they stay re-addable.
+  const existing = db
+    .prepare(
+      `SELECT id FROM download_queue
+       WHERE stream_id = ? AND kind = ?
+         AND status IN ('queued','downloading','paused','completed')
+       ORDER BY id ASC LIMIT 1`
+    )
+    .get(d.streamId, d.kind) as { id: number } | undefined
+  if (existing) return getDownload(existing.id)!
+
   const now = Date.now()
   const nextPos =
     ((db.prepare('SELECT MAX(queue_position) AS m FROM download_queue').get() as {

@@ -385,15 +385,19 @@ export const handlers: IpcHandlers = {
     const safeName = sanitizeFileName(fileName)
     // Organize the library into per-kind subfolders (Films / Séries). The
     // DownloadManager mkdir's the destination directory recursively before the
-    // transfer, so the subfolder is created on demand.
+    // transfer, so the subfolder is created on demand. Confirm the final path
+    // stays within the configured download dir (defense in depth, mirroring the
+    // recording handler) even though the subfolder is constant and safeName is
+    // sanitized.
     const destDir = joinPath(settings.downloadDir, downloadSubfolder(kind))
+    const destPath = assertPathWithin(joinPath(destDir, safeName), settings.downloadDir)
     const item = downloadManager.add({
       streamId,
       kind,
       name,
       containerExtension: cleanExt,
       fileName: safeName,
-      destPath: joinPath(destDir, safeName)
+      destPath
     })
     return ok(item)
   },

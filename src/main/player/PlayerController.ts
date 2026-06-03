@@ -377,6 +377,11 @@ export class PlayerController {
       return
     }
     if (e.reason === 'eof') {
+      // Recording (if any) stops with the stream — clear the flag BEFORE emitting
+      // 'ended' so the renderer never briefly shows "ended" while still REC.
+      this.recordingPath = null
+      this.status.recording = false
+      this.status.recordingPath = null
       this.setState('ended')
       // Free the connection; the file is done.
       void this.teardown()
@@ -473,9 +478,14 @@ export class PlayerController {
     if (!this.ipc?.isConnected()) {
       throw new PlayerError('Aucune lecture en cours à enregistrer.')
     }
+    // Idempotent: a second start while already recording is a no-op (the UI
+    // toggle already guards this; this hardens the raw IPC boundary so we never
+    // silently switch mpv to a new file mid-recording).
+    if (this.recordingPath) return this.getStatus()
     await mkdir(dirname(filePath), { recursive: true })
-    // Setting stream-record to a path starts recording; mpv keeps the container
-    // it negotiates (we request a .ts file so the live MPEG-TS is copied as-is).
+    // Setting stream-record to a path starts recording. The caller passes a .ts
+    // filename so mpv copies the live MPEG-TS stream as-is; a non-TS source could
+    // produce a malformed file (acceptable for the Xtream MPEG-TS live streams).
     await this.ipc.setProperty('stream-record', filePath)
     this.recordingPath = filePath
     this.status.recording = true
