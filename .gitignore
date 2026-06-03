@@ -8,3 +8,6 @@ release
 !.vscode/extensions.json
 # bundled native binaries (mpv) are not committed; see ARCHITECTURE.md
 resources/bin/
+
+# TypeScript incremental build info
+*.tsbuildinfo
