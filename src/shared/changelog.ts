@@ -24,6 +24,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Favoris : ajoutez films, séries et chaînes en favori avec l’étoile (sur les fiches et les chaînes).',
       'Chaque section affiche une catégorie « ★ Favoris » en tête, listant vos favoris.',
       'Un favori dont la source a disparu après un rafraîchissement reste listé avec un statut « Hors ligne » (rouge).',
+      'Lecture : les contrôles passent dans une barre en bas — on peut continuer à naviguer dans l’app pendant qu’un flux joue dans la fenêtre vidéo.',
       'Le logo en haut à gauche est désormais distinct du bouton Catalogue.'
     ]
   },
