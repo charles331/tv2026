@@ -22,6 +22,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-06-03',
     changes: [
       'Direct : bouton « Enregistrer » pendant la lecture d’une chaîne — le flux est enregistré sur le disque (avec un peu de tampon avant grâce au cache mpv).',
+      'Séries : boutons « Télécharger la saison » et « Télécharger toutes les saisons » sur la fiche série (les épisodes déjà récupérés ou en file sont ignorés).',
       'Téléchargements rangés automatiquement en sous-dossiers « Films », « Séries » et « Live » dans le dossier choisi.',
       'L’application se souvient durablement de ce qui a déjà été téléchargé (même après redémarrage), pour signaler les éléments déjà récupérés.'
     ]
