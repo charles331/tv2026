@@ -14,7 +14,7 @@
 #    the Windows mpv build there. At runtime it resolves to
 #    process.resourcesPath/bin/mpv.exe.
 
-appId: be.speos.tv2026
+appId: io.github.charles331.tv2026
 productName: TV2026
 copyright: Copyright © 2026 charles331
 
@@ -40,6 +40,10 @@ extraResources:
       - '**/*'
 
 win:
+  # Multi-resolution app icon (build/icon.ico, 16→256). Used for the .exe, the
+  # installed app, and shortcuts. build/ is the buildResources dir above, so this
+  # is also picked up by convention, but we set it explicitly for clarity.
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:
@@ -56,6 +60,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: TV2026
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 
 portable:
   artifactName: ${productName}-${version}-portable.${ext}
