@@ -1,7 +1,9 @@
 import { useState, type ReactElement } from 'react'
-import type { SeriesCategory, SeriesStream, VodCategory } from '@shared/index'
+import type { FavoriteItem, SeriesCategory, SeriesStream, VodCategory } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
+import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
+import { FavoritesView } from '../favorites/FavoritesView'
 import {
   Button,
   TextInput,
@@ -35,6 +37,21 @@ function toSidebarCategories(cats: SeriesCategory[]): VodCategory[] {
   }))
 }
 
+/** Build a minimal SeriesStream from a favorite snapshot (to open the detail). */
+function favToSeries(f: FavoriteItem): SeriesStream {
+  return {
+    seriesId: f.itemId,
+    name: f.name,
+    cover: f.image,
+    rating: null,
+    categoryId: f.categoryId ?? '',
+    year: null,
+    lastModified: null,
+    plot: null,
+    genre: null
+  }
+}
+
 export function SeriesScreen({
   onSelectSeries,
   onGoToSettings
@@ -48,12 +65,20 @@ export function SeriesScreen({
   const [sort, setSort] = useState<`${SortBy}:${'asc' | 'desc'}`>('lastModified:desc')
   const [sortBy, sortDir] = sort.split(':') as [SortBy, 'asc' | 'desc']
 
+  const favorites = useFavorites()
+  const isFavorites = categoryId === FAVORITES_CATEGORY_ID
+
   const categoriesState = useAsync<SeriesCategory[]>(
     () => api().series.listCategories().then(unwrap),
     []
   )
 
-  const feed = useSeriesFeed({ categoryId, query, sortBy, sortDir })
+  const feed = useSeriesFeed({
+    categoryId: isFavorites ? null : categoryId,
+    query: isFavorites ? '' : query,
+    sortBy,
+    sortDir
+  })
 
   const isSearching = query.trim().length > 0
   const selectedCategoryName =
@@ -71,6 +96,7 @@ export function SeriesScreen({
         selectedId={categoryId}
         onSelect={setCategoryId}
         allLabel="Toutes les séries"
+        favoritesCount={favorites.count('series')}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -84,12 +110,13 @@ export function SeriesScreen({
               placeholder="Rechercher une série…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
+              disabled={isFavorites}
             />
           </div>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as typeof sort)}
-            disabled={isSearching}
+            disabled={isSearching || isFavorites}
             className="h-10 rounded-lg border border-white/10 bg-surface-sunken px-3 text-sm text-gray-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/70 disabled:opacity-40"
             title={isSearching ? 'Tri indisponible pendant la recherche' : 'Trier'}
           >
@@ -103,21 +130,28 @@ export function SeriesScreen({
 
         <div className="flex items-center justify-between px-5 pt-3 text-sm text-gray-400">
           <span>
-            {isSearching ? (
+            {isFavorites ? (
+              <>
+                <span className="text-gray-200">★ Favoris</span>
+                <span className="ml-2 text-gray-600">· {favorites.count('series')} séries</span>
+              </>
+            ) : isSearching ? (
               <>
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
               </>
             ) : (
               <span className="text-gray-200">{selectedCategoryName}</span>
             )}
-            {!feed.loading && !feed.error && (
+            {!isFavorites && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} séries</span>
             )}
           </span>
         </div>
 
         <div className="min-h-0 flex-1 px-4 pb-2 pt-2">
-          {feed.loading ? (
+          {isFavorites ? (
+            <FavoritesView kind="series" onActivate={(f) => onSelectSeries(favToSeries(f))} />
+          ) : feed.loading ? (
             <LoadingState label="Chargement des séries…" />
           ) : feed.error ? (
             <ErrorState message={feed.error} onRetry={feed.reload} retryLabel="Réessayer" />

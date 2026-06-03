@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import type { Episode, SeriesInfo, SeriesStream } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useDownloads } from '../../lib/downloads'
+import { useToast } from '../../lib/toast'
 import {
   Badge,
   Button,
@@ -15,6 +16,7 @@ import {
   IconCheck
 } from '../../components/ui'
 import { formatDuration, formatRating } from '../../lib/format'
+import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /** "S01E04" tag from a season/episode pair. */
 function tag(season: number, episodeNum: number): string {
@@ -32,12 +34,15 @@ export function SeriesDetail({
   onPlayEpisode: (episode: Episode, seriesName: string) => void
 }): ReactElement {
   const { add, downloadedStreamIds } = useDownloads()
+  const toast = useToast()
   const [info, setInfo] = useState<SeriesInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyEpisodeId, setBusyEpisodeId] = useState<number | null>(null)
+  /** Scope of an in-flight bulk enqueue ('season' | 'all'), or null when idle. */
+  const [bulkBusy, setBulkBusy] = useState<'season' | 'all' | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -94,6 +99,53 @@ export function SeriesDetail({
     [add, title]
   )
 
+  // Enqueue every episode in `episodes` that isn't already downloaded or queued.
+  // The download engine processes them sequentially (single connection). `scope`
+  // drives which button shows a spinner.
+  const enqueueEpisodes = useCallback(
+    async (episodes: Episode[], scope: 'season' | 'all', scopeLabel: string) => {
+      const pending = episodes.filter((ep) => !downloadedStreamIds.has(ep.episodeId))
+      if (pending.length === 0) {
+        toast.show(`${scopeLabel} : déjà téléchargé ou dans la file.`, 'info')
+        return
+      }
+      setBulkBusy(scope)
+      setActionError(null)
+      let added = 0
+      try {
+        for (const ep of pending) {
+          await add({
+            streamId: ep.episodeId,
+            kind: 'series',
+            name: `${title} ${tag(ep.season, ep.episodeNum)}`,
+            containerExtension: ep.containerExtension
+          })
+          added++
+        }
+        const s = added > 1 ? 's' : ''
+        toast.show(`${added} épisode${s} ajouté${s} à la file (${scopeLabel}).`, 'success')
+      } catch (e) {
+        setActionError(describeError(e))
+        if (added > 0) toast.show(`${added} épisode(s) ajouté(s) avant l’erreur.`, 'info')
+      } finally {
+        setBulkBusy(null)
+      }
+    },
+    [add, downloadedStreamIds, title, toast]
+  )
+
+  /** Count of not-yet-downloaded/queued episodes in a list (for button labels). */
+  const pendingCount = useCallback(
+    (episodes: Episode[]): number =>
+      episodes.filter((ep) => !downloadedStreamIds.has(ep.episodeId)).length,
+    [downloadedStreamIds]
+  )
+
+  const allEpisodes = useMemo(
+    () => (info?.seasons ?? []).flatMap((s) => s.episodes),
+    [info]
+  )
+
   return (
     <div
       className="fixed inset-0 z-40 flex justify-center bg-black/70 p-0 backdrop-blur-sm sm:p-6"
@@ -141,6 +193,19 @@ export function SeriesDetail({
                 )}
                 {info?.genre && <span>{info.genre}</span>}
               </div>
+              <div className="mt-4">
+                <FavoriteButton
+                  size="md"
+                  req={{
+                    kind: 'series',
+                    itemId: series.seriesId,
+                    name: title,
+                    image: poster,
+                    containerExtension: null,
+                    categoryId: series.categoryId
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -176,6 +241,46 @@ export function SeriesDetail({
                       Saison {s.seasonNumber}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Bulk download: the selected season and (if several) all seasons. */}
+              {info && season && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<IconDownload size={14} />}
+                    loading={bulkBusy === 'season'}
+                    disabled={bulkBusy !== null || pendingCount(season.episodes) === 0}
+                    onClick={() =>
+                      void enqueueEpisodes(
+                        season.episodes,
+                        'season',
+                        `Saison ${season.seasonNumber}`
+                      )
+                    }
+                  >
+                    {pendingCount(season.episodes) === 0
+                      ? 'Saison déjà dans la file'
+                      : `Télécharger la saison (${pendingCount(season.episodes)})`}
+                  </Button>
+                  {info.seasons.length > 1 && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<IconDownload size={14} />}
+                      loading={bulkBusy === 'all'}
+                      disabled={bulkBusy !== null || pendingCount(allEpisodes) === 0}
+                      onClick={() =>
+                        void enqueueEpisodes(allEpisodes, 'all', 'Toutes les saisons')
+                      }
+                    >
+                      {pendingCount(allEpisodes) === 0
+                        ? 'Tout est dans la file'
+                        : `Télécharger toutes les saisons (${pendingCount(allEpisodes)})`}
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -215,6 +320,7 @@ export function SeriesDetail({
                           variant="ghost"
                           icon={<IconDownload size={14} />}
                           loading={busyEpisodeId === ep.episodeId}
+                          disabled={bulkBusy !== null}
                           onClick={() => handleDownloadEpisode(ep)}
                         >
                           Télécharger

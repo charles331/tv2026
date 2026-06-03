@@ -48,6 +48,7 @@ import type {
   SearchLiveRequest,
   ShortEpgRequest
 } from '../types/live'
+import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from '../types/favorites'
 import type {
   AddDownloadRequest,
   DownloadItem,
@@ -64,6 +65,7 @@ import type {
   PlayerStatus,
   PlayRequest,
   SeekRequest,
+  StartRecordingRequest,
   SubtitleVisibleRequest,
   VolumeRequest
 } from '../types/player'
@@ -117,6 +119,11 @@ export interface IpcContract {
   [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
   [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
 
+  // favorites
+  [InvokeChannels.FAVORITES_LIST]: { request: { kind: FavoriteKind }; response: FavoriteItem[] }
+  [InvokeChannels.FAVORITES_ADD]: { request: AddFavoriteRequest; response: { ok: true } }
+  [InvokeChannels.FAVORITES_REMOVE]: { request: FavoriteRef; response: { ok: true } }
+
   // downloads
   [InvokeChannels.DOWNLOAD_ADD]: { request: AddDownloadRequest; response: DownloadItem }
   [InvokeChannels.DOWNLOAD_LIST]: { request: void; response: DownloadItem[] }
@@ -129,6 +136,7 @@ export interface IpcContract {
     request: { streamId: number; kind?: DownloadKind }
     response: LocalPathResult
   }
+  [InvokeChannels.DOWNLOAD_COMPLETED_IDS]: { request: void; response: { ids: number[] } }
 
   // player
   [InvokeChannels.PLAYER_PLAY]: { request: PlayRequest; response: PlayerStatus }
@@ -145,6 +153,11 @@ export interface IpcContract {
     request: SubtitleVisibleRequest
     response: PlayerStatus
   }
+  [InvokeChannels.PLAYER_START_RECORDING]: {
+    request: StartRecordingRequest
+    response: PlayerStatus
+  }
+  [InvokeChannels.PLAYER_STOP_RECORDING]: { request: void; response: PlayerStatus }
 }
 
 /** Map of event channel -> payload pushed from main to renderer. */

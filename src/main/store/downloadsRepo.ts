@@ -58,6 +58,21 @@ export interface NewDownload {
 
 export function addDownload(d: NewDownload): DownloadItem {
   const db = getDb()
+  // Dedupe: if an active (queued/downloading/paused) or still-listed completed
+  // download for the same stream + kind already exists, return it instead of
+  // enqueuing a duplicate — avoids two queue rows / two .part files for one
+  // stream (e.g. a per-episode click racing a "download the whole season" run).
+  // 'failed'/'canceled' rows are intentionally NOT matched, so they stay re-addable.
+  const existing = db
+    .prepare(
+      `SELECT id FROM download_queue
+       WHERE stream_id = ? AND kind = ?
+         AND status IN ('queued','downloading','paused','completed')
+       ORDER BY id ASC LIMIT 1`
+    )
+    .get(d.streamId, d.kind) as { id: number } | undefined
+  if (existing) return getDownload(existing.id)!
+
   const now = Date.now()
   const nextPos =
     ((db.prepare('SELECT MAX(queue_position) AS m FROM download_queue').get() as {
@@ -180,6 +195,25 @@ export function getCompletedPath(streamId: number, kind: DownloadKind = 'movie')
     )
     .get(streamId, kind, streamId, kind) as { dest_path: string } | undefined
   return row?.dest_path ?? null
+}
+
+/**
+ * All stream ids that have a completed download recorded — across the active
+ * queue (status 'completed') AND the archived history. This is the persistent
+ * source of truth for "already downloaded?", surviving app restarts and the
+ * archiving that removes finished items from the queue. The set is kind-agnostic
+ * (movie stream ids and series episode ids share the renderer's "downloaded"
+ * set, mirroring the queue-derived behaviour).
+ */
+export function listCompletedStreamIds(): number[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT stream_id FROM download_queue WHERE status = 'completed'
+       UNION
+       SELECT stream_id FROM download_history WHERE status = 'completed'`
+    )
+    .all() as { stream_id: number }[]
+  return rows.map((r) => r.stream_id)
 }
 
 /**

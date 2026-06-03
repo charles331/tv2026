@@ -32,7 +32,7 @@ export function AppNav({
         aria-label="Accueil"
         className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent-hover transition-colors hover:bg-accent/30"
       >
-        <IconFilm size={20} />
+        <span className="text-sm font-bold leading-none tracking-tight">TV</span>
       </button>
       <NavButton
         label="Catalogue"

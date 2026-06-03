@@ -38,8 +38,9 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process'
+import { mkdir } from 'fs/promises'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 import type {
   EventContract,
@@ -97,6 +98,8 @@ export class PlayerController {
 
   private status: PlayerStatus = idleStatus()
   private lastPositionEmit = 0
+  /** Absolute path of the file currently being recorded (mpv stream-record). */
+  private recordingPath: string | null = null
 
   /**
    * Wire the typed event emitter (called once from main/index.ts). mpv renders
@@ -250,7 +253,7 @@ export class PlayerController {
    */
   private buildMpvArgs(ipcPath: string, url: string, req: PlayRequest): string[] {
     const winTitle = req.title ? `TV2026 — ${req.title}` : 'TV2026'
-    return [
+    const args = [
       `--input-ipc-server=${ipcPath}`,
       '--idle=yes', // stay alive between files / after end-file
       '--force-window=yes', // open the video window immediately
@@ -269,9 +272,22 @@ export class PlayerController {
       '--network-timeout=30',
       '--user-agent=tv2026',
       // Subtitles: prefer embedded tracks, auto-select.
-      '--sub-auto=fuzzy',
-      url
+      '--sub-auto=fuzzy'
     ]
+
+    // Live: keep a generous demuxer cache + back-buffer. mpv's stream-record
+    // flushes the cached data when recording starts, so a larger back-buffer
+    // lets a recording capture some content from BEFORE the user hit "record".
+    if (req.mediaKind === 'live') {
+      args.push(
+        '--cache=yes',
+        '--demuxer-max-bytes=256MiB',
+        '--demuxer-max-back-bytes=256MiB'
+      )
+    }
+
+    args.push(url)
+    return args
   }
 
   // ---------------------------------------------------------------- IPC wiring
@@ -361,6 +377,11 @@ export class PlayerController {
       return
     }
     if (e.reason === 'eof') {
+      // Recording (if any) stops with the stream — clear the flag BEFORE emitting
+      // 'ended' so the renderer never briefly shows "ended" while still REC.
+      this.recordingPath = null
+      this.status.recording = false
+      this.status.recordingPath = null
       this.setState('ended')
       // Free the connection; the file is done.
       void this.teardown()
@@ -442,6 +463,56 @@ export class PlayerController {
     return this.getStatus()
   }
 
+  /** True when a stream is loaded and can be recorded (mpv IPC is live). */
+  canRecord(): boolean {
+    return this.ipc?.isConnected() === true && this.status.source === 'stream'
+  }
+
+  /**
+   * Start dumping the currently playing stream to `filePath` via mpv's
+   * `stream-record` property. mpv writes the live demuxer cache first (so some
+   * pre-roll from before "record" is captured) then continues until stopped.
+   * Recording stops automatically when playback ends or is stopped (teardown).
+   */
+  async startRecording(filePath: string): Promise<PlayerStatus> {
+    if (!this.ipc?.isConnected()) {
+      throw new PlayerError('Aucune lecture en cours à enregistrer.')
+    }
+    // Idempotent: a second start while already recording is a no-op (the UI
+    // toggle already guards this; this hardens the raw IPC boundary so we never
+    // silently switch mpv to a new file mid-recording).
+    if (this.recordingPath) return this.getStatus()
+    await mkdir(dirname(filePath), { recursive: true })
+    // Setting stream-record to a path starts recording. The caller passes a .ts
+    // filename so mpv copies the live MPEG-TS stream as-is; a non-TS source could
+    // produce a malformed file (acceptable for the Xtream MPEG-TS live streams).
+    await this.ipc.setProperty('stream-record', filePath)
+    this.recordingPath = filePath
+    this.status.recording = true
+    this.status.recordingPath = filePath
+    // Re-emit state so the renderer reflects the recording flag immediately.
+    this.emit(EventChannels.PLAYER_STATE, {
+      state: this.status.state,
+      recording: true
+    })
+    return this.getStatus()
+  }
+
+  /** Stop the current recording (clears mpv's `stream-record`). */
+  async stopRecording(): Promise<PlayerStatus> {
+    if (this.ipc?.isConnected() && this.recordingPath) {
+      await this.ipc.setProperty('stream-record', '').catch(() => undefined)
+    }
+    this.recordingPath = null
+    this.status.recording = false
+    this.status.recordingPath = null
+    this.emit(EventChannels.PLAYER_STATE, {
+      state: this.status.state,
+      recording: false
+    })
+    return this.getStatus()
+  }
+
   /**
    * Stop playback: kill mpv, release the connection lock, reset to idle.
    * Safe to call when nothing is playing.
@@ -465,6 +536,10 @@ export class PlayerController {
     const proc = this.proc
     this.ipc = null
     this.proc = null
+    // A killed mpv stops recording on its own; just clear our flag.
+    this.recordingPath = null
+    this.status.recording = false
+    this.status.recordingPath = null
 
     if (ipc) {
       // Ask mpv to quit gracefully, then dispose the socket.
@@ -494,6 +569,7 @@ export class PlayerController {
     this.ipc?.dispose()
     this.ipc = null
     this.proc = null
+    this.recordingPath = null
     if (proc && proc.exitCode === null && !proc.killed) {
       proc.kill()
       // Synchronous best-effort hard kill on quit.
@@ -517,7 +593,8 @@ export class PlayerController {
     if (state !== 'error') this.status.error = undefined
     this.emit(EventChannels.PLAYER_STATE, {
       state,
-      error: state === 'error' ? this.status.error : undefined
+      error: state === 'error' ? this.status.error : undefined,
+      recording: this.status.recording
     })
     // Always push a position tick alongside a state change so the UI syncs.
     this.emitPosition(true)
@@ -525,7 +602,11 @@ export class PlayerController {
 
   private toError(message: string): PlayerStatus {
     this.status = { ...this.status, state: 'error', error: message }
-    this.emit(EventChannels.PLAYER_STATE, { state: 'error', error: message })
+    this.emit(EventChannels.PLAYER_STATE, {
+      state: 'error',
+      error: message,
+      recording: this.status.recording
+    })
     this.emitPosition(true)
     return this.getStatus()
   }
@@ -562,7 +643,9 @@ function idleStatus(): PlayerStatus {
     muted: false,
     fullscreen: false,
     source: null,
-    title: null
+    title: null,
+    recording: false,
+    recordingPath: null
   }
 }
 

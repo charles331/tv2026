@@ -16,6 +16,7 @@ import {
   IconCheck
 } from '../../components/ui'
 import { formatDuration, formatRating, trailerUrl } from '../../lib/format'
+import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /**
  * Movie detail overlay. Loads full info via `catalog.getInfo` and offers
@@ -211,6 +212,17 @@ export function MovieDetail({
                 >
                   Télécharger
                 </Button>
+                <FavoriteButton
+                  size="lg"
+                  req={{
+                    kind: 'movie',
+                    itemId: stream.streamId,
+                    name: title,
+                    image: poster,
+                    containerExtension: info?.containerExtension ?? stream.containerExtension,
+                    categoryId: stream.categoryId
+                  }}
+                />
                 {trailer && (
                   <a
                     href={trailer}

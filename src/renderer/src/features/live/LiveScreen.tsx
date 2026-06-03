@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import type { LiveCategory, LiveStream, VodCategory } from '@shared/index'
+import type { FavoriteItem, LiveCategory, LiveStream, VodCategory } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
+import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
+import { FavoritesView } from '../favorites/FavoritesView'
 import {
   Button,
   TextInput,
@@ -26,6 +28,19 @@ function toSidebarCategories(cats: LiveCategory[]): VodCategory[] {
   }))
 }
 
+/** Build a minimal LiveStream from a favorite snapshot (to play it). */
+function favToLive(f: FavoriteItem): LiveStream {
+  return {
+    streamId: f.itemId,
+    name: f.name,
+    icon: f.image,
+    number: null,
+    epgChannelId: null,
+    categoryId: f.categoryId ?? '',
+    hasArchive: false
+  }
+}
+
 export function LiveScreen({
   onPlayChannel,
   onGoToSettings
@@ -37,8 +52,16 @@ export function LiveScreen({
   const [rawQuery, setRawQuery] = useState('')
   const query = useDebounced(rawQuery, 300)
 
+  const favorites = useFavorites()
+  const isFavorites = categoryId === FAVORITES_CATEGORY_ID
+
   const categoriesState = useAsync<LiveCategory[]>(() => api().live.listCategories().then(unwrap), [])
-  const feed = useLiveFeed({ categoryId, query, sortBy: 'number', sortDir: 'asc' })
+  const feed = useLiveFeed({
+    categoryId: isFavorites ? null : categoryId,
+    query: isFavorites ? '' : query,
+    sortBy: 'number',
+    sortDir: 'asc'
+  })
 
   const isSearching = query.trim().length > 0
   const selectedCategoryName =
@@ -71,6 +94,7 @@ export function LiveScreen({
         selectedId={categoryId}
         onSelect={setCategoryId}
         allLabel="Toutes les chaînes"
+        favoritesCount={favorites.count('live')}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -84,27 +108,35 @@ export function LiveScreen({
               placeholder="Rechercher une chaîne…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
+              disabled={isFavorites}
             />
           </div>
         </div>
 
         <div className="flex items-center justify-between px-5 pt-3 text-sm text-gray-400">
           <span>
-            {isSearching ? (
+            {isFavorites ? (
+              <>
+                <span className="text-gray-200">★ Favoris</span>
+                <span className="ml-2 text-gray-600">· {favorites.count('live')} chaînes</span>
+              </>
+            ) : isSearching ? (
               <>
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
               </>
             ) : (
               <span className="text-gray-200">{selectedCategoryName}</span>
             )}
-            {!feed.loading && !feed.error && (
+            {!isFavorites && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} chaînes</span>
             )}
           </span>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-2">
-          {feed.loading ? (
+          {isFavorites ? (
+            <FavoritesView kind="live" onActivate={(f) => onPlayChannel(favToLive(f))} />
+          ) : feed.loading ? (
             <LoadingState label="Chargement des chaînes…" />
           ) : feed.error ? (
             <ErrorState message={feed.error} onRetry={feed.reload} retryLabel="Réessayer" />

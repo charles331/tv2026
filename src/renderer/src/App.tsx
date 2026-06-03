@@ -13,6 +13,7 @@ import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
 import { useChangelogStatus } from './lib/changelog'
 import { ToastProvider, useToast } from './lib/toast'
+import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { AppNav, type Route } from './components/AppNav'
 import { Button, LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
@@ -27,9 +28,11 @@ import { PlayerView } from './features/player/PlayerView'
 export function App(): ReactElement {
   return (
     <ToastProvider>
-      <DownloadsProvider>
-        <AppShell />
-      </DownloadsProvider>
+      <FavoritesProvider>
+        <DownloadsProvider>
+          <AppShell />
+        </DownloadsProvider>
+      </FavoritesProvider>
     </ToastProvider>
   )
 }
@@ -47,6 +50,7 @@ function AppShell(): ReactElement {
   const { items } = useDownloads()
   const busy = useConnectionBusy()
   const toast = useToast()
+  const { reload: reloadFavorites } = useFavorites()
   const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
 
   const activeDownloads = useMemo(
@@ -154,6 +158,8 @@ function AppShell(): ReactElement {
       const movies = unwrap(await api().catalog.refresh({ force: true }))
       const series = unwrap(await api().series.refresh({ force: true }))
       const live = unwrap(await api().live.refresh({ force: true }))
+      // Availability of favorites may have changed (sources added/removed).
+      await reloadFavorites()
       toast.show(
         `Catalogues à jour : ${movies.streams} films, ${series.series} séries, ${live.channels} chaînes.`,
         'success'
@@ -163,7 +169,7 @@ function AppShell(): ReactElement {
     } finally {
       setUpdatingAll(false)
     }
-  }, [toast])
+  }, [toast, reloadFavorites])
 
   if (!credsLoaded) {
     return (
@@ -174,33 +180,39 @@ function AppShell(): ReactElement {
   }
 
   return (
-    <div className="flex h-full bg-surface text-gray-100">
-      <AppNav
-        route={route}
-        onNavigate={setRoute}
-        activeDownloads={activeDownloads}
-        busyReason={busy.busy ? busy.reason : null}
-        settingsHasUnseen={changelogHasUnseen}
-        onUpdateAll={() => setConfirmUpdateAll(true)}
-        updatingAll={updatingAll}
-      />
+    <div className="flex h-full flex-col bg-surface text-gray-100">
+      {/* Main row: nav + active screen. Shrinks when the player bar is shown. */}
+      <div className="flex min-h-0 flex-1">
+        <AppNav
+          route={route}
+          onNavigate={setRoute}
+          activeDownloads={activeDownloads}
+          busyReason={busy.busy ? busy.reason : null}
+          settingsHasUnseen={changelogHasUnseen}
+          onUpdateAll={() => setConfirmUpdateAll(true)}
+          updatingAll={updatingAll}
+        />
 
-      <main className="min-w-0 flex-1">
-        {route === 'catalog' && (
-          <CatalogScreen onSelectMovie={setSelected} onGoToSettings={() => setRoute('settings')} />
-        )}
-        {route === 'series' && (
-          <SeriesScreen
-            onSelectSeries={setSelectedSeries}
-            onGoToSettings={() => setRoute('settings')}
-          />
-        )}
-        {route === 'live' && (
-          <LiveScreen onPlayChannel={handlePlayChannel} onGoToSettings={() => setRoute('settings')} />
-        )}
-        {route === 'downloads' && <DownloadsScreen />}
-        {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
-      </main>
+        <main className="min-w-0 flex-1">
+          {route === 'catalog' && (
+            <CatalogScreen onSelectMovie={setSelected} onGoToSettings={() => setRoute('settings')} />
+          )}
+          {route === 'series' && (
+            <SeriesScreen
+              onSelectSeries={setSelectedSeries}
+              onGoToSettings={() => setRoute('settings')}
+            />
+          )}
+          {route === 'live' && (
+            <LiveScreen onPlayChannel={handlePlayChannel} onGoToSettings={() => setRoute('settings')} />
+          )}
+          {route === 'downloads' && <DownloadsScreen />}
+          {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
+        </main>
+      </div>
+
+      {/* Non-blocking player bar (mpv plays in its own window; navigation stays free). */}
+      {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
 
       {selected && (
         <MovieDetail stream={selected} onClose={() => setSelected(null)} onPlay={handlePlay} />
@@ -213,8 +225,6 @@ function AppShell(): ReactElement {
           onPlayEpisode={handlePlayEpisode}
         />
       )}
-
-      {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
 
       {confirmUpdateAll && (
         <div

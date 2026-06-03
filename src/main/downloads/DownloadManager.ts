@@ -211,7 +211,9 @@ export class DownloadManager {
       destPath: opts.destPath,
       containerExtension: opts.containerExtension
     })
-    this.emitState(item.id, item.streamId, 'queued')
+    // Emit the item's actual status: a fresh insert is 'queued', but addDownload
+    // may return an existing (e.g. already-downloading) item when deduping.
+    this.emitState(item.id, item.streamId, item.status)
     void this.kick()
     return item
   }

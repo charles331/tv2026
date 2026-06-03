@@ -43,6 +43,12 @@ export const IconStop = (p: IconProps): ReactElement => (
   </svg>
 )
 
+export const IconRecord = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 export const IconDownload = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <path d="M12 4v11m0 0 4-4m-4 4-4-4" />

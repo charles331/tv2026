@@ -18,6 +18,27 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.8.0',
+    date: '2026-06-03',
+    changes: [
+      'Direct : bouton « Enregistrer » pendant la lecture d’une chaîne — le flux est enregistré sur le disque (avec un peu de tampon avant grâce au cache mpv).',
+      'Séries : boutons « Télécharger la saison » et « Télécharger toutes les saisons » sur la fiche série (les épisodes déjà récupérés ou en file sont ignorés).',
+      'Téléchargements rangés automatiquement en sous-dossiers « Films », « Séries » et « Live » dans le dossier choisi.',
+      'L’application se souvient durablement de ce qui a déjà été téléchargé (même après redémarrage), pour signaler les éléments déjà récupérés.'
+    ]
+  },
+  {
+    version: '0.7.0',
+    date: '2026-06-03',
+    changes: [
+      'Favoris : ajoutez films, séries et chaînes en favori avec l’étoile (sur les fiches et les chaînes).',
+      'Chaque section affiche une catégorie « ★ Favoris » en tête, listant vos favoris.',
+      'Un favori dont la source a disparu après un rafraîchissement reste listé avec un statut « Hors ligne » (rouge).',
+      'Lecture : les contrôles passent dans une barre en bas — on peut continuer à naviguer dans l’app pendant qu’un flux joue dans la fenêtre vidéo.',
+      'Le logo en haut à gauche est désormais distinct du bouton Catalogue.'
+    ]
+  },
+  {
     version: '0.6.0',
     date: '2026-06-03',
     changes: [

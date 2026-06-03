@@ -25,8 +25,9 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
-import { settingsRepo, catalogRepo, seriesRepo, liveRepo, downloadsRepo } from '../store'
+import { settingsRepo, catalogRepo, seriesRepo, liveRepo, favoritesRepo, downloadsRepo } from '../store'
 import { downloadManager } from '../downloads/DownloadManager'
+import { downloadSubfolder } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
 import * as tmdbKey from '../secrets/tmdbKey'
@@ -76,6 +77,15 @@ function sanitizeFileName(name: string): string {
  */
 function joinPath(dir: string, fileName: string): string {
   return pathJoin(dir, fileName)
+}
+
+/** Filesystem-safe local timestamp for recording filenames: "2026-06-03 14-30-05". */
+function recordingTimestamp(d = new Date()): string {
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
+  )
 }
 
 /**
@@ -325,6 +335,37 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  // ---------------- favorites (local, SQLite) ----------------
+  [InvokeChannels.FAVORITES_LIST]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireString(req, 'kind', 16)
+    assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+    return ok(favoritesRepo.listFavorites(kind))
+  },
+
+  [InvokeChannels.FAVORITES_ADD]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireString(req, 'kind', 16)
+    assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+    favoritesRepo.addFavorite({
+      kind,
+      itemId: requireInt(req, 'itemId'),
+      name: requireString(req, 'name', 512),
+      image: optionalString(req, 'image', 2048) ?? null,
+      containerExtension: optionalString(req, 'containerExtension', 16) ?? null,
+      categoryId: optionalString(req, 'categoryId', 128) ?? null
+    })
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.FAVORITES_REMOVE]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireString(req, 'kind', 16)
+    assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+    favoritesRepo.removeFavorite(kind, requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
+  },
+
   // ---------------- downloads (real engine via DownloadManager) ----------------
   [InvokeChannels.DOWNLOAD_ADD]: (req) => {
     assert(isObject(req), 'request must be an object')
@@ -342,13 +383,21 @@ export const handlers: IpcHandlers = {
     const cleanExt = ext.replace(/^\.+/, '').trim() || 'mkv'
     const fileName = optionalString(req, 'fileName') ?? `${name}.${cleanExt}`
     const safeName = sanitizeFileName(fileName)
+    // Organize the library into per-kind subfolders (Films / Séries). The
+    // DownloadManager mkdir's the destination directory recursively before the
+    // transfer, so the subfolder is created on demand. Confirm the final path
+    // stays within the configured download dir (defense in depth, mirroring the
+    // recording handler) even though the subfolder is constant and safeName is
+    // sanitized.
+    const destDir = joinPath(settings.downloadDir, downloadSubfolder(kind))
+    const destPath = assertPathWithin(joinPath(destDir, safeName), settings.downloadDir)
     const item = downloadManager.add({
       streamId,
       kind,
       name,
       containerExtension: cleanExt,
       fileName: safeName,
-      destPath: joinPath(settings.downloadDir, safeName)
+      destPath
     })
     return ok(item)
   },
@@ -399,6 +448,9 @@ export const handlers: IpcHandlers = {
     if (recorded && existsSync(recorded)) return ok({ path: recorded })
     return ok({ path: null })
   },
+
+  [InvokeChannels.DOWNLOAD_COMPLETED_IDS]: () =>
+    ok({ ids: downloadsRepo.listCompletedStreamIds() }),
 
   // ---------------- player (real: drives mpv via PlayerController) ----------------
   [InvokeChannels.PLAYER_PLAY]: async (req) => {
@@ -471,5 +523,27 @@ export const handlers: IpcHandlers = {
     const visible = optionalBoolean(req, 'visible')
     assert(visible !== undefined, 'visible is required')
     return ok(await playerController.setSubtitleVisible(visible))
-  }
+  },
+
+  [InvokeChannels.PLAYER_START_RECORDING]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const settings = settingsRepo.getSettings()
+    if (!settings.downloadDir) {
+      return err('INVALID_INPUT', 'Aucun dossier de téléchargement configuré pour l’enregistrement.')
+    }
+    if (!playerController.canRecord()) {
+      return err('INVALID_INPUT', 'Aucune lecture en direct en cours à enregistrer.')
+    }
+    // Build a sanitized, timestamped .ts filename inside the Live subfolder, then
+    // confirm it stays within the download directory (defense in depth).
+    const base = sanitizeFileName(optionalString(req, 'name', 512) ?? 'Enregistrement')
+    const liveDir = joinPath(settings.downloadDir, downloadSubfolder('live'))
+    const filePath = assertPathWithin(
+      joinPath(liveDir, `${base} ${recordingTimestamp()}.ts`),
+      settings.downloadDir
+    )
+    return ok(await playerController.startRecording(filePath))
+  },
+
+  [InvokeChannels.PLAYER_STOP_RECORDING]: async () => ok(await playerController.stopRecording())
 }

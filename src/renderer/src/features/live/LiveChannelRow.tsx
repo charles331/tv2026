@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
 import type { EpgEntry, LiveStream } from '@shared/index'
 import { api } from '../../lib/ipc'
 import { Button, Poster, IconPlay } from '../../components/ui'
+import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /** Format an epoch (seconds) as a short local time, e.g. "20:00". */
 function clock(secs: number | null): string {
@@ -80,6 +81,17 @@ function LiveChannelRowImpl({
       <Button size="sm" variant="secondary" icon={<IconPlay size={14} />} onClick={() => onPlay(channel)}>
         Regarder
       </Button>
+      <FavoriteButton
+        variant="icon"
+        req={{
+          kind: 'live',
+          itemId: channel.streamId,
+          name: channel.name,
+          image: channel.icon,
+          containerExtension: 'ts',
+          categoryId: channel.categoryId
+        }}
+      />
     </div>
   )
 }
