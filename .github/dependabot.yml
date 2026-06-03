@@ -31,6 +31,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Electron is capped at 41: better-sqlite3 12.10.0 fails to compile against
+      # Electron 42's V8 (v8::External::New/Value + SetNativeDataProperty API
+      # changes). Re-allow the major once better-sqlite3 ships Electron-42 support,
+      # bumping electron + electron-builder + electron-vite together and validating
+      # the Windows build. Minor/patch within 41.x are still taken.
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
