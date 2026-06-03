@@ -1,7 +1,7 @@
 # Plan — Application IPTV de téléchargement de films (VOD)
 
 > App de bureau **Electron + TypeScript**, catalogue cliquable, **téléchargement** de films
-> + **lecture intégrée**. Source : panel Xtream Codes `2026.tarik.buzz`.
+> + **lecture intégrée**. Source : panel Xtream Codes `mon-panel.exemple`.
 
 ---
 
@@ -10,7 +10,7 @@
 | Élément | Valeur confirmée |
 |---|---|
 | Type de fournisseur | **Xtream Codes** — API `player_api.php` |
-| URL de base | `http://2026.tarik.buzz:8080` |
+| URL de base | `http://mon-panel.exemple:8080` |
 | Compte | Actif, expire ~2026, **1 connexion simultanée max** |
 | Catalogue films | **26 680 films**, classés par catégories |
 | Métadonnées | Poster TMDB, note, genre, bande-annonce, synopsis (`get_vod_info`) |

@@ -67,6 +67,9 @@ jobs:
           $exe = Get-ChildItem -Path mpv-extract -Recurse -Filter mpv.exe | Select-Object -First 1
           Copy-Item $exe.FullName -Destination resources/bin/win/mpv.exe -Force
           Get-ChildItem -Path $exe.Directory -Filter *.dll | Copy-Item -Destination resources/bin/win/ -Force
+          # GPL/LGPL compliance: ship mpv's license/notice files next to the binary.
+          Get-ChildItem -Path mpv-extract -Recurse -Include *LICENSE*,*COPYING*,*license*,*.txt |
+            Copy-Item -Destination resources/bin/win/ -Force -ErrorAction SilentlyContinue
           Write-Host "mpv bundled:"; Get-ChildItem resources/bin/win/
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

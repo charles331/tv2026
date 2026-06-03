@@ -68,7 +68,7 @@ export function SettingsScreen({
   // Prefill from stored (non-secret) status.
   useEffect(() => {
     void api()
-      .connection.getCredentials()
+      .connection.getCredentialsStatus()
       .then((r) => {
         if (r.ok) {
           setCreds(r.data)
@@ -300,7 +300,7 @@ export function SettingsScreen({
         )}
 
         <form className="mt-4 space-y-4" onSubmit={handleSaveCreds}>
-          <Field label="URL de base" hint="Ex. http://2026.tarik.buzz:8080 (sans barre finale)">
+          <Field label="URL de base" hint="Ex. http://mon-panel.exemple:8080 (sans barre finale)">
             <TextInput
               type="url"
               inputMode="url"
@@ -510,6 +510,9 @@ export function SettingsScreen({
             themoviedb.org → Paramètres → API
           </a>{' '}
           (clé « API Key (v3 auth) »).
+        </p>
+        <p className="mt-2 text-[11px] italic text-gray-600">
+          This product uses the TMDB API but is not endorsed or certified by TMDB.
         </p>
 
         {tmdbStatus && !tmdbStatus.encryptionAvailable && (

@@ -6,7 +6,7 @@
 
 /** Xtream connection credentials. Handled via encrypted safeStorage only. */
 export interface XtreamCredentials {
-  /** Base URL, e.g. "http://2026.tarik.buzz:8080". No trailing slash. */
+  /** Base URL, e.g. "http://mon-panel.exemple:8080". No trailing slash. */
   baseUrl: string
   username: string
   password: string

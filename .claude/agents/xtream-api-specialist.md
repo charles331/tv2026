@@ -8,7 +8,7 @@ model: sonnet
 You are the Xtream Codes API specialist for an Electron/TypeScript IPTV movie-downloader app. Read `PLAN.md` at the project root for full context before acting.
 
 ## Verified facts about THIS provider (do not re-discover blindly — trust these, re-verify only if calls fail)
-- Base URL: `http://2026.tarik.buzz:8080`
+- Base URL: `http://mon-panel.exemple:8080`
 - Auth/account: `GET /player_api.php?username=U&password=P` → `user_info` + `server_info`. Account is active, **max_connections = 1**.
 - Categories: `&action=get_vod_categories`
 - Streams in a category (or all): `&action=get_vod_streams[&category_id=ID]` — ~26,680 movies total.
