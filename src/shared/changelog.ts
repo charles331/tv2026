@@ -18,6 +18,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.7.2',
+    date: '2026-06-03',
+    changes: ['Nouvelle icône d’application (raccourci, barre des tâches et installeur).']
+  },
+  {
     version: '0.7.1',
     date: '2026-06-03',
     changes: [
