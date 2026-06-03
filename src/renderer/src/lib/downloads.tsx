@@ -55,6 +55,10 @@ export function DownloadsProvider({ children }: { children: ReactNode }): ReactE
   const [items, setItems] = useState<DownloadItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Persistent "already downloaded" set from main (queue + archived history), so
+  // badges survive a restart and the archiving that drops finished items off the
+  // queue. Refreshed alongside the queue list.
+  const [completedIds, setCompletedIds] = useState<number[]>([])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -62,6 +66,8 @@ export function DownloadsProvider({ children }: { children: ReactNode }): ReactE
     try {
       const list = unwrap(await api().downloads.list())
       setItems(list)
+      const completed = unwrap(await api().downloads.completedIds())
+      setCompletedIds(completed.ids)
     } catch (e) {
       setError(describeError(e))
     } finally {
@@ -165,12 +171,12 @@ export function DownloadsProvider({ children }: { children: ReactNode }): ReactE
   }, [refresh])
 
   const downloadedStreamIds = useMemo(() => {
-    const set = new Set<number>()
+    const set = new Set<number>(completedIds)
     for (const it of items) {
       if (it.status === 'completed' || ACTIVE_STATUSES.has(it.status)) set.add(it.streamId)
     }
     return set
-  }, [items])
+  }, [items, completedIds])
 
   const value: DownloadsContextValue = {
     items,

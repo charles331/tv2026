@@ -61,6 +61,7 @@ import type {
   PlayerStatus,
   PlayRequest,
   SeekRequest,
+  StartRecordingRequest,
   SubtitleVisibleRequest,
   VolumeRequest
 } from '../types/player'
@@ -144,6 +145,11 @@ export interface DownloadsApi {
    * Returns `{ path: null }` if not downloaded or the file no longer exists.
    */
   localPath(streamId: number, kind?: DownloadKind): Promise<Result<LocalPathResult>>
+  /**
+   * All stream ids with a completed download on record (queue + history). Used to
+   * persistently flag "already downloaded" items, even after a restart.
+   */
+  completedIds(): Promise<Result<{ ids: number[] }>>
   /** Subscribe to per-item byte/speed/ETA progress ticks. */
   onProgress(cb: (e: DownloadProgressEvent) => void): Unsubscribe
   /** Subscribe to status transitions (completed/failed/etc.). */
@@ -165,6 +171,10 @@ export interface PlayerApi {
   cycleAudio(): Promise<Result<PlayerStatus>>
   /** Show/hide subtitles. */
   setSubtitleVisible(req: SubtitleVisibleRequest): Promise<Result<PlayerStatus>>
+  /** Start recording the playing stream to disk (Live subfolder). */
+  startRecording(req: StartRecordingRequest): Promise<Result<PlayerStatus>>
+  /** Stop the current recording. */
+  stopRecording(): Promise<Result<PlayerStatus>>
   onPosition(cb: (e: PlayerPositionEvent) => void): Unsubscribe
   onState(cb: (e: PlayerStateEvent) => void): Unsubscribe
 }

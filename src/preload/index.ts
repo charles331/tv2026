@@ -213,6 +213,10 @@ const api: RendererApi = {
       invoke(InvokeChannels.DOWNLOAD_LOCAL_PATH, { streamId, kind }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_LOCAL_PATH>>
       >,
+    completedIds: () =>
+      invoke(InvokeChannels.DOWNLOAD_COMPLETED_IDS) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_COMPLETED_IDS>>
+      >,
     onProgress: (cb) => subscribe(EventChannels.DOWNLOAD_PROGRESS, cb),
     onState: (cb) => subscribe(EventChannels.DOWNLOAD_STATE, cb)
   },
@@ -261,6 +265,14 @@ const api: RendererApi = {
     setSubtitleVisible: (req) =>
       invoke(InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE>>
+      >,
+    startRecording: (req) =>
+      invoke(InvokeChannels.PLAYER_START_RECORDING, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_START_RECORDING>>
+      >,
+    stopRecording: () =>
+      invoke(InvokeChannels.PLAYER_STOP_RECORDING) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_STOP_RECORDING>>
       >,
     onPosition: (cb) => subscribe(EventChannels.PLAYER_POSITION, cb),
     onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb)

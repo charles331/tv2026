@@ -18,6 +18,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.8.0',
+    date: '2026-06-03',
+    changes: [
+      'Direct : bouton « Enregistrer » pendant la lecture d’une chaîne — le flux est enregistré sur le disque (avec un peu de tampon avant grâce au cache mpv).',
+      'Téléchargements rangés automatiquement en sous-dossiers « Films », « Séries » et « Live » dans le dossier choisi.',
+      'L’application se souvient durablement de ce qui a déjà été téléchargé (même après redémarrage), pour signaler les éléments déjà récupérés.'
+    ]
+  },
+  {
     version: '0.7.0',
     date: '2026-06-03',
     changes: [

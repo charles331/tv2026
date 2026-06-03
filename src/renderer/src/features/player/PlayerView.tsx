@@ -11,9 +11,11 @@ import {
   IconVolumeMute,
   IconFullscreen,
   IconSubtitles,
-  IconFilm
+  IconFilm,
+  IconRecord
 } from '../../components/ui'
 import { formatDuration } from '../../lib/format'
+import { useToast } from '../../lib/toast'
 import { usePlayer } from './usePlayer'
 
 /**
@@ -34,8 +36,24 @@ export function PlayerView({
   onClose: () => void
 }): ReactElement {
   const player = usePlayer()
+  const toast = useToast()
   const { status, unavailable } = player
   const [seekPreview, setSeekPreview] = useState<number | null>(null)
+
+  // Recording is offered only for live streams (mpv `stream-record`).
+  const isLive = request.mediaKind === 'live'
+  const recording = status.recording
+
+  const toggleRecord = async (): Promise<void> => {
+    if (recording) {
+      const ok = await player.stopRecording()
+      if (ok) toast.show('Enregistrement arrêté — fichier dans le dossier « Live ».', 'success')
+    } else {
+      const ok = await player.startRecording(request.title)
+      if (ok) toast.show('Enregistrement démarré.', 'success')
+      else toast.show('Impossible de démarrer l’enregistrement.', 'error')
+    }
+  }
 
   // Kick off playback when the requested source changes; stop on unmount.
   useEffect(() => {
@@ -181,6 +199,23 @@ export function PlayerView({
             >
               AUD
             </button>
+            {isLive && (
+              <button
+                type="button"
+                onClick={() => void toggleRecord()}
+                title={recording ? 'Arrêter l’enregistrement' : 'Enregistrer le direct'}
+                aria-label={recording ? 'Arrêter l’enregistrement' : 'Enregistrer le direct'}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold transition-colors',
+                  recording
+                    ? 'animate-pulse bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                    : 'text-gray-300 hover:text-white'
+                )}
+              >
+                <IconRecord size={14} />
+                {recording ? 'REC' : ''}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void player.setFullscreen(!status.fullscreen)}

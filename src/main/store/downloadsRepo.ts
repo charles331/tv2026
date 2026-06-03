@@ -183,6 +183,25 @@ export function getCompletedPath(streamId: number, kind: DownloadKind = 'movie')
 }
 
 /**
+ * All stream ids that have a completed download recorded — across the active
+ * queue (status 'completed') AND the archived history. This is the persistent
+ * source of truth for "already downloaded?", surviving app restarts and the
+ * archiving that removes finished items from the queue. The set is kind-agnostic
+ * (movie stream ids and series episode ids share the renderer's "downloaded"
+ * set, mirroring the queue-derived behaviour).
+ */
+export function listCompletedStreamIds(): number[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT stream_id FROM download_queue WHERE status = 'completed'
+       UNION
+       SELECT stream_id FROM download_history WHERE status = 'completed'`
+    )
+    .all() as { stream_id: number }[]
+  return rows.map((r) => r.stream_id)
+}
+
+/**
  * On startup, downloads left in 'downloading' from a previous run can't still
  * be active — reset them to 'paused' so the engine can resume cleanly.
  */

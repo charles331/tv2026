@@ -6,7 +6,8 @@ import {
   parseContentRangeTotal,
   describeError,
   formatBytes,
-  renameWithRetry
+  renameWithRetry,
+  downloadSubfolder
 } from '../../src/main/downloads/helpers'
 
 /** Build an errno-style error with a .code, like Node's fs throws. */
@@ -19,6 +20,14 @@ function errnoError(code: string): NodeJS.ErrnoException {
 describe('partPath', () => {
   it('appends .part to the final path', () => {
     expect(partPath('/dl/Movie (2021).mkv')).toBe('/dl/Movie (2021).mkv.part')
+  })
+})
+
+describe('downloadSubfolder', () => {
+  it('maps each media kind to its library subfolder', () => {
+    expect(downloadSubfolder('movie')).toBe('Films')
+    expect(downloadSubfolder('series')).toBe('Séries')
+    expect(downloadSubfolder('live')).toBe('Live')
   })
 })
 

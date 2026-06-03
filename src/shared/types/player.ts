@@ -37,8 +37,18 @@ export interface PlayerStatus {
   /** What is currently loaded. */
   source: PlaySourceKind | null
   title: string | null
+  /** True while mpv is dumping the live stream to disk (recording). */
+  recording: boolean
+  /** Absolute path of the file being recorded, when recording. */
+  recordingPath?: string | null
   /** Set when state === 'error'. */
   error?: string
+}
+
+/** Request to start recording the current stream to disk. */
+export interface StartRecordingRequest {
+  /** Suggested base name (e.g. the channel name); sanitized + timestamped in main. */
+  name?: string
 }
 
 export interface SeekRequest {
@@ -71,4 +81,6 @@ export interface PlayerPositionEvent {
 export interface PlayerStateEvent {
   state: PlayerState
   error?: string
+  /** Current recording flag, so the UI stays in sync when playback ends/stops. */
+  recording?: boolean
 }

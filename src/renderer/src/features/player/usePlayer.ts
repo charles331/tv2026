@@ -16,7 +16,9 @@ const IDLE_STATUS: PlayerStatus = {
   muted: false,
   fullscreen: false,
   source: null,
-  title: null
+  title: null,
+  recording: false,
+  recordingPath: null
 }
 
 export interface PlayerController {
@@ -33,6 +35,9 @@ export interface PlayerController {
   setFullscreen: (fullscreen: boolean) => Promise<void>
   cycleSubtitle: () => Promise<void>
   cycleAudio: () => Promise<void>
+  /** Resolves true when recording actually started/stopped. */
+  startRecording: (name?: string) => Promise<boolean>
+  stopRecording: () => Promise<boolean>
 }
 
 export function usePlayer(): PlayerController {
@@ -53,7 +58,12 @@ export function usePlayer(): PlayerController {
       }))
     })
     const offState = api().player.onState((e) => {
-      setStatus((s) => ({ ...s, state: e.state, error: e.error }))
+      setStatus((s) => ({
+        ...s,
+        state: e.state,
+        error: e.error,
+        recording: e.recording ?? s.recording
+      }))
       if (e.state === 'error' && e.error) setError(e.error)
     })
     return () => {
@@ -63,13 +73,15 @@ export function usePlayer(): PlayerController {
   }, [])
 
   // Apply a Result from the player API: update status or flag unavailable.
-  const apply = useCallback(async (call: Promise<Result<PlayerStatus>>): Promise<void> => {
+  // Returns true when the call succeeded (used by the recording toggle).
+  const runAction = useCallback(async (call: Promise<Result<PlayerStatus>>): Promise<boolean> => {
     setError(null)
     try {
       const r = await call
       if (r.ok) {
         setStatus(r.data)
         setUnavailable(false)
+        return true
       } else if (r.error.code === 'NOT_IMPLEMENTED') {
         // mpv backend not wired yet — show "préparation" instead of an error.
         setUnavailable(true)
@@ -79,7 +91,16 @@ export function usePlayer(): PlayerController {
     } catch (e) {
       setError(describeError(e))
     }
+    return false
   }, [])
+
+  // Most actions don't care about the success boolean.
+  const apply = useCallback(
+    async (call: Promise<Result<PlayerStatus>>): Promise<void> => {
+      await runAction(call)
+    },
+    [runAction]
+  )
 
   const play = useCallback(
     (req: PlayRequest) => {
@@ -119,6 +140,12 @@ export function usePlayer(): PlayerController {
   const cycleSubtitle = useCallback(() => apply(api().player.cycleSubtitle()), [apply])
   const cycleAudio = useCallback(() => apply(api().player.cycleAudio()), [apply])
 
+  const startRecording = useCallback(
+    (name?: string) => runAction(api().player.startRecording({ name })),
+    [runAction]
+  )
+  const stopRecording = useCallback(() => runAction(api().player.stopRecording()), [runAction])
+
   return {
     status,
     unavailable,
@@ -131,6 +158,8 @@ export function usePlayer(): PlayerController {
     toggleMute,
     setFullscreen,
     cycleSubtitle,
-    cycleAudio
+    cycleAudio,
+    startRecording,
+    stopRecording
   }
 }

@@ -65,6 +65,7 @@ import type {
   PlayerStatus,
   PlayRequest,
   SeekRequest,
+  StartRecordingRequest,
   SubtitleVisibleRequest,
   VolumeRequest
 } from '../types/player'
@@ -135,6 +136,7 @@ export interface IpcContract {
     request: { streamId: number; kind?: DownloadKind }
     response: LocalPathResult
   }
+  [InvokeChannels.DOWNLOAD_COMPLETED_IDS]: { request: void; response: { ids: number[] } }
 
   // player
   [InvokeChannels.PLAYER_PLAY]: { request: PlayRequest; response: PlayerStatus }
@@ -151,6 +153,11 @@ export interface IpcContract {
     request: SubtitleVisibleRequest
     response: PlayerStatus
   }
+  [InvokeChannels.PLAYER_START_RECORDING]: {
+    request: StartRecordingRequest
+    response: PlayerStatus
+  }
+  [InvokeChannels.PLAYER_STOP_RECORDING]: { request: void; response: PlayerStatus }
 }
 
 /** Map of event channel -> payload pushed from main to renderer. */

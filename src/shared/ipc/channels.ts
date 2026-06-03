@@ -64,6 +64,7 @@ export const InvokeChannels = {
   DOWNLOAD_REORDER: 'download:reorder',
   DOWNLOAD_CLEAR_COMPLETED: 'download:clearCompleted',
   DOWNLOAD_LOCAL_PATH: 'download:localPath',
+  DOWNLOAD_COMPLETED_IDS: 'download:completedIds', // persistent "already downloaded" set
 
   // --- player ---
   PLAYER_PLAY: 'player:play',
@@ -76,7 +77,9 @@ export const InvokeChannels = {
   PLAYER_STATUS: 'player:status',
   PLAYER_CYCLE_SUBTITLE: 'player:cycleSubtitle',
   PLAYER_CYCLE_AUDIO: 'player:cycleAudio',
-  PLAYER_SET_SUBTITLE_VISIBLE: 'player:setSubtitleVisible'
+  PLAYER_SET_SUBTITLE_VISIBLE: 'player:setSubtitleVisible',
+  PLAYER_START_RECORDING: 'player:startRecording', // dump the playing stream to disk (live)
+  PLAYER_STOP_RECORDING: 'player:stopRecording'
 } as const
 
 /** One-way event channels (main -> renderer). */

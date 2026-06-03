@@ -19,6 +19,31 @@ export function partPath(finalPath: string): string {
   return `${finalPath}.part`
 }
 
+/**
+ * Media category whose files get their own subfolder under the configured
+ * download directory. 'movie'/'series' come from the download queue; 'live' is
+ * used by the player's live recording feature.
+ */
+export type MediaFolderKind = 'movie' | 'series' | 'live'
+
+/**
+ * Name of the subfolder (inside the download directory) where a given media kind
+ * is stored, so the library stays organized: Films / Séries / Live. Keeping this
+ * pure (and unit-tested) guarantees the same mapping is used by the download
+ * engine and the live recorder.
+ */
+export function downloadSubfolder(kind: MediaFolderKind): string {
+  switch (kind) {
+    case 'series':
+      return 'Séries'
+    case 'live':
+      return 'Live'
+    case 'movie':
+    default:
+      return 'Films'
+  }
+}
+
 /** Read a single header value (undici may surface a header as string[]). */
 export function headerValue(h: string | string[] | undefined): string | undefined {
   if (Array.isArray(h)) return h[0]
