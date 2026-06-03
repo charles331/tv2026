@@ -1,0 +1,52 @@
+# Dependabot configuration.
+#
+# Goal: stay up to date without noisy, hard-to-test mega-PRs.
+#  - Routine MINOR + PATCH bumps are batched into a single weekly PR.
+#  - MAJOR bumps come as SEPARATE, individual PRs (one ecosystem-shift at a
+#    time), because a major often needs companion bumps + a migration and must
+#    be validated against the Windows build, not just CI.
+#
+# NOTE: tightly-coupled packages must move together (CI won't catch a partial
+# bump's build break unless the build job runs — see .github/workflows/ci.yml):
+#   - electron  <-> electron-builder <-> electron-vite
+#   - vite      <-> @vitejs/plugin-react <-> vitest <-> @vitest/coverage-v8
+#   - eslint    <-> typescript-eslint <-> eslint-plugin-react(-hooks)
+#   - tailwindcss <-> @tailwindcss/postcss
+# When reviewing a grouped/major PR, check the matching companion is included.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Electron is capped at 41: better-sqlite3 12.10.0 fails to compile against
+      # Electron 42's V8 (v8::External::New/Value + SetNativeDataProperty API
+      # changes). Re-allow the major once better-sqlite3 ships Electron-42 support,
+      # bumping electron + electron-builder + electron-vite together and validating
+      # the Windows build. Minor/patch within 41.x are still taken.
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -291,7 +291,6 @@ export class DownloadManager {
     if (this.looping) return
     this.looping = true
     try {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         if (this.playbackActive || connectionLock.current() === 'playback') return
         const next = this.nextQueued()

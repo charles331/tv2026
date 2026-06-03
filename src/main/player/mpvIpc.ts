@@ -64,7 +64,6 @@ export class MpvIpc extends EventEmitter {
   async connect(timeoutMs = 8000): Promise<void> {
     const deadline = Date.now() + timeoutMs
     // Retry loop: the server endpoint appears a moment after mpv spawns.
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
         await this.tryConnectOnce()
