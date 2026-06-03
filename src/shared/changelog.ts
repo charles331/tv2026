@@ -18,6 +18,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.6.0',
+    date: '2026-06-03',
+    changes: [
+      'Le logo en haut à gauche ramène désormais au catalogue (Accueil).',
+      'Colonne des catégories : largeur ajustable (glisser le bord) et champ de filtre.',
+      'Bouton « Tout mettre à jour » (films + séries + direct) dans la barre de gauche, avec confirmation et notification de fin.'
+    ]
+  },
+  {
     version: '0.5.0',
     date: '2026-06-02',
     changes: [

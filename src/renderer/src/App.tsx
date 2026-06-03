@@ -8,12 +8,13 @@ import type {
   VodInfo,
   VodStream
 } from '@shared/index'
-import { api } from './lib/ipc'
+import { api, describeError, unwrap } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
 import { useChangelogStatus } from './lib/changelog'
+import { ToastProvider, useToast } from './lib/toast'
 import { AppNav, type Route } from './components/AppNav'
-import { LoadingState } from './components/ui'
+import { Button, LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
 import { SeriesScreen } from './features/series/SeriesScreen'
 import { SeriesDetail } from './features/series/SeriesDetail'
@@ -25,9 +26,11 @@ import { PlayerView } from './features/player/PlayerView'
 
 export function App(): ReactElement {
   return (
-    <DownloadsProvider>
-      <AppShell />
-    </DownloadsProvider>
+    <ToastProvider>
+      <DownloadsProvider>
+        <AppShell />
+      </DownloadsProvider>
+    </ToastProvider>
   )
 }
 
@@ -38,9 +41,12 @@ function AppShell(): ReactElement {
   const [selected, setSelected] = useState<VodStream | null>(null)
   const [selectedSeries, setSelectedSeries] = useState<SeriesStream | null>(null)
   const [playRequest, setPlayRequest] = useState<PlayRequest | null>(null)
+  const [confirmUpdateAll, setConfirmUpdateAll] = useState(false)
+  const [updatingAll, setUpdatingAll] = useState(false)
 
   const { items } = useDownloads()
   const busy = useConnectionBusy()
+  const toast = useToast()
   const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
 
   const activeDownloads = useMemo(
@@ -139,6 +145,26 @@ function AppShell(): ReactElement {
     )
   }, [])
 
+  // Refresh movies + series + live in one go (triggered from the nav, confirmed
+  // by the user). Reports the outcome via a toast.
+  const runUpdateAll = useCallback(async () => {
+    setConfirmUpdateAll(false)
+    setUpdatingAll(true)
+    try {
+      const movies = unwrap(await api().catalog.refresh({ force: true }))
+      const series = unwrap(await api().series.refresh({ force: true }))
+      const live = unwrap(await api().live.refresh({ force: true }))
+      toast.show(
+        `Catalogues à jour : ${movies.streams} films, ${series.series} séries, ${live.channels} chaînes.`,
+        'success'
+      )
+    } catch (e) {
+      toast.show(`Échec de la mise à jour : ${describeError(e)}`, 'error')
+    } finally {
+      setUpdatingAll(false)
+    }
+  }, [toast])
+
   if (!credsLoaded) {
     return (
       <div className="flex h-full items-center justify-center bg-surface">
@@ -155,6 +181,8 @@ function AppShell(): ReactElement {
         activeDownloads={activeDownloads}
         busyReason={busy.busy ? busy.reason : null}
         settingsHasUnseen={changelogHasUnseen}
+        onUpdateAll={() => setConfirmUpdateAll(true)}
+        updatingAll={updatingAll}
       />
 
       <main className="min-w-0 flex-1">
@@ -187,6 +215,35 @@ function AppShell(): ReactElement {
       )}
 
       {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
+
+      {confirmUpdateAll && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+          onClick={() => setConfirmUpdateAll(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="fade-in w-full max-w-md rounded-2xl border border-white/10 bg-surface-raised p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-white">Tout mettre à jour ?</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              Les catalogues <strong>films</strong>, <strong>séries</strong> et <strong>direct</strong>{' '}
+              seront re-téléchargés depuis le fournisseur vers le cache local. L’opération peut
+              durer plusieurs minutes.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setConfirmUpdateAll(false)}>
+                Annuler
+              </Button>
+              <Button variant="primary" onClick={() => void runUpdateAll()}>
+                Tout mettre à jour
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

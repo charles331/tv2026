@@ -16,7 +16,7 @@ function PosterCardImpl({
     <button
       type="button"
       onClick={() => onSelect(stream)}
-      className="group flex w-full flex-col text-left focus-visible:outline-none"
+      className="group flex w-full min-w-0 flex-col text-left focus-visible:outline-none"
       title={stream.name}
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-poster ring-1 ring-white/5 transition-all duration-200 group-hover:-translate-y-1 group-hover:shadow-poster-hover group-hover:ring-accent/40 group-focus-visible:ring-2 group-focus-visible:ring-accent">
@@ -37,11 +37,11 @@ function PosterCardImpl({
           )}
         </div>
       </div>
-      <div className="mt-2 px-0.5">
+      <div className="mt-2 w-full min-w-0 px-0.5">
         <p className="truncate text-sm font-medium text-gray-100 group-hover:text-white">
           {stream.name}
         </p>
-        <p className="text-xs text-gray-500">{stream.year ?? '—'}</p>
+        <p className="truncate text-xs text-gray-500">{stream.year ?? '—'}</p>
       </div>
     </button>
   )
