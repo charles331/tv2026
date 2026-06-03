@@ -59,7 +59,7 @@ function AppShell(): ReactElement {
 
   const refreshCreds = useCallback(() => {
     void api()
-      .connection.getCredentials()
+      .connection.getCredentialsStatus()
       .then((r) => {
         if (r.ok) setCreds(r.data)
         setCredsLoaded(true)

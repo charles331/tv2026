@@ -76,7 +76,8 @@ export interface AppApi {
 
 export interface ConnectionApi {
   test(): Promise<Result<ConnectionTestResult>>
-  getCredentials(): Promise<Result<CredentialsStatus>>
+  /** Stored-credentials status (booleans + baseUrl/username) — never the password. */
+  getCredentialsStatus(): Promise<Result<CredentialsStatus>>
   setCredentials(creds: XtreamCredentials): Promise<Result<CredentialsStatus>>
   clearCredentials(): Promise<Result<CredentialsStatus>>
 }

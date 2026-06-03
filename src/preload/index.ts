@@ -52,7 +52,7 @@ const api: RendererApi = {
 
   connection: {
     test: () => invoke(InvokeChannels.CONNECTION_TEST) as Promise<Result<IpcResponse<typeof InvokeChannels.CONNECTION_TEST>>>,
-    getCredentials: () =>
+    getCredentialsStatus: () =>
       invoke(InvokeChannels.CREDENTIALS_GET) as Promise<
         Result<IpcResponse<typeof InvokeChannels.CREDENTIALS_GET>>
       >,

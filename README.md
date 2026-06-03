@@ -41,13 +41,19 @@ consultez un professionnel du droit.*
 
 - 🔐 Connexion à un panel Xtream Codes (identifiants **chiffrés** localement, jamais
   stockés en clair).
-- 🎬 Catalogue VOD navigable : catégories, recherche, posters, fiches détaillées
-  (synopsis, note, bande-annonce).
-- ⬇️ **Téléchargement de films** : file d'attente, **reprise après coupure**,
-  progression en temps réel (vitesse / ETA), nommage propre des fichiers.
-- ▶️ Lecture intégrée via **mpv** (lit le fichier téléchargé hors-ligne, ou en
-  streaming direct).
-- 🔄 **Mise à jour automatique** de l'application (via GitHub Releases).
+- 🎬 **Films (VOD)** : catégories, recherche, posters, fiches détaillées
+  (synopsis, casting, bande-annonce).
+- 📺 **Séries** : navigation par catégories, fiche série avec **saisons et
+  épisodes**, lecture et téléchargement **par épisode**.
+- 📡 **Direct (TV)** : chaînes par catégories, **guide des programmes (EPG)**
+  en cours / à suivre, lecture en direct.
+- ⭐ **Notes** : note du fournisseur + (optionnel) **note TMDB en direct** et
+  **lien IMDb** sur les fiches films (nécessite une clé API TMDB gratuite).
+- ⬇️ **Téléchargement** de films et d'épisodes : file d'attente, **reprise après
+  coupure**, progression temps réel (vitesse / ETA), nommage propre des fichiers.
+- ▶️ Lecture via **mpv** (fichier téléchargé hors-ligne, ou streaming direct).
+- 🔄 **Mise à jour automatique** de l'application (via GitHub Releases) + bouton
+  « Vérifier les mises à jour ».
 
 > ℹ️ **Contrainte importante** : la plupart des abonnements n'autorisent
 > **qu'une seule connexion simultanée**. L'app en tient compte : les
@@ -70,7 +76,15 @@ consultez un professionnel du droit.*
 > sans installation, **mais ne bénéficie pas de la mise à jour automatique**.
 
 **Premier lancement** : *Réglages* → saisir l'URL et les identifiants du fournisseur
-→ *Tester la connexion* → *Rafraîchir le catalogue* → parcourir et télécharger.
+→ *Tester la connexion* → *Rafraîchir le catalogue* (et *les séries* / *le direct*)
+→ parcourir, lire et télécharger. Un bouton **« Tout mettre à jour »** (barre de
+gauche) rafraîchit films + séries + direct en une fois.
+
+> ⭐ **Notes TMDB / lien IMDb (optionnel)** : dans *Réglages → Notes des films
+> (TMDB)*, collez une **clé API TMDB** (gratuite, *API Key v3* sur
+> [themoviedb.org](https://www.themoviedb.org/settings/api)) pour afficher la note
+> communautaire à jour et un lien IMDb sur les fiches films. La clé est stockée
+> **chiffrée** localement.
 
 ### Mise à jour
 
@@ -159,4 +173,17 @@ Architecture détaillée : [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Licence
 
-Distribué sous licence **MIT**. Voir [`LICENSE`](LICENSE).
+Le **code** de TV2026 est distribué sous licence **MIT**. Voir [`LICENSE`](LICENSE).
+
+### Composants tiers
+
+Les **Releases** (installeur Windows) embarquent des composants sous leurs propres
+licences — voir [`THIRD-PARTY.md`](THIRD-PARTY.md). En particulier :
+
+- **mpv** (lecteur vidéo) est sous **GPLv2+/LGPL** et distribué **tel quel,
+  comme exécutable séparé** (TV2026 ne fait que l'invoquer) ; son code source et
+  sa licence sont référencés dans `THIRD-PARTY.md`.
+- La fonction de note utilise l'**API TMDB** avec votre propre clé :
+  *This product uses the TMDB API but is not endorsed or certified by TMDB.*
+
+Voir aussi [`SECURITY.md`](SECURITY.md) et [`CONTRIBUTING.md`](CONTRIBUTING.md).
