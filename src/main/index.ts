@@ -124,7 +124,9 @@ if (!gotLock) {
   })
 
   app.whenReady().then(() => {
-    electronApp.setAppUserModelId('be.speos.tv2026')
+    // Must match `appId` in electron-builder.yml (Windows taskbar grouping,
+    // notifications). Neutral id — no employer domain leaked.
+    electronApp.setAppUserModelId('io.github.charles331.tv2026')
 
     // Initialize store + reconcile any download left mid-flight by a crash.
     initDatabase()
