@@ -1,6 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS v4 single-import entry. The custom theme (colors, shadows) and
+   content globs still live in the legacy JS config, loaded via @config. */
+@import 'tailwindcss';
+@config '../../../../tailwind.config.cjs';
 
 :root {
   color-scheme: dark;
@@ -49,38 +50,37 @@ body {
   background-color: rgba(255, 255, 255, 0.22);
 }
 
-@layer utilities {
-  /* Poster shimmer placeholder while images lazy-load. */
-  .shimmer {
-    background: linear-gradient(
-      100deg,
-      rgba(255, 255, 255, 0.03) 30%,
-      rgba(255, 255, 255, 0.08) 50%,
-      rgba(255, 255, 255, 0.03) 70%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.4s ease-in-out infinite;
+/* Custom animations / helper classes. Written as plain CSS (not @layer) so they
+   are always emitted under Tailwind v4 — they are referenced directly in JSX. */
+.shimmer {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.03) 30%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
   }
-  @keyframes shimmer {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
+  100% {
+    background-position: -200% 0;
   }
+}
 
-  .fade-in {
-    animation: fade-in 0.25s ease both;
+.fade-in {
+  animation: fade-in 0.25s ease both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

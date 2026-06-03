@@ -56,3 +56,10 @@ jobs:
 
       - name: Tests (Vitest)
         run: pnpm test
+
+      # Bundle main/preload/renderer with electron-vite. This runs fine on Linux
+      # without the native rebuild (deps are externalized) and is what catches a
+      # broken toolchain bump — e.g. a vite / electron-vite / tailwind /
+      # plugin-react version mismatch that lint/typecheck/test would NOT surface.
+      - name: Build (electron-vite bundle)
+        run: pnpm run build

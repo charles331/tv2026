@@ -11,10 +11,9 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["react", "react-dom"],
-    "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@renderer/*": ["src/renderer/src/*"]
+      "@shared/*": ["./src/shared/*"],
+      "@renderer/*": ["./src/renderer/src/*"]
     }
   }
 }
