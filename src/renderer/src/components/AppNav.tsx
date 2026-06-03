@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
-import { cn, IconFilm, IconTv, IconBroadcast, IconQueue, IconSettings } from './ui'
+import { cn, Spinner, IconFilm, IconTv, IconBroadcast, IconQueue, IconRefresh, IconSettings } from './ui'
 
 export type Route = 'catalog' | 'series' | 'live' | 'downloads' | 'settings'
 
@@ -8,7 +8,9 @@ export function AppNav({
   onNavigate,
   activeDownloads,
   busyReason,
-  settingsHasUnseen
+  settingsHasUnseen,
+  onUpdateAll,
+  updatingAll
 }: {
   route: Route
   onNavigate: (route: Route) => void
@@ -16,12 +18,22 @@ export function AppNav({
   busyReason: 'download' | 'playback' | null
   /** Show a "what's new" dot on the Réglages item after an update. */
   settingsHasUnseen?: boolean
+  /** Refresh movies + series + live catalogs (with confirmation, handled by App). */
+  onUpdateAll?: () => void
+  /** True while the global refresh is running (shows a spinner). */
+  updatingAll?: boolean
 }): ReactElement {
   return (
     <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-surface-sunken py-4">
-      <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent-hover">
+      <button
+        type="button"
+        onClick={() => onNavigate('catalog')}
+        title="Accueil (catalogue)"
+        aria-label="Accueil"
+        className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent-hover transition-colors hover:bg-accent/30"
+      >
         <IconFilm size={20} />
-      </div>
+      </button>
       <NavButton
         label="Catalogue"
         active={route === 'catalog'}
@@ -48,6 +60,15 @@ export function AppNav({
         badge={activeDownloads > 0 ? activeDownloads : undefined}
       />
       <div className="mt-auto" />
+      {onUpdateAll && (
+        <NavButton
+          label="Tout mettre à jour (films, séries, direct)"
+          active={false}
+          disabled={updatingAll}
+          onClick={onUpdateAll}
+          icon={updatingAll ? <Spinner size={18} /> : <IconRefresh size={18} />}
+        />
+      )}
       {busyReason && (
         <span
           className={cn(
@@ -78,7 +99,8 @@ function NavButton({
   onClick,
   icon,
   badge,
-  dot
+  dot,
+  disabled
 }: {
   label: string
   active: boolean
@@ -87,15 +109,17 @@ function NavButton({
   badge?: number
   /** Small notification dot (no count), e.g. "what's new". */
   dot?: boolean
+  disabled?: boolean
 }): ReactElement {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
       className={cn(
-        'relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors',
+        'relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors disabled:opacity-50',
         active
           ? 'bg-accent/20 text-accent-hover'
           : 'text-gray-500 hover:bg-white/[0.06] hover:text-gray-200'
