@@ -53,6 +53,7 @@ import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from
 import type {
   AddReminderRequest,
   RecordingConflictEvent,
+  RecordingConflictResolvedEvent,
   Reminder,
   ReminderOpenChannelEvent,
   ReminderUpdatedEvent,
@@ -191,6 +192,7 @@ export interface EventContract {
   [EventChannels.REMINDER_UPDATED]: ReminderUpdatedEvent
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
+  [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
 }
 
 /** Convenience aliases. */

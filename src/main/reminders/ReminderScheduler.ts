@@ -57,6 +57,9 @@ export class ReminderScheduler {
   private emit: Emitter = () => {}
   private getWindows: () => BrowserWindow[] = () => []
   private timer: NodeJS.Timeout | null = null
+  /** Re-entrancy guard: a tick may run long (a recording start), and setInterval
+   *  fires regardless — never run two ticks concurrently. */
+  private ticking = false
   /** Reminder ids currently awaiting a conflict decision (avoid re-asking). */
   private readonly awaitingConflict = new Set<number>()
   /** Pending conflict resolvers keyed by reminder id. */
@@ -105,32 +108,52 @@ export class ReminderScheduler {
     return true
   }
 
+  /**
+   * Drop any pending conflict prompt for a reminder (called when it's canceled
+   * mid-prompt). Settling the promise lets handleConflict() unwind; it re-reads
+   * the row and bails because the status is no longer restartable, so a canceled
+   * reminder is never resurrected to `conflict`.
+   */
+  cancelConflict(reminderId: number): void {
+    const pending = this.conflictResolvers.get(reminderId)
+    if (!pending) return
+    clearTimeout(pending.timeout)
+    this.conflictResolvers.delete(reminderId)
+    pending.resolve('keepPlayback')
+  }
+
   // ------------------------------------------------------------------ tick
 
   private async tick(): Promise<void> {
-    let reminders: Reminder[]
+    if (this.ticking) return
+    this.ticking = true
     try {
-      reminders = remindersRepo.listActiveReminders()
-    } catch (e) {
-      console.error('[ReminderScheduler] listActiveReminders failed', e)
-      return
+      let reminders: Reminder[]
+      try {
+        reminders = remindersRepo.listActiveReminders()
+      } catch (e) {
+        console.error('[ReminderScheduler] listActiveReminders failed', e)
+        return
+      }
+      if (reminders.length === 0) return
+
+      const settings = settingsRepo.getSettings()
+      const nowSecs = Math.floor(Date.now() / 1000)
+      const actions = computeDueActions(
+        reminders,
+        nowSecs,
+        settings.recordPadBeforeSecs,
+        settings.recordPadAfterSecs
+      )
+
+      for (const r of actions.missed) this.markStatus(r.id, 'missed')
+      for (const r of actions.toNotify) this.fireNotification(r)
+      for (const r of actions.toStopRecording) this.stopRecording(r)
+      // Recordings last so a notify_record reminder gets its notification first.
+      for (const r of actions.toStartRecording) await this.beginRecording(r)
+    } finally {
+      this.ticking = false
     }
-    if (reminders.length === 0) return
-
-    const settings = settingsRepo.getSettings()
-    const nowSecs = Math.floor(Date.now() / 1000)
-    const actions = computeDueActions(
-      reminders,
-      nowSecs,
-      settings.recordPadBeforeSecs,
-      settings.recordPadAfterSecs
-    )
-
-    for (const r of actions.missed) this.markStatus(r.id, 'missed')
-    for (const r of actions.toNotify) this.fireNotification(r)
-    for (const r of actions.toStopRecording) this.stopRecording(r)
-    // Recordings last so a notify_record reminder gets its notification first.
-    for (const r of actions.toStartRecording) await this.beginRecording(r)
   }
 
   // ------------------------------------------------------------ notifications
@@ -167,26 +190,57 @@ export class ReminderScheduler {
   /** Begin a scheduled recording, resolving a playback conflict first if needed. */
   private async beginRecording(r: Reminder): Promise<void> {
     if (recordingController.isRecording()) {
-      // Another recording is already running and overlaps → conflict.
+      // Another recording overlaps → conflict (retried on a later tick once it
+      // frees up, or marked missed when this one's window ends).
       if (recordingController.currentReminderId() !== r.id) this.markStatus(r.id, 'conflict')
       return
     }
-    if (this.awaitingConflict.has(r.id)) return // already prompting
+    if (this.awaitingConflict.has(r.id)) return // a prompt is already pending
 
-    // Conflict with current PLAYBACK (the single connection is held to watch a
-    // channel). ASK the user; default to keeping playback after a timeout.
     if (this.isPlaybackHoldingConnection()) {
+      // Already answered "keep playback" (or timed out) earlier → don't nag every
+      // tick. It will start by itself once playback frees the connection, or be
+      // marked missed when its record window ends.
+      if (r.status === 'conflict') return
+      // First time the record window meets active playback → ASK, WITHOUT
+      // blocking the tick (awaitingConflict prevents re-asking meanwhile).
+      void this.handleConflict(r)
+      return
+    }
+
+    await this.startRecordingNow(r)
+  }
+
+  /**
+   * Resolve a recording-vs-playback conflict out-of-band so the tick is never
+   * blocked for up to 30 s. Holds `awaitingConflict` for its whole life (so
+   * concurrent ticks skip this reminder), RE-READS the row after the answer (it
+   * may have been canceled while prompting — never resurrect it), and always
+   * emits RECORDING_CONFLICT_RESOLVED so the renderer dismisses its dialog.
+   */
+  private async handleConflict(r: Reminder): Promise<void> {
+    this.awaitingConflict.add(r.id)
+    try {
       const resolution = await this.askConflict(r)
+      const fresh = remindersRepo.getReminder(r.id)
+      if (!fresh || !isRestartableStatus(fresh.status)) return
       if (resolution === 'keepPlayback') {
         this.markStatus(r.id, 'conflict')
         this.notifyConflictKept(r)
         return
       }
-      // switchToRecording: stop playback to free the connection.
+      // switchToRecording: free the connection by stopping playback, unless a
+      // recording started in the meantime.
+      if (recordingController.isRecording()) {
+        this.markStatus(r.id, 'conflict')
+        return
+      }
       await playerController.stop().catch(() => undefined)
+      await this.startRecordingNow(r)
+    } finally {
+      this.awaitingConflict.delete(r.id)
+      this.emit(EventChannels.RECORDING_CONFLICT_RESOLVED, { reminderId: r.id })
     }
-
-    await this.startRecordingNow(r)
   }
 
   private async startRecordingNow(r: Reminder): Promise<void> {
@@ -254,7 +308,6 @@ export class ReminderScheduler {
    * default to 'keepPlayback' after CONFLICT_TIMEOUT_MS.
    */
   private askConflict(r: Reminder): Promise<ConflictResolution> {
-    this.awaitingConflict.add(r.id)
     this.emit(EventChannels.RECORDING_CONFLICT, { reminder: r })
     return new Promise<ConflictResolution>((resolve) => {
       const timeout = setTimeout(() => {
@@ -265,8 +318,6 @@ export class ReminderScheduler {
         resolve: (res) => resolve(res),
         timeout
       })
-    }).finally(() => {
-      this.awaitingConflict.delete(r.id)
     })
   }
 
@@ -299,6 +350,11 @@ export class ReminderScheduler {
     win.focus()
     app.focus({ steal: true })
   }
+}
+
+/** Statuses from which a recording may still (re)start. */
+function isRestartableStatus(s: Reminder['status']): boolean {
+  return s === 'scheduled' || s === 'notified' || s === 'conflict'
 }
 
 /** Format an epoch (seconds) as a short local time, e.g. "20:00". */

@@ -106,6 +106,15 @@ export interface RecordingConflictEvent {
   reminder: Reminder
 }
 
+/**
+ * Event payload: a conflict prompt is no longer pending (the user answered, the
+ * 30 s timeout elapsed, or the reminder was canceled). The renderer dismisses
+ * any open dialog for this reminder.
+ */
+export interface RecordingConflictResolvedEvent {
+  reminderId: number
+}
+
 /** The user's decision when a recording conflicts with current playback. */
 export type ConflictResolution = 'keepPlayback' | 'switchToRecording'
 

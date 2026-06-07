@@ -446,7 +446,10 @@ export const handlers: IpcHandlers = {
   [InvokeChannels.REMINDERS_CANCEL]: (req) => {
     assert(isObject(req), 'request must be an object')
     const id = requireInt(req, 'id')
-    // Stop an in-progress recording for this reminder before marking canceled.
+    // Drop any pending conflict prompt for this reminder (so its 30 s timeout
+    // can't later resurrect a canceled row to `conflict`), and stop an
+    // in-progress recording, before marking it canceled.
+    reminderScheduler.cancelConflict(id)
     recordingController.stop(id)
     const reminder = remindersRepo.cancelReminder(id)
     if (!reminder) return err('NOT_FOUND', `Rappel ${id} introuvable`)

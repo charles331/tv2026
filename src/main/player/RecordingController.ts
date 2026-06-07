@@ -62,15 +62,16 @@ export class RecordingController {
    * is missing, the lock is busy (playback in progress and not yet resolved), or
    * a recording is already running.
    *
-   * `onExit` fires once when the process ends (clean stop or crash) with whether
-   * it looked successful — the scheduler uses it to finalize status.
+   * `onExit` fires once when the process ends (clean stop or crash); the
+   * scheduler finalizes status by re-reading the row (it doesn't need exit codes,
+   * since a deliberate stop kills mpv → a non-zero exit is normal).
    */
   async start(opts: {
     reminderId: number
     streamId: number
     ext?: string
     filePath: string
-    onExit: (info: { ok: boolean; code: number | null }) => void
+    onExit: () => void
   }): Promise<void> {
     if (this.active) {
       throw new RecordingError('Un enregistrement est déjà en cours.')
@@ -121,26 +122,20 @@ export class RecordingController {
     })
     this.active = { reminderId: opts.reminderId, proc: child, token, filePath: opts.filePath }
 
-    const finalize = (code: number | null): void => {
+    const finalize = (): void => {
       // Only act if this is still the active recording (guards double events).
       if (!this.active || this.active.proc !== child) return
       const wasActive = this.active
       this.active = null
       connectionLock.release(wasActive.token)
-      // We kill mpv to stop a dump, so a non-zero/SIGTERM exit on a deliberate
-      // stop is normal; the scheduler decides ok-ness by whether it asked to stop.
-      opts.onExit({ ok: code === 0, code })
+      opts.onExit()
     }
 
     child.on('error', (err) => {
-      if (!this.active || this.active.proc !== child) return
-      const wasActive = this.active
-      this.active = null
-      connectionLock.release(wasActive.token)
-      opts.onExit({ ok: false, code: null })
       console.error('[RecordingController] mpv spawn error', err.message)
+      finalize()
     })
-    child.on('exit', (code) => finalize(code))
+    child.on('exit', () => finalize())
   }
 
   /**

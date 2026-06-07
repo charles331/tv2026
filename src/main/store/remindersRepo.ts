@@ -108,7 +108,7 @@ export function getReminder(id: number): Reminder | null {
   return row ? mapRow(row) : null
 }
 
-/** All reminders, soonest-start first. */
+/** All reminders, latest start first (newest programmes on top). */
 export function listReminders(): Reminder[] {
   const rows = getDb()
     .prepare('SELECT * FROM programme_reminders ORDER BY start_secs DESC')
@@ -119,12 +119,16 @@ export function listReminders(): Reminder[] {
 /**
  * "Active" reminders the scheduler must track: not in a terminal state. Sorted
  * by start so the scheduler processes them in order.
+ *
+ * `conflict` is INCLUDED: a recording that hit a playback conflict is retried on
+ * later ticks (it can still record once playback frees the connection, until its
+ * window passes — the scheduler then terminalizes it to `missed`).
  */
 export function listActiveReminders(): Reminder[] {
   const rows = getDb()
     .prepare(
       `SELECT * FROM programme_reminders
-       WHERE status IN ('scheduled', 'notified', 'recording')
+       WHERE status IN ('scheduled', 'notified', 'recording', 'conflict')
        ORDER BY start_secs ASC`
     )
     .all() as ReminderRow[]

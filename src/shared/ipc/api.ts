@@ -48,6 +48,7 @@ import type { AddFavoriteRequest, FavoriteItem, FavoriteKind } from '../types/fa
 import type {
   AddReminderRequest,
   RecordingConflictEvent,
+  RecordingConflictResolvedEvent,
   Reminder,
   ReminderOpenChannelEvent,
   ReminderUpdatedEvent,
@@ -160,6 +161,8 @@ export interface RemindersApi {
   onOpenChannel(cb: (e: ReminderOpenChannelEvent) => void): Unsubscribe
   /** Subscribe to recording-vs-playback conflicts that need a user decision. */
   onConflict(cb: (e: RecordingConflictEvent) => void): Unsubscribe
+  /** Subscribe to "conflict prompt resolved/closed" (dismiss the dialog). */
+  onConflictResolved(cb: (e: RecordingConflictResolvedEvent) => void): Unsubscribe
 }
 
 export interface DownloadsApi {

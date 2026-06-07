@@ -43,20 +43,25 @@ export function recordStopSecs(r: Pick<Reminder, 'endSecs'>, padAfterSecs: numbe
 }
 
 /**
- * A reminder counts as "missed" when its programme START has already passed
- * (with a small grace window) and no notification/recording ever ran for it
- * (still `scheduled`). This is the "app was closed over the programme" case.
+ * A reminder counts as "missed" when it can no longer do anything useful:
+ *  - a still-`scheduled` reminder whose programme START has passed (beyond a
+ *    grace window) — the "app was closed over the programme" case; or
+ *  - a `conflict` recording whose full record window (end + padAfter) has
+ *    elapsed without ever running — it will never record now.
  *
- * We treat the START (not start−lead) as the cutoff: a notification a bit late
- * is still useful, but once the programme itself has begun, a pure-notify
- * reminder is moot. A grace window avoids flapping right at the boundary.
+ * For the scheduled case we use START (not start−lead) as the cutoff: a slightly
+ * late notification is still useful, but once the programme has begun a
+ * pure-notify reminder is moot. The grace window avoids flapping at the boundary.
  */
 export function isMissed(
-  r: Pick<Reminder, 'status' | 'startSecs'>,
+  r: Pick<Reminder, 'status' | 'startSecs' | 'endSecs'>,
   nowSecs: number,
-  graceSecs = 60
+  graceSecs = 60,
+  padAfterSecs = 0
 ): boolean {
-  return r.status === 'scheduled' && nowSecs > r.startSecs + graceSecs
+  if (r.status === 'scheduled') return nowSecs > r.startSecs + graceSecs
+  if (r.status === 'conflict') return nowSecs >= recordStopSecs(r, padAfterSecs)
+  return false
 }
 
 /**
@@ -141,7 +146,10 @@ export function computeDueActions(
       toStopRecording.push(r)
       continue
     }
-    if (isMissed(r, nowSecs) && !isRecordDue(r, nowSecs, padBeforeSecs, padAfterSecs)) {
+    if (
+      isMissed(r, nowSecs, 60, padAfterSecs) &&
+      !isRecordDue(r, nowSecs, padBeforeSecs, padAfterSecs)
+    ) {
       missed.push(r)
       continue
     }

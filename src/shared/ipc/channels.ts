@@ -104,7 +104,9 @@ export const EventChannels = {
   /** A reminder notification was clicked → open/play the channel. */
   REMINDER_OPEN_CHANNEL: 'event:reminder:openChannel',
   /** A scheduled recording conflicts with current playback (ASK the user). */
-  RECORDING_CONFLICT: 'event:recording:conflict'
+  RECORDING_CONFLICT: 'event:recording:conflict',
+  /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */
+  RECORDING_CONFLICT_RESOLVED: 'event:recording:conflictResolved'
 } as const
 
 export type InvokeChannel = (typeof InvokeChannels)[keyof typeof InvokeChannels]

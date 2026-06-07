@@ -120,6 +120,11 @@ describe('isMissed', () => {
   it('is false once notified/recording', () => {
     expect(isMissed({ ...r, status: 'notified' }, 9999)).toBe(false)
   })
+  it('marks a conflict recording missed only once its window (end+padAfter) passed', () => {
+    const c = mk({ status: 'conflict', endSecs: 4600 })
+    expect(isMissed(c, 4719, 60, 120)).toBe(false) // still inside [.., 4720)
+    expect(isMissed(c, 4720, 60, 120)).toBe(true) // 4600 + 120
+  })
 })
 
 describe('computeDueActions', () => {
@@ -167,5 +172,19 @@ describe('computeDueActions', () => {
     const out = computeDueActions([r], 2000, 60, 120)
     expect(out.missed).toHaveLength(0)
     expect(out.toStartRecording.map((x) => x.id)).toEqual([6])
+  })
+
+  it('retries a conflict recording while still inside its window (B1)', () => {
+    const r = mk({ id: 8, mode: 'record', status: 'conflict', startSecs: 1000, endSecs: 4600 })
+    const out = computeDueActions([r], 2000, 60, 120)
+    expect(out.toStartRecording.map((x) => x.id)).toEqual([8])
+    expect(out.missed).toHaveLength(0)
+  })
+
+  it('marks a conflict recording missed once its window has fully passed (B1)', () => {
+    const r = mk({ id: 8, mode: 'record', status: 'conflict', startSecs: 1000, endSecs: 4600 })
+    const out = computeDueActions([r], 4720, 60, 120)
+    expect(out.missed.map((x) => x.id)).toEqual([8])
+    expect(out.toStartRecording).toHaveLength(0)
   })
 })

@@ -207,7 +207,8 @@ const api: RendererApi = {
       >,
     onUpdated: (cb) => subscribe(EventChannels.REMINDER_UPDATED, cb),
     onOpenChannel: (cb) => subscribe(EventChannels.REMINDER_OPEN_CHANNEL, cb),
-    onConflict: (cb) => subscribe(EventChannels.RECORDING_CONFLICT, cb)
+    onConflict: (cb) => subscribe(EventChannels.RECORDING_CONFLICT, cb),
+    onConflictResolved: (cb) => subscribe(EventChannels.RECORDING_CONFLICT_RESOLVED, cb)
   },
 
   downloads: {
