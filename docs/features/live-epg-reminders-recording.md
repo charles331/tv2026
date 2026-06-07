@@ -69,7 +69,7 @@ Unicité naturelle : `(stream_id, start_secs, title)`.
 - **⚠️ Contrainte connexion unique (`ConnectionLock`)** — point structurant :
   - Un enregistrement live = **une** connexion fournisseur.
   - vs **téléchargements** : l'enregistrement prend la priorité (les téléchargements se mettent en pause, comme pour la lecture).
-  - vs **lecture en cours** : on ne peut pas regarder la chaîne B **et** enregistrer la chaîne A en même temps (1 seule connexion). → **politique à choisir** (voir §6).
+  - vs **lecture en cours** : on ne peut pas regarder la chaîne B **et** enregistrer la chaîne A en même temps (1 seule connexion). → **on demande sur le moment** (continuer la lecture / basculer sur l'enregistrement) — voir §6.
   - **Deux enregistrements** qui se chevauchent = impossible → le second passe en `conflict` + notification.
 - **app/PC doivent tourner** : pas d'enregistrement si l'app est fermée (voir Composant F).
 
@@ -95,11 +95,13 @@ Pour que rappels/enregistrements marchent sans fenêtre ouverte : **icône en zo
 5. **Vue « Programmés » + réglages** (lead, padding, interruption lecture).
 6. **(Option/futur)** tray + lancement au démarrage pour fonctionner en arrière-plan.
 
-## 6. Points à trancher avec l'utilisateur (avant code)
-1. **Délai de rappel** par défaut (ex. 2 min avant) ?
-2. **Conflit de connexion** : si un enregistrement programmé doit démarrer alors qu'une lecture est en cours → (a) l'enregistrement **interrompt** la lecture, (b) l'enregistrement est **abandonné** (status `conflict`), ou (c) **demander** sur le moment ?
-3. **Marges d'enregistrement** (`padBefore`/`padAfter`, ex. +1 min avant / +2 min après) ?
-4. **Mode arrière-plan** (tray + autostart) : dès maintenant ou étape ultérieure ?
+## 6. Décisions retenues
+
+1. **Délai de rappel** par défaut : **2 min** avant le début (réglable).
+2. **Conflit de connexion** (un enregistrement programmé doit démarrer pendant une lecture) : **demander sur le moment** — une notification/dialogue propose de *continuer la lecture* ou de *basculer sur l'enregistrement*. (Vis-à-vis des téléchargements, l'enregistrement reste prioritaire et les met en pause, comme la lecture.)
+3. **Marges d'enregistrement** par défaut : **+1 min avant / +2 min après** (réglables).
+4. **Mode arrière-plan** (tray + autostart) : **étape 6, plus tard**. MVP = rappels/enregistrements actifs **tant que l'app est ouverte**.
+5. **Périmètre de la 1re livraison** : **étapes 1 → 5 en une fois** (guide, rappels, scheduler/notifications, enregistrement programmé, vue « Programmés » + réglages). L'étape 6 (arrière-plan) viendra ensuite.
 
 ## 7. Risques / hypothèses
 - Profondeur et qualité de l'EPG **dépendent du fournisseur**.
