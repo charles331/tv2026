@@ -124,7 +124,8 @@ describe('getShortEpg', () => {
       description: 'Les infos du soir',
       startSecs: 1700000000,
       endSecs: 1700003600,
-      nowPlaying: true
+      nowPlaying: true,
+      epgId: null
     })
     expect(epg[1].title).toBe('Film du soir')
     expect(epg[1].description).toBeNull()
@@ -136,5 +137,48 @@ describe('getShortEpg', () => {
     expect(await new XtreamClient(creds).getShortEpg(101)).toEqual([])
     requestMock.mockResolvedValueOnce(fakeRes(200, JSON.stringify({})))
     expect(await new XtreamClient(creds).getShortEpg(101)).toEqual([])
+  })
+})
+
+describe('getFullEpg', () => {
+  it('maps the full guide, prefers epg_id over id, and sorts by start', async () => {
+    requestMock.mockResolvedValueOnce(
+      fakeRes(
+        200,
+        JSON.stringify({
+          epg_listings: [
+            {
+              id: '55',
+              epg_id: '42',
+              title: b64('Second'),
+              description: '',
+              start_timestamp: '1700003600',
+              stop_timestamp: '1700007200',
+              now_playing: '0',
+              has_archive: '1'
+            },
+            {
+              id: '54',
+              title: b64('Premier'),
+              description: '',
+              start_timestamp: '1700000000',
+              stop_timestamp: '1700003600',
+              now_playing: '1',
+              has_archive: '0'
+            }
+          ]
+        })
+      )
+    )
+    const epg = await new XtreamClient(creds).getFullEpg(101)
+    expect(epg.map((e) => e.title)).toEqual(['Premier', 'Second'])
+    // sorted by start; epg_id preferred over id (fallback to id when absent).
+    expect(epg[0]).toMatchObject({ epgId: '54', nowPlaying: true })
+    expect(epg[1]).toMatchObject({ epgId: '42' })
+  })
+
+  it('returns an empty array when there is no guide', async () => {
+    requestMock.mockResolvedValueOnce(fakeRes(200, JSON.stringify({})))
+    expect(await new XtreamClient(creds).getFullEpg(101)).toEqual([])
   })
 })

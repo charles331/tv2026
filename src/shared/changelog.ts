@@ -18,6 +18,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.8.0',
+    date: '2026-06-07',
+    changes: [
+      'Direct : nouveau « Guide » par chaîne (bouton Guide) — la grille complète des programmes, groupée par jour, avec le programme en cours surligné.',
+      'Depuis le guide, chaque programme propose « 🔔 Rappel » (notification système à l’approche) et « ⏺ Enregistrer » (enregistrement programmé).',
+      'Nouvelle section « Programmés » : vos rappels et enregistrements (à venir / en cours / passés) avec leur statut, et l’annulation en un clic.',
+      'Notification système quand un programme va commencer ; un clic ouvre la chaîne.',
+      'Enregistrement programmé en arrière-plan (sans fenêtre vidéo) avec marges configurables avant/après.',
+      'Conflit de connexion : si un enregistrement doit démarrer pendant une lecture, l’application demande s’il faut continuer la lecture ou basculer sur l’enregistrement.',
+      'Réglages : délai de rappel par défaut et marges d’enregistrement (avant / après).',
+      'Note : rappels et enregistrements ne fonctionnent que lorsque l’application est ouverte.'
+    ]
+  },
+  {
     version: '0.7.2',
     date: '2026-06-03',
     changes: ['Nouvelle icône d’application (raccourci, barre des tâches et installeur).']

@@ -49,11 +49,19 @@ export const InvokeChannels = {
   LIVE_SEARCH: 'live:search',
   LIVE_REFRESH: 'live:refresh',
   LIVE_EPG: 'live:epg',
+  LIVE_FULL_EPG: 'live:fullEpg',
 
   // --- favorites ---
   FAVORITES_LIST: 'favorites:list',
   FAVORITES_ADD: 'favorites:add',
   FAVORITES_REMOVE: 'favorites:remove',
+
+  // --- reminders / scheduled recordings ---
+  REMINDERS_LIST: 'reminders:list',
+  REMINDERS_ADD: 'reminders:add',
+  REMINDERS_CANCEL: 'reminders:cancel',
+  /** Renderer replies to a recording-vs-playback conflict prompt. */
+  RECORDING_RESOLVE_CONFLICT: 'recording:resolveConflict',
 
   // --- downloads ---
   DOWNLOAD_ADD: 'download:add',
@@ -89,7 +97,15 @@ export const EventChannels = {
   PLAYER_POSITION: 'event:player:position',
   PLAYER_STATE: 'event:player:state',
   /** Connection lock state changed (e.g. download paused for playback). */
-  CONNECTION_BUSY: 'event:connection:busy'
+  CONNECTION_BUSY: 'event:connection:busy',
+  /** A reminder/recording row changed (status / filePath). */
+  REMINDER_UPDATED: 'event:reminder:updated',
+  /** A reminder notification was clicked → open/play the channel. */
+  REMINDER_OPEN_CHANNEL: 'event:reminder:openChannel',
+  /** A scheduled recording conflicts with current playback (ASK the user). */
+  RECORDING_CONFLICT: 'event:recording:conflict',
+  /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */
+  RECORDING_CONFLICT_RESOLVED: 'event:recording:conflictResolved'
 } as const
 
 export type InvokeChannel = (typeof InvokeChannels)[keyof typeof InvokeChannels]

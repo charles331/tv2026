@@ -25,16 +25,27 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
-import { settingsRepo, catalogRepo, seriesRepo, liveRepo, favoritesRepo, downloadsRepo } from '../store'
+import {
+  settingsRepo,
+  catalogRepo,
+  seriesRepo,
+  liveRepo,
+  favoritesRepo,
+  downloadsRepo,
+  remindersRepo
+} from '../store'
+import { reminderScheduler } from '../reminders/ReminderScheduler'
+import { recordingController } from '../player/RecordingController'
 import { downloadManager } from '../downloads/DownloadManager'
-import { downloadSubfolder } from '../downloads/helpers'
+import { downloadSubfolder, sanitizeFileName, buildLiveRecordingPath } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
 import * as tmdbKey from '../secrets/tmdbKey'
 import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
 import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
 import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
-import { refreshLive, getShortEpg } from '../xtream/liveService'
+import { refreshLive, getShortEpg, getFullEpg } from '../xtream/liveService'
+import type { AddReminderRequest, ReminderMode } from '@shared/index'
 import { checkForUpdatesNow } from '../updater'
 import {
   assert,
@@ -62,30 +73,11 @@ function fromXtreamError(e: unknown): ReturnType<typeof err> {
 }
 
 /**
- * Sanitize a filename for the Windows filesystem: strip reserved characters
- * (\ / : * ? " < > |) plus control chars, collapse whitespace, and trim.
- */
-function sanitizeFileName(name: string): string {
-  // eslint-disable-next-line no-control-regex
-  const cleaned = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim()
-  return cleaned || 'download'
-}
-
-/**
  * Join a download directory and filename. The directory is a Windows path at
  * runtime; path.join handles the separators for the host platform.
  */
 function joinPath(dir: string, fileName: string): string {
   return pathJoin(dir, fileName)
-}
-
-/** Filesystem-safe local timestamp for recording filenames: "2026-06-03 14-30-05". */
-function recordingTimestamp(d = new Date()): string {
-  const p = (n: number): string => String(n).padStart(2, '0')
-  return (
-    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-    `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
-  )
 }
 
 /**
@@ -159,6 +151,23 @@ export const handlers: IpcHandlers = {
       patch.diskSpaceWarningBytes = requireInt(req, 'diskSpaceWarningBytes')
     if ('lastSeenVersion' in req)
       patch.lastSeenVersion = optionalString(req, 'lastSeenVersion', 32) ?? null
+    // Reminder lead / recording padding (seconds). Clamp to sane bounds so a
+    // bad value can't schedule a notification in the past or an absurd window.
+    if ('reminderLeadSecs' in req) {
+      const v = requireInt(req, 'reminderLeadSecs')
+      assert(v >= 0 && v <= 3600, 'reminderLeadSecs out of range (0..3600)')
+      patch.reminderLeadSecs = v
+    }
+    if ('recordPadBeforeSecs' in req) {
+      const v = requireInt(req, 'recordPadBeforeSecs')
+      assert(v >= 0 && v <= 3600, 'recordPadBeforeSecs out of range (0..3600)')
+      patch.recordPadBeforeSecs = v
+    }
+    if ('recordPadAfterSecs' in req) {
+      const v = requireInt(req, 'recordPadAfterSecs')
+      assert(v >= 0 && v <= 3600, 'recordPadAfterSecs out of range (0..3600)')
+      patch.recordPadAfterSecs = v
+    }
     return ok(settingsRepo.setSettings(patch))
   },
 
@@ -335,6 +344,16 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  [InvokeChannels.LIVE_FULL_EPG]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const streamId = requireInt(req, 'streamId')
+    try {
+      return ok(await getFullEpg(streamId))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
   // ---------------- favorites (local, SQLite) ----------------
   [InvokeChannels.FAVORITES_LIST]: (req) => {
     assert(isObject(req), 'request must be an object')
@@ -363,6 +382,70 @@ export const handlers: IpcHandlers = {
     const kind = requireString(req, 'kind', 16)
     assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
     favoritesRepo.removeFavorite(kind, requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
+  },
+
+  // ---------------- reminders / scheduled recordings (local, SQLite) ----------------
+  [InvokeChannels.REMINDERS_LIST]: () => ok(remindersRepo.listReminders()),
+
+  [InvokeChannels.REMINDERS_ADD]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const mode = requireString(req, 'mode', 16)
+    assert(
+      mode === 'notify' || mode === 'record' || mode === 'notify_record',
+      'invalid reminder mode'
+    )
+    const startSecs = requireInt(req, 'startSecs')
+    const endSecs = requireInt(req, 'endSecs')
+    assert(startSecs > 0 && endSecs > 0, 'start/end must be positive epoch seconds')
+    assert(endSecs > startSecs, 'end must be after start')
+    // Resolve lead from the request or the user's default; clamp to sane bounds.
+    const settings = settingsRepo.getSettings()
+    const rawLead = optionalNumber(req, 'leadSecs')
+    const leadSecs =
+      rawLead === undefined
+        ? settings.reminderLeadSecs
+        : Math.max(0, Math.min(3600, Math.trunc(rawLead)))
+    const addReq: AddReminderRequest & { leadSecs: number } = {
+      streamId: requireInt(req, 'streamId'),
+      channelName: requireString(req, 'channelName', 512),
+      channelIcon: optionalString(req, 'channelIcon', 2048) ?? null,
+      epgId: optionalString(req, 'epgId', 128) ?? null,
+      title: requireString(req, 'title', 512),
+      description: optionalString(req, 'description', 4096) ?? null,
+      startSecs,
+      endSecs,
+      mode: mode as ReminderMode,
+      leadSecs
+    }
+    const reminder = remindersRepo.addReminder(addReq)
+    // Run a tick soon so a reminder added for an imminent programme fires.
+    reminderScheduler.kick()
+    return ok(reminder)
+  },
+
+  [InvokeChannels.REMINDERS_CANCEL]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const id = requireInt(req, 'id')
+    // Drop any pending conflict prompt for this reminder (so its 30 s timeout
+    // can't later resurrect a canceled row to `conflict`), and stop an
+    // in-progress recording, before marking it canceled.
+    reminderScheduler.cancelConflict(id)
+    recordingController.stop(id)
+    const reminder = remindersRepo.cancelReminder(id)
+    if (!reminder) return err('NOT_FOUND', `Rappel ${id} introuvable`)
+    return ok(reminder)
+  },
+
+  [InvokeChannels.RECORDING_RESOLVE_CONFLICT]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const reminderId = requireInt(req, 'reminderId')
+    const resolution = requireString(req, 'resolution', 32)
+    assert(
+      resolution === 'keepPlayback' || resolution === 'switchToRecording',
+      'invalid conflict resolution'
+    )
+    reminderScheduler.resolveConflict(reminderId, resolution)
     return ok({ ok: true as const })
   },
 
@@ -534,13 +617,11 @@ export const handlers: IpcHandlers = {
     if (!playerController.canRecord()) {
       return err('INVALID_INPUT', 'Aucune lecture en direct en cours à enregistrer.')
     }
-    // Build a sanitized, timestamped .ts filename inside the Live subfolder, then
-    // confirm it stays within the download directory (defense in depth).
-    const base = sanitizeFileName(optionalString(req, 'name', 512) ?? 'Enregistrement')
-    const liveDir = joinPath(settings.downloadDir, downloadSubfolder('live'))
-    const filePath = assertPathWithin(
-      joinPath(liveDir, `${base} ${recordingTimestamp()}.ts`),
-      settings.downloadDir
+    // Sanitized, timestamped .ts path inside the Live subfolder, confined to the
+    // download dir (shared with the scheduled recorder — see buildLiveRecordingPath).
+    const filePath = buildLiveRecordingPath(
+      settings.downloadDir,
+      optionalString(req, 'name', 512) ?? 'Enregistrement'
     )
     return ok(await playerController.startRecording(filePath))
   },

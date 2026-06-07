@@ -8,12 +8,14 @@ import type {
   VodInfo,
   VodStream
 } from '@shared/index'
+import { isActiveReminderStatus } from '@shared/index'
 import { api, describeError, unwrap } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
 import { useChangelogStatus } from './lib/changelog'
 import { ToastProvider, useToast } from './lib/toast'
 import { FavoritesProvider, useFavorites } from './lib/favorites'
+import { RemindersProvider, useReminders } from './lib/reminders'
 import { AppNav, type Route } from './components/AppNav'
 import { Button, LoadingState } from './components/ui'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
@@ -22,6 +24,8 @@ import { SeriesDetail } from './features/series/SeriesDetail'
 import { LiveScreen } from './features/live/LiveScreen'
 import { DownloadsScreen } from './features/downloads/DownloadsScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
+import { ScheduledScreen } from './features/reminders/ScheduledScreen'
+import { ConflictDialog } from './features/reminders/ConflictDialog'
 import { MovieDetail } from './features/movie/MovieDetail'
 import { PlayerView } from './features/player/PlayerView'
 
@@ -29,9 +33,11 @@ export function App(): ReactElement {
   return (
     <ToastProvider>
       <FavoritesProvider>
-        <DownloadsProvider>
-          <AppShell />
-        </DownloadsProvider>
+        <RemindersProvider>
+          <DownloadsProvider>
+            <AppShell />
+          </DownloadsProvider>
+        </RemindersProvider>
       </FavoritesProvider>
     </ToastProvider>
   )
@@ -51,7 +57,13 @@ function AppShell(): ReactElement {
   const busy = useConnectionBusy()
   const toast = useToast()
   const { reload: reloadFavorites } = useFavorites()
+  const { reminders } = useReminders()
   const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
+
+  const scheduledCount = useMemo(
+    () => reminders.filter((r) => isActiveReminderStatus(r.status)).length,
+    [reminders]
+  )
 
   const activeDownloads = useMemo(
     () =>
@@ -121,6 +133,20 @@ function AppShell(): ReactElement {
     })
   }, [])
 
+  // A clicked reminder notification asks the renderer to open/play the channel.
+  useEffect(() => {
+    return api().reminders.onOpenChannel((e) => {
+      setRoute('live')
+      setPlayRequest({
+        kind: 'stream',
+        mediaKind: 'live',
+        streamId: e.streamId,
+        containerExtension: 'ts',
+        title: e.channelName
+      })
+    })
+  }, [])
+
   const handlePlayEpisode = useCallback(async (episode: Episode, seriesName: string) => {
     setSelectedSeries(null)
     const title = `${seriesName} S${String(episode.season).padStart(2, '0')}E${String(
@@ -187,6 +213,7 @@ function AppShell(): ReactElement {
           route={route}
           onNavigate={setRoute}
           activeDownloads={activeDownloads}
+          scheduledCount={scheduledCount}
           busyReason={busy.busy ? busy.reason : null}
           settingsHasUnseen={changelogHasUnseen}
           onUpdateAll={() => setConfirmUpdateAll(true)}
@@ -206,6 +233,7 @@ function AppShell(): ReactElement {
           {route === 'live' && (
             <LiveScreen onPlayChannel={handlePlayChannel} onGoToSettings={() => setRoute('settings')} />
           )}
+          {route === 'scheduled' && <ScheduledScreen />}
           {route === 'downloads' && <DownloadsScreen />}
           {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
         </main>
@@ -213,6 +241,9 @@ function AppShell(): ReactElement {
 
       {/* Non-blocking player bar (mpv plays in its own window; navigation stays free). */}
       {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
+
+      {/* Recording-vs-playback conflict prompt (driven by the main scheduler). */}
+      <ConflictDialog />
 
       {selected && (
         <MovieDetail stream={selected} onClose={() => setSelected(null)} onPlay={handlePlay} />

@@ -16,6 +16,7 @@ import {
 } from '../../components/ui'
 import { CategorySidebar } from '../catalog/CategorySidebar'
 import { LiveChannelRow } from './LiveChannelRow'
+import { ChannelGuide } from './ChannelGuide'
 import { useLiveFeed } from './useLiveFeed'
 
 /** Adapt LiveCategory[] to the (structurally compatible) sidebar shape. */
@@ -50,6 +51,7 @@ export function LiveScreen({
 }): ReactElement {
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [rawQuery, setRawQuery] = useState('')
+  const [guideChannel, setGuideChannel] = useState<LiveStream | null>(null)
   const query = useDebounced(rawQuery, 300)
 
   const favorites = useFavorites()
@@ -162,7 +164,12 @@ export function LiveScreen({
           ) : (
             <div className="space-y-2">
               {feed.items.map((c) => (
-                <LiveChannelRow key={c.streamId} channel={c} onPlay={onPlayChannel} />
+                <LiveChannelRow
+                  key={c.streamId}
+                  channel={c}
+                  onPlay={onPlayChannel}
+                  onOpenGuide={setGuideChannel}
+                />
               ))}
               <div ref={sentinelRef} />
               {feed.loadingMore && (
@@ -172,6 +179,17 @@ export function LiveScreen({
           )}
         </div>
       </div>
+
+      {guideChannel && (
+        <ChannelGuide
+          channel={guideChannel}
+          onClose={() => setGuideChannel(null)}
+          onPlay={(c) => {
+            setGuideChannel(null)
+            onPlayChannel(c)
+          }}
+        />
+      )}
     </div>
   )
 }

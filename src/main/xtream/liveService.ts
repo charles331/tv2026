@@ -59,3 +59,25 @@ export async function getShortEpg(streamId: number, limit = 2): Promise<EpgEntry
     await client.close()
   }
 }
+
+/** Full-EPG in-memory cache: the full guide is larger; cache it for 5 min. */
+const FULL_EPG_TTL_MS = 5 * 60_000
+const fullEpgCache = new Map<number, { at: number; entries: EpgEntry[] }>()
+
+/**
+ * The complete programme guide for one channel (get_simple_data_table). Cached
+ * in memory for 5 min. Best-effort: returns [] for EPG-less channels.
+ */
+export async function getFullEpg(streamId: number): Promise<EpgEntry[]> {
+  const hit = fullEpgCache.get(streamId)
+  if (hit && Date.now() - hit.at < FULL_EPG_TTL_MS) return hit.entries
+
+  const client = getXtreamClient()
+  try {
+    const entries = await client.getFullEpg(streamId)
+    fullEpgCache.set(streamId, { at: Date.now(), entries })
+    return entries
+  } finally {
+    await client.close()
+  }
+}

@@ -54,6 +54,12 @@ export interface AppSettings {
    * is silently pinned to the current version so no badge shows on day one.
    */
   lastSeenVersion: string | null
+  /** Default reminder lead: notify this many seconds BEFORE a programme starts. */
+  reminderLeadSecs: number
+  /** Scheduled recording: start this many seconds BEFORE the programme start. */
+  recordPadBeforeSecs: number
+  /** Scheduled recording: stop this many seconds AFTER the programme end. */
+  recordPadAfterSecs: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -63,7 +69,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentDownloads: 1,
   diskSpaceWarningBytes: 2 * 1024 * 1024 * 1024, // 2 GiB
   pauseDownloadsWhilePlaying: true,
-  lastSeenVersion: null
+  lastSeenVersion: null,
+  reminderLeadSecs: 120, // 2 min before start
+  recordPadBeforeSecs: 60, // +1 min before
+  recordPadAfterSecs: 120 // +2 min after
 }
 
 /** Whether a TMDB API key is stored (without revealing it). */

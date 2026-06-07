@@ -5,6 +5,9 @@
  */
 
 import { rename as fsRename } from 'fs/promises'
+import { join } from 'path'
+
+import { assertPathWithin } from '../ipc/validate'
 
 /** Raised when the provider answers an unexpected (non-2xx/206) HTTP status. */
 export class HttpStatusError extends Error {
@@ -42,6 +45,38 @@ export function downloadSubfolder(kind: MediaFolderKind): string {
     default:
       return 'Films'
   }
+}
+
+/**
+ * Sanitize a filename for the Windows filesystem: strip reserved characters
+ * (\ / : * ? " < > |) plus control chars, collapse whitespace, and trim. Falls
+ * back to `fallback` when the result is empty.
+ */
+export function sanitizeFileName(name: string, fallback = 'download'): string {
+  // eslint-disable-next-line no-control-regex
+  const cleaned = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim()
+  return cleaned || fallback
+}
+
+/** Filesystem-safe local timestamp for recording filenames: "2026-06-03 14-30-05". */
+export function recordingTimestamp(d = new Date()): string {
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
+  )
+}
+
+/**
+ * Build the confined destination path for a LIVE recording:
+ * `<downloadDir>/<Live>/<sanitized base> <timestamp>.ts`, asserted to stay
+ * within the download directory. Shared by the interactive recording handler
+ * and the scheduled RecordingController so the naming/confinement rule lives in
+ * one place.
+ */
+export function buildLiveRecordingPath(downloadDir: string, baseName: string): string {
+  const file = `${sanitizeFileName(baseName, 'Enregistrement')} ${recordingTimestamp()}.ts`
+  return assertPathWithin(join(downloadDir, downloadSubfolder('live'), file), downloadDir)
 }
 
 /** Read a single header value (undici may surface a header as string[]). */

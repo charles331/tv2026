@@ -1,18 +1,9 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
 import type { EpgEntry, LiveStream } from '@shared/index'
 import { api } from '../../lib/ipc'
-import { Button, Poster, IconPlay } from '../../components/ui'
+import { formatClockFromEpochSecs } from '../../lib/format'
+import { Button, Poster, IconPlay, IconTv } from '../../components/ui'
 import { FavoriteButton } from '../favorites/FavoriteButton'
-
-/** Format an epoch (seconds) as a short local time, e.g. "20:00". */
-function clock(secs: number | null): string {
-  if (secs == null) return ''
-  try {
-    return new Date(secs * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
-}
 
 /**
  * One channel row. The short EPG (now/next) is fetched lazily the first time the
@@ -21,10 +12,13 @@ function clock(secs: number | null): string {
  */
 function LiveChannelRowImpl({
   channel,
-  onPlay
+  onPlay,
+  onOpenGuide
 }: {
   channel: LiveStream
   onPlay: (channel: LiveStream) => void
+  /** Open the full programme guide (with reminder/record actions). */
+  onOpenGuide: (channel: LiveStream) => void
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null)
   const [epg, setEpg] = useState<EpgEntry[] | null>(null)
@@ -70,7 +64,7 @@ function LiveChannelRowImpl({
             <span className="text-emerald-400">● </span>
             {now.title}
             {now.endSecs != null && (
-              <span className="text-gray-600"> · jusqu’à {clock(now.endSecs)}</span>
+              <span className="text-gray-600"> · jusqu’à {formatClockFromEpochSecs(now.endSecs)}</span>
             )}
             {next && <span className="text-gray-600"> — puis {next.title}</span>}
           </p>
@@ -78,6 +72,15 @@ function LiveChannelRowImpl({
           <p className="text-xs text-gray-600">{epg === null ? 'Programme…' : 'Pas de guide'}</p>
         )}
       </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={<IconTv size={14} />}
+        title="Guide des programmes"
+        onClick={() => onOpenGuide(channel)}
+      >
+        Guide
+      </Button>
       <Button size="sm" variant="secondary" icon={<IconPlay size={14} />} onClick={() => onPlay(channel)}>
         Regarder
       </Button>

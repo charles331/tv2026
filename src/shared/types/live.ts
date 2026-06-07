@@ -33,7 +33,7 @@ export interface LiveStream {
   hasArchive: boolean
 }
 
-/** One programme in the short EPG (now/next). */
+/** One programme in the EPG (short now/next or full guide). */
 export interface EpgEntry {
   title: string
   description: string | null
@@ -42,6 +42,8 @@ export interface EpgEntry {
   endSecs: number | null
   /** True for the programme currently on air. */
   nowPlaying: boolean
+  /** Provider EPG id (`id`/`epg_id`) if present — not guaranteed stable. */
+  epgId: string | null
 }
 
 /** Listing request for live channels, with optional category filter. */
@@ -66,6 +68,11 @@ export interface ShortEpgRequest {
   streamId: number
   /** How many upcoming programmes to return (default 2 = now + next). */
   limit?: number
+}
+
+/** Full-EPG request: the complete guide for one channel. */
+export interface FullEpgRequest {
+  streamId: number
 }
 
 /** Result of refreshing the live cache from the provider. */

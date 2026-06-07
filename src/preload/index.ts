@@ -162,6 +162,10 @@ const api: RendererApi = {
     epg: (streamId, limit) =>
       invoke(InvokeChannels.LIVE_EPG, { streamId, limit }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.LIVE_EPG>>
+      >,
+    fullEpg: (streamId) =>
+      invoke(InvokeChannels.LIVE_FULL_EPG, { streamId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_FULL_EPG>>
       >
   },
 
@@ -178,6 +182,29 @@ const api: RendererApi = {
       invoke(InvokeChannels.FAVORITES_REMOVE, { kind, itemId }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.FAVORITES_REMOVE>>
       >
+  },
+
+  reminders: {
+    list: () =>
+      invoke(InvokeChannels.REMINDERS_LIST) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.REMINDERS_LIST>>
+      >,
+    add: (req) =>
+      invoke(InvokeChannels.REMINDERS_ADD, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.REMINDERS_ADD>>
+      >,
+    cancel: (id) =>
+      invoke(InvokeChannels.REMINDERS_CANCEL, { id }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.REMINDERS_CANCEL>>
+      >,
+    resolveConflict: (req) =>
+      invoke(InvokeChannels.RECORDING_RESOLVE_CONFLICT, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.RECORDING_RESOLVE_CONFLICT>>
+      >,
+    onUpdated: (cb) => subscribe(EventChannels.REMINDER_UPDATED, cb),
+    onOpenChannel: (cb) => subscribe(EventChannels.REMINDER_OPEN_CHANNEL, cb),
+    onConflict: (cb) => subscribe(EventChannels.RECORDING_CONFLICT, cb),
+    onConflictResolved: (cb) => subscribe(EventChannels.RECORDING_CONFLICT_RESOLVED, cb)
   },
 
   downloads: {
