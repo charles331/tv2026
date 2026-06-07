@@ -177,6 +177,34 @@ export const MIGRATIONS: readonly Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_fav_kind ON favorites(kind, added_at);
     `
+  },
+  {
+    version: 5,
+    description: 'programme reminders & scheduled recordings (live TV)',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS programme_reminders (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        stream_id     INTEGER NOT NULL,          -- live channel stream id
+        channel_name  TEXT NOT NULL,             -- snapshot for display
+        channel_icon  TEXT,                      -- snapshot logo url
+        epg_id        TEXT,                       -- provider id if present (unstable)
+        title         TEXT NOT NULL,             -- programme title snapshot
+        description   TEXT,                       -- programme description snapshot
+        start_secs    INTEGER NOT NULL,          -- programme start (epoch seconds)
+        end_secs      INTEGER NOT NULL,          -- programme end (epoch seconds)
+        lead_secs     INTEGER NOT NULL,          -- notify this many seconds BEFORE start
+        mode          TEXT NOT NULL,             -- 'notify' | 'record' | 'notify_record'
+        status        TEXT NOT NULL DEFAULT 'scheduled',
+        file_path     TEXT,                       -- recording file once it exists
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL
+      );
+      -- Natural-key dedupe: one reminder per (channel, start, title).
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_reminders_natural
+        ON programme_reminders(stream_id, start_secs, title);
+      CREATE INDEX IF NOT EXISTS idx_reminders_status ON programme_reminders(status);
+      CREATE INDEX IF NOT EXISTS idx_reminders_start  ON programme_reminders(start_secs);
+    `
   }
 ]
 

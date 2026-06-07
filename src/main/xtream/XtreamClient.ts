@@ -366,6 +366,24 @@ export class XtreamClient {
   }
 
   /**
+   * Fetch the FULL programme guide for one channel via `get_simple_data_table`.
+   * Same `epg_listings[]` shape as the short EPG. Returns entries sorted by
+   * start time; empty array for EPG-less channels. Guide depth depends on the
+   * provider (some return only the current day, others several days).
+   */
+  async getFullEpg(streamId: number): Promise<EpgEntry[]> {
+    const raw = await this.apiGet<RawShortEpgResponse>({
+      action: 'get_simple_data_table',
+      stream_id: String(streamId)
+    })
+    const listings = raw?.epg_listings
+    if (!Array.isArray(listings)) return []
+    return listings
+      .map((l) => this.mapEpg(l))
+      .sort((a, b) => (a.startSecs ?? 0) - (b.startSecs ?? 0))
+  }
+
+  /**
    * Build the stable live stream URL: `/live/USER/PASS/{streamId}.{ext}`.
    * Default extension is `ts` (mpv also handles `m3u8`). Same redirect/lock
    * rules as the other stream URLs (playback acquires the ConnectionLock).
@@ -596,12 +614,18 @@ export class XtreamClient {
   }
 
   private mapEpg(l: RawEpgListing): EpgEntry {
+    // The provider exposes both `id` and `epg_id`; prefer `epg_id` then `id`.
+    // These ids are NOT guaranteed stable, so the reminder layer keys on the
+    // natural (stream_id, start_secs, title) tuple, not on this value.
+    const rawEpgId = l.epg_id ?? l.id ?? null
     return {
       title: decodeBase64(l.title) || '(sans titre)',
       description: nonEmpty(decodeBase64(l.description)),
       startSecs: toInt(l.start_timestamp),
       endSecs: toInt(l.stop_timestamp),
-      nowPlaying: toInt(l.now_playing) === 1
+      nowPlaying: toInt(l.now_playing) === 1,
+      epgId: rawEpgId === null || rawEpgId === '' ? null : String(rawEpgId),
+      hasArchive: toInt(l.has_archive) === 1
     }
   }
 }
