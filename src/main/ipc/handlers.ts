@@ -25,7 +25,17 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
-import { settingsRepo, catalogRepo, seriesRepo, liveRepo, favoritesRepo, downloadsRepo } from '../store'
+import {
+  settingsRepo,
+  catalogRepo,
+  seriesRepo,
+  liveRepo,
+  favoritesRepo,
+  downloadsRepo,
+  remindersRepo
+} from '../store'
+import { reminderScheduler } from '../reminders/ReminderScheduler'
+import { recordingController } from '../player/RecordingController'
 import { downloadManager } from '../downloads/DownloadManager'
 import { downloadSubfolder } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
@@ -34,7 +44,8 @@ import * as tmdbKey from '../secrets/tmdbKey'
 import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
 import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
 import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
-import { refreshLive, getShortEpg } from '../xtream/liveService'
+import { refreshLive, getShortEpg, getFullEpg } from '../xtream/liveService'
+import type { AddReminderRequest, ReminderMode } from '@shared/index'
 import { checkForUpdatesNow } from '../updater'
 import {
   assert,
@@ -159,6 +170,23 @@ export const handlers: IpcHandlers = {
       patch.diskSpaceWarningBytes = requireInt(req, 'diskSpaceWarningBytes')
     if ('lastSeenVersion' in req)
       patch.lastSeenVersion = optionalString(req, 'lastSeenVersion', 32) ?? null
+    // Reminder lead / recording padding (seconds). Clamp to sane bounds so a
+    // bad value can't schedule a notification in the past or an absurd window.
+    if ('reminderLeadSecs' in req) {
+      const v = requireInt(req, 'reminderLeadSecs')
+      assert(v >= 0 && v <= 3600, 'reminderLeadSecs out of range (0..3600)')
+      patch.reminderLeadSecs = v
+    }
+    if ('recordPadBeforeSecs' in req) {
+      const v = requireInt(req, 'recordPadBeforeSecs')
+      assert(v >= 0 && v <= 3600, 'recordPadBeforeSecs out of range (0..3600)')
+      patch.recordPadBeforeSecs = v
+    }
+    if ('recordPadAfterSecs' in req) {
+      const v = requireInt(req, 'recordPadAfterSecs')
+      assert(v >= 0 && v <= 3600, 'recordPadAfterSecs out of range (0..3600)')
+      patch.recordPadAfterSecs = v
+    }
     return ok(settingsRepo.setSettings(patch))
   },
 
@@ -335,6 +363,16 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  [InvokeChannels.LIVE_FULL_EPG]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const streamId = requireInt(req, 'streamId')
+    try {
+      return ok(await getFullEpg(streamId))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
   // ---------------- favorites (local, SQLite) ----------------
   [InvokeChannels.FAVORITES_LIST]: (req) => {
     assert(isObject(req), 'request must be an object')
@@ -363,6 +401,89 @@ export const handlers: IpcHandlers = {
     const kind = requireString(req, 'kind', 16)
     assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
     favoritesRepo.removeFavorite(kind, requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
+  },
+
+  // ---------------- reminders / scheduled recordings (local, SQLite) ----------------
+  [InvokeChannels.REMINDERS_LIST]: () => ok(remindersRepo.listReminders()),
+
+  [InvokeChannels.REMINDERS_ADD]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const mode = requireString(req, 'mode', 16)
+    assert(
+      mode === 'notify' || mode === 'record' || mode === 'notify_record',
+      'invalid reminder mode'
+    )
+    const startSecs = requireInt(req, 'startSecs')
+    const endSecs = requireInt(req, 'endSecs')
+    assert(startSecs > 0 && endSecs > 0, 'start/end must be positive epoch seconds')
+    assert(endSecs > startSecs, 'end must be after start')
+    // Resolve lead from the request or the user's default; clamp to sane bounds.
+    const settings = settingsRepo.getSettings()
+    const rawLead = optionalNumber(req, 'leadSecs')
+    const leadSecs =
+      rawLead === undefined
+        ? settings.reminderLeadSecs
+        : Math.max(0, Math.min(3600, Math.trunc(rawLead)))
+    const addReq: AddReminderRequest & { leadSecs: number } = {
+      streamId: requireInt(req, 'streamId'),
+      channelName: requireString(req, 'channelName', 512),
+      channelIcon: optionalString(req, 'channelIcon', 2048) ?? null,
+      epgId: optionalString(req, 'epgId', 128) ?? null,
+      title: requireString(req, 'title', 512),
+      description: optionalString(req, 'description', 4096) ?? null,
+      startSecs,
+      endSecs,
+      mode: mode as ReminderMode,
+      leadSecs
+    }
+    const reminder = remindersRepo.addReminder(addReq)
+    // Run a tick soon so a reminder added for an imminent programme fires.
+    reminderScheduler.kick()
+    return ok(reminder)
+  },
+
+  [InvokeChannels.REMINDERS_CANCEL]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const id = requireInt(req, 'id')
+    // Stop an in-progress recording for this reminder before marking canceled.
+    recordingController.stop(id)
+    const reminder = remindersRepo.cancelReminder(id)
+    if (!reminder) return err('NOT_FOUND', `Rappel ${id} introuvable`)
+    return ok(reminder)
+  },
+
+  [InvokeChannels.REMINDERS_UPDATE]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const id = requireInt(req, 'id')
+    const patch: { mode?: ReminderMode; leadSecs?: number; status?: never } = {}
+    if ('mode' in req) {
+      const mode = requireString(req, 'mode', 16)
+      assert(
+        mode === 'notify' || mode === 'record' || mode === 'notify_record',
+        'invalid reminder mode'
+      )
+      patch.mode = mode as ReminderMode
+    }
+    if ('leadSecs' in req) {
+      const v = requireInt(req, 'leadSecs')
+      assert(v >= 0 && v <= 3600, 'leadSecs out of range (0..3600)')
+      patch.leadSecs = v
+    }
+    const reminder = remindersRepo.updateReminder(id, patch)
+    if (!reminder) return err('NOT_FOUND', `Rappel ${id} introuvable`)
+    return ok(reminder)
+  },
+
+  [InvokeChannels.RECORDING_RESOLVE_CONFLICT]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const reminderId = requireInt(req, 'reminderId')
+    const resolution = requireString(req, 'resolution', 32)
+    assert(
+      resolution === 'keepPlayback' || resolution === 'switchToRecording',
+      'invalid conflict resolution'
+    )
+    reminderScheduler.resolveConflict(reminderId, resolution)
     return ok({ ok: true as const })
   },
 

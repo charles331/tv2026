@@ -22,6 +22,7 @@ import {
 import { connectionLock } from './lock/ConnectionLock'
 import { downloadManager } from './downloads/DownloadManager'
 import { playerController } from './player/PlayerController'
+import { reminderScheduler } from './reminders/ReminderScheduler'
 import { initAutoUpdates } from './updater'
 
 let mainWindow: BrowserWindow | null = null
@@ -147,6 +148,13 @@ if (!gotLock) {
     // while the player holds it (handled in DownloadManager via the lock).
     playerController.attach(makeEmitter(getWindows))
 
+    // Wire + start the reminder/recording scheduler: native notifications at
+    // start−lead, scheduled headless recordings (padding + ConnectionLock +
+    // conflict ASK flow), and "missed" detection for shows that elapsed while
+    // the app was closed. Runs only while the app is open (background = later).
+    reminderScheduler.attach(makeEmitter(getWindows), getWindows)
+    reminderScheduler.start()
+
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
     })
@@ -168,6 +176,7 @@ app.on('window-all-closed', () => {
 
 // Graceful shutdown: release the shared connection, tear down IPC + DB.
 app.on('before-quit', () => {
+  reminderScheduler.stop()
   playerController.disposeForShutdown()
   downloadManager.stop()
   unwireLock?.()
