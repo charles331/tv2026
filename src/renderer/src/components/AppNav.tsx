@@ -1,12 +1,23 @@
 import type { ReactElement, ReactNode } from 'react'
-import { cn, Spinner, IconFilm, IconTv, IconBroadcast, IconQueue, IconRefresh, IconSettings } from './ui'
+import {
+  cn,
+  Spinner,
+  IconFilm,
+  IconTv,
+  IconBroadcast,
+  IconQueue,
+  IconRecord,
+  IconRefresh,
+  IconSettings
+} from './ui'
 
-export type Route = 'catalog' | 'series' | 'live' | 'downloads' | 'settings'
+export type Route = 'catalog' | 'series' | 'live' | 'scheduled' | 'downloads' | 'settings'
 
 export function AppNav({
   route,
   onNavigate,
   activeDownloads,
+  scheduledCount,
   busyReason,
   settingsHasUnseen,
   onUpdateAll,
@@ -15,6 +26,8 @@ export function AppNav({
   route: Route
   onNavigate: (route: Route) => void
   activeDownloads: number
+  /** Active reminders/recordings (for the "Programmés" badge). */
+  scheduledCount?: number
   busyReason: 'download' | 'playback' | null
   /** Show a "what's new" dot on the Réglages item after an update. */
   settingsHasUnseen?: boolean
@@ -51,6 +64,13 @@ export function AppNav({
         active={route === 'live'}
         onClick={() => onNavigate('live')}
         icon={<IconBroadcast size={20} />}
+      />
+      <NavButton
+        label="Programmés (rappels & enregistrements)"
+        active={route === 'scheduled'}
+        onClick={() => onNavigate('scheduled')}
+        icon={<IconRecord size={20} />}
+        badge={scheduledCount && scheduledCount > 0 ? scheduledCount : undefined}
       />
       <NavButton
         label="Téléchargements"

@@ -56,6 +56,13 @@ export function SettingsScreen({
 
   const [pickingDir, setPickingDir] = useState(false)
 
+  // Reminder lead / recording padding (in minutes, persisted as seconds).
+  const [leadMin, setLeadMin] = useState('')
+  const [padBeforeMin, setPadBeforeMin] = useState('')
+  const [padAfterMin, setPadAfterMin] = useState('')
+  const [savingReminderSettings, setSavingReminderSettings] = useState(false)
+  const [reminderSettingsMessage, setReminderSettingsMessage] = useState<string | null>(null)
+
   const [tmdbKey, setTmdbKey] = useState('')
   const [tmdbStatus, setTmdbStatus] = useState<TmdbKeyStatus | null>(null)
   const [savingTmdb, setSavingTmdb] = useState(false)
@@ -79,7 +86,12 @@ export function SettingsScreen({
     void api()
       .settings.get()
       .then((r) => {
-        if (r.ok) setSettings(r.data)
+        if (r.ok) {
+          setSettings(r.data)
+          setLeadMin(String(Math.round(r.data.reminderLeadSecs / 60)))
+          setPadBeforeMin(String(Math.round(r.data.recordPadBeforeSecs / 60)))
+          setPadAfterMin(String(Math.round(r.data.recordPadAfterSecs / 60)))
+        }
       })
     void api()
       .tmdb.getStatus()
@@ -165,6 +177,36 @@ export function SettingsScreen({
       setPickingDir(false)
     }
   }, [])
+
+  const handleSaveReminderSettings = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault()
+      setSavingReminderSettings(true)
+      setReminderSettingsMessage(null)
+      try {
+        // Inputs are in minutes; clamp to 0..60 min then persist as seconds.
+        const toSecs = (v: string): number =>
+          Math.max(0, Math.min(60, Math.round(Number(v) || 0))) * 60
+        const next = unwrap(
+          await api().settings.set({
+            reminderLeadSecs: toSecs(leadMin),
+            recordPadBeforeSecs: toSecs(padBeforeMin),
+            recordPadAfterSecs: toSecs(padAfterMin)
+          })
+        )
+        setSettings(next)
+        setLeadMin(String(Math.round(next.reminderLeadSecs / 60)))
+        setPadBeforeMin(String(Math.round(next.recordPadBeforeSecs / 60)))
+        setPadAfterMin(String(Math.round(next.recordPadAfterSecs / 60)))
+        setReminderSettingsMessage('Réglages des rappels enregistrés.')
+      } catch (err) {
+        setReminderSettingsMessage(describeError(err))
+      } finally {
+        setSavingReminderSettings(false)
+      }
+    },
+    [leadMin, padBeforeMin, padAfterMin]
+  )
 
   const handleSaveTmdb = useCallback(
     async (e: FormEvent) => {
@@ -489,6 +531,55 @@ export function SettingsScreen({
         </div>
         {liveError && <p className="mt-3 text-sm text-red-300">{liveError}</p>}
         {liveMessage && <p className="mt-3 text-sm text-emerald-300">{liveMessage}</p>}
+      </section>
+
+      {/* Rappels & enregistrements programmés */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Rappels & enregistrements</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Réglages par défaut pour les rappels de programmes (Direct → Guide). Les rappels et
+          enregistrements ne sont actifs que lorsque l’application est ouverte.
+        </p>
+        <form className="mt-4 space-y-4" onSubmit={handleSaveReminderSettings}>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Rappel avant (min)" hint="Notification avant le début">
+              <TextInput
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={60}
+                value={leadMin}
+                onChange={(e) => setLeadMin(e.target.value)}
+              />
+            </Field>
+            <Field label="Marge avant (min)" hint="Enregistrer avant le début">
+              <TextInput
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={60}
+                value={padBeforeMin}
+                onChange={(e) => setPadBeforeMin(e.target.value)}
+              />
+            </Field>
+            <Field label="Marge après (min)" hint="Enregistrer après la fin">
+              <TextInput
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={60}
+                value={padAfterMin}
+                onChange={(e) => setPadAfterMin(e.target.value)}
+              />
+            </Field>
+          </div>
+          {reminderSettingsMessage && (
+            <p className="text-sm text-emerald-300">{reminderSettingsMessage}</p>
+          )}
+          <Button type="submit" variant="secondary" loading={savingReminderSettings}>
+            Enregistrer les réglages
+          </Button>
+        </form>
       </section>
 
       {/* Notes TMDB */}

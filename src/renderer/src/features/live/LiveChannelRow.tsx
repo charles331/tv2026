@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
 import type { EpgEntry, LiveStream } from '@shared/index'
 import { api } from '../../lib/ipc'
-import { Button, Poster, IconPlay } from '../../components/ui'
+import { Button, Poster, IconPlay, IconTv } from '../../components/ui'
 import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /** Format an epoch (seconds) as a short local time, e.g. "20:00". */
@@ -21,10 +21,13 @@ function clock(secs: number | null): string {
  */
 function LiveChannelRowImpl({
   channel,
-  onPlay
+  onPlay,
+  onOpenGuide
 }: {
   channel: LiveStream
   onPlay: (channel: LiveStream) => void
+  /** Open the full programme guide (with reminder/record actions). */
+  onOpenGuide: (channel: LiveStream) => void
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null)
   const [epg, setEpg] = useState<EpgEntry[] | null>(null)
@@ -78,6 +81,15 @@ function LiveChannelRowImpl({
           <p className="text-xs text-gray-600">{epg === null ? 'Programme…' : 'Pas de guide'}</p>
         )}
       </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={<IconTv size={14} />}
+        title="Guide des programmes"
+        onClick={() => onOpenGuide(channel)}
+      >
+        Guide
+      </Button>
       <Button size="sm" variant="secondary" icon={<IconPlay size={14} />} onClick={() => onPlay(channel)}>
         Regarder
       </Button>
