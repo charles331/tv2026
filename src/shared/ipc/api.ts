@@ -46,6 +46,15 @@ import type {
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind } from '../types/favorites'
 import type {
+  AddReminderRequest,
+  RecordingConflictEvent,
+  Reminder,
+  ReminderOpenChannelEvent,
+  ReminderUpdatedEvent,
+  ResolveConflictRequest,
+  UpdateReminderRequest
+} from '../types/reminders'
+import type {
   AddDownloadRequest,
   DownloadItem,
   DownloadKind,
@@ -121,6 +130,8 @@ export interface LiveApi {
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshLiveResult>>
   /** Now/next programmes for a channel (empty when no EPG). */
   epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
+  /** Full programme guide for a channel, sorted by start (empty when no EPG). */
+  fullEpg(streamId: number): Promise<Result<EpgEntry[]>>
 }
 
 export interface FavoritesApi {
@@ -130,6 +141,25 @@ export interface FavoritesApi {
   add(req: AddFavoriteRequest): Promise<Result<{ ok: true }>>
   /** Unpin a favorite. */
   remove(kind: FavoriteKind, itemId: number): Promise<Result<{ ok: true }>>
+}
+
+export interface RemindersApi {
+  /** All reminders/recordings, newest start first. */
+  list(): Promise<Result<Reminder[]>>
+  /** Create a reminder/recording (dedup by stream/start/title). */
+  add(req: AddReminderRequest): Promise<Result<Reminder>>
+  /** Cancel a reminder/recording (stops an in-progress recording). */
+  cancel(id: number): Promise<Result<Reminder>>
+  /** Update mode/lead (status is normally driven by main). */
+  update(req: UpdateReminderRequest): Promise<Result<Reminder>>
+  /** Reply to a recording-vs-playback conflict prompt. */
+  resolveConflict(req: ResolveConflictRequest): Promise<Result<{ ok: true }>>
+  /** Subscribe to reminder row changes (status / filePath). */
+  onUpdated(cb: (e: ReminderUpdatedEvent) => void): Unsubscribe
+  /** Subscribe to "open this channel" requests from a clicked notification. */
+  onOpenChannel(cb: (e: ReminderOpenChannelEvent) => void): Unsubscribe
+  /** Subscribe to recording-vs-playback conflicts that need a user decision. */
+  onConflict(cb: (e: RecordingConflictEvent) => void): Unsubscribe
 }
 
 export interface DownloadsApi {
@@ -196,6 +226,7 @@ export interface RendererApi {
   series: SeriesApi
   live: LiveApi
   favorites: FavoritesApi
+  reminders: RemindersApi
   downloads: DownloadsApi
   player: PlayerApi
   connectionLock: ConnectionLockApi

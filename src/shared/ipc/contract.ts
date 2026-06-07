@@ -41,6 +41,7 @@ import type {
 } from '../types/series'
 import type {
   EpgEntry,
+  FullEpgRequest,
   ListLiveRequest,
   LiveCategory,
   LiveStream,
@@ -49,6 +50,15 @@ import type {
   ShortEpgRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from '../types/favorites'
+import type {
+  AddReminderRequest,
+  RecordingConflictEvent,
+  Reminder,
+  ReminderOpenChannelEvent,
+  ReminderUpdatedEvent,
+  ResolveConflictRequest,
+  UpdateReminderRequest
+} from '../types/reminders'
 import type {
   AddDownloadRequest,
   DownloadItem,
@@ -118,11 +128,22 @@ export interface IpcContract {
   [InvokeChannels.LIVE_SEARCH]: { request: SearchLiveRequest; response: Page<LiveStream> }
   [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
   [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
+  [InvokeChannels.LIVE_FULL_EPG]: { request: FullEpgRequest; response: EpgEntry[] }
 
   // favorites
   [InvokeChannels.FAVORITES_LIST]: { request: { kind: FavoriteKind }; response: FavoriteItem[] }
   [InvokeChannels.FAVORITES_ADD]: { request: AddFavoriteRequest; response: { ok: true } }
   [InvokeChannels.FAVORITES_REMOVE]: { request: FavoriteRef; response: { ok: true } }
+
+  // reminders / scheduled recordings
+  [InvokeChannels.REMINDERS_LIST]: { request: void; response: Reminder[] }
+  [InvokeChannels.REMINDERS_ADD]: { request: AddReminderRequest; response: Reminder }
+  [InvokeChannels.REMINDERS_CANCEL]: { request: { id: number }; response: Reminder }
+  [InvokeChannels.REMINDERS_UPDATE]: { request: UpdateReminderRequest; response: Reminder }
+  [InvokeChannels.RECORDING_RESOLVE_CONFLICT]: {
+    request: ResolveConflictRequest
+    response: { ok: true }
+  }
 
   // downloads
   [InvokeChannels.DOWNLOAD_ADD]: { request: AddDownloadRequest; response: DownloadItem }
@@ -167,6 +188,9 @@ export interface EventContract {
   [EventChannels.PLAYER_POSITION]: PlayerPositionEvent
   [EventChannels.PLAYER_STATE]: PlayerStateEvent
   [EventChannels.CONNECTION_BUSY]: { busy: boolean; reason: 'download' | 'playback' | null }
+  [EventChannels.REMINDER_UPDATED]: ReminderUpdatedEvent
+  [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
+  [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
 }
 
 /** Convenience aliases. */
