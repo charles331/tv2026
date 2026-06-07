@@ -60,7 +60,6 @@ export const InvokeChannels = {
   REMINDERS_LIST: 'reminders:list',
   REMINDERS_ADD: 'reminders:add',
   REMINDERS_CANCEL: 'reminders:cancel',
-  REMINDERS_UPDATE: 'reminders:update',
   /** Renderer replies to a recording-vs-playback conflict prompt. */
   RECORDING_RESOLVE_CONFLICT: 'recording:resolveConflict',
 

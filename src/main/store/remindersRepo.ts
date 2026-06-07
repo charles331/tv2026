@@ -155,15 +155,16 @@ export function updateReminder(
     now: Date.now(),
     id
   }
-  getDb()
+  const row = getDb()
     .prepare(
       `UPDATE programme_reminders
        SET mode = @mode, lead_secs = @leadSecs, status = @status,
            file_path = @filePath, updated_at = @now
-       WHERE id = @id`
+       WHERE id = @id
+       RETURNING *`
     )
-    .run(merged)
-  return getReminder(id)
+    .get(merged) as ReminderRow | undefined
+  return row ? mapRow(row) : null
 }
 
 /** Mark a reminder canceled (kept for history). Returns the updated row. */

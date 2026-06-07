@@ -65,6 +65,35 @@ export function formatDateFromEpochSecs(epochSecs: number | null | undefined): s
   }
 }
 
+/** Format a Unix epoch (seconds) as a short local time, e.g. "20:00" ('' if unknown). */
+export function formatClockFromEpochSecs(epochSecs: number | null | undefined): string {
+  if (epochSecs == null || !Number.isFinite(epochSecs)) return ''
+  try {
+    return new Date(epochSecs * 1000).toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch {
+    return ''
+  }
+}
+
+/** Format a Unix epoch (seconds) as a French weekday + date + time, e.g. "lun. 3 juin 20:00". */
+export function formatDateTimeFromEpochSecs(epochSecs: number | null | undefined): string {
+  if (epochSecs == null || !Number.isFinite(epochSecs)) return ''
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(epochSecs * 1000))
+  } catch {
+    return ''
+  }
+}
+
 /** Normalize a trailer value (id or url) into a watchable YouTube URL. */
 export function trailerUrl(trailer: string | null | undefined): string | null {
   if (!trailer) return null

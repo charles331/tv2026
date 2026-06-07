@@ -624,8 +624,7 @@ export class XtreamClient {
       startSecs: toInt(l.start_timestamp),
       endSecs: toInt(l.stop_timestamp),
       nowPlaying: toInt(l.now_playing) === 1,
-      epgId: rawEpgId === null || rawEpgId === '' ? null : String(rawEpgId),
-      hasArchive: toInt(l.has_archive) === 1
+      epgId: rawEpgId === null || rawEpgId === '' ? null : String(rawEpgId)
     }
   }
 }

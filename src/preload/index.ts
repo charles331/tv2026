@@ -197,10 +197,6 @@ const api: RendererApi = {
       invoke(InvokeChannels.REMINDERS_CANCEL, { id }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.REMINDERS_CANCEL>>
       >,
-    update: (req) =>
-      invoke(InvokeChannels.REMINDERS_UPDATE, req) as Promise<
-        Result<IpcResponse<typeof InvokeChannels.REMINDERS_UPDATE>>
-      >,
     resolveConflict: (req) =>
       invoke(InvokeChannels.RECORDING_RESOLVE_CONFLICT, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.RECORDING_RESOLVE_CONFLICT>>

@@ -64,6 +64,21 @@ export interface Reminder {
   updatedAt: number
 }
 
+/**
+ * Whether a reminder is still "active" — pending, in progress, or a conflict
+ * that will be retried (i.e. NOT a terminal completed/missed/failed/canceled).
+ * Shared by the nav badge, the "Programmés" view and (as a SQL mirror) the
+ * scheduler's `listActiveReminders`, so the notion of "active" stays in sync.
+ */
+export function isActiveReminderStatus(status: ReminderStatus): boolean {
+  return (
+    status === 'scheduled' ||
+    status === 'notified' ||
+    status === 'recording' ||
+    status === 'conflict'
+  )
+}
+
 /** Create a reminder/recording for a programme. */
 export interface AddReminderRequest {
   streamId: number
@@ -77,14 +92,6 @@ export interface AddReminderRequest {
   mode: ReminderMode
   /** Override the default lead; omitted = use the user's Settings default. */
   leadSecs?: number
-}
-
-/** Patch a subset of a reminder (mode/lead from the UI; status from main). */
-export interface UpdateReminderRequest {
-  id: number
-  mode?: ReminderMode
-  leadSecs?: number
-  status?: ReminderStatus
 }
 
 /** Event payload: a reminder row changed (status/filePath) in the main process. */

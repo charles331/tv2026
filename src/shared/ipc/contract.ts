@@ -57,8 +57,7 @@ import type {
   Reminder,
   ReminderOpenChannelEvent,
   ReminderUpdatedEvent,
-  ResolveConflictRequest,
-  UpdateReminderRequest
+  ResolveConflictRequest
 } from '../types/reminders'
 import type {
   AddDownloadRequest,
@@ -140,7 +139,6 @@ export interface IpcContract {
   [InvokeChannels.REMINDERS_LIST]: { request: void; response: Reminder[] }
   [InvokeChannels.REMINDERS_ADD]: { request: AddReminderRequest; response: Reminder }
   [InvokeChannels.REMINDERS_CANCEL]: { request: { id: number }; response: Reminder }
-  [InvokeChannels.REMINDERS_UPDATE]: { request: UpdateReminderRequest; response: Reminder }
   [InvokeChannels.RECORDING_RESOLVE_CONFLICT]: {
     request: ResolveConflictRequest
     response: { ok: true }

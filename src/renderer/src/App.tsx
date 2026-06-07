@@ -8,6 +8,7 @@ import type {
   VodInfo,
   VodStream
 } from '@shared/index'
+import { isActiveReminderStatus } from '@shared/index'
 import { api, describeError, unwrap } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
@@ -60,10 +61,7 @@ function AppShell(): ReactElement {
   const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
 
   const scheduledCount = useMemo(
-    () =>
-      reminders.filter(
-        (r) => r.status === 'scheduled' || r.status === 'notified' || r.status === 'recording'
-      ).length,
+    () => reminders.filter((r) => isActiveReminderStatus(r.status)).length,
     [reminders]
   )
 

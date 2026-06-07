@@ -16,15 +16,13 @@
  * Reminders/recordings only run while the app is open (background = later étape).
  */
 
-import { join } from 'path'
 import { app, Notification, type BrowserWindow } from 'electron'
 
 import type { ConflictResolution, EventContract, Reminder } from '@shared/index'
 import { EventChannels } from '@shared/index'
 
 import { remindersRepo, settingsRepo } from '../store'
-import { downloadSubfolder } from '../downloads/helpers'
-import { assertPathWithin } from '../ipc/validate'
+import { buildLiveRecordingPath } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import { recordingController, RecordingError } from '../player/RecordingController'
 import { computeDueActions } from './schedulerLogic'
@@ -36,22 +34,6 @@ type Emitter = <C extends keyof EventContract>(channel: C, payload: EventContrac
 const TICK_MS = 20_000
 /** How long we wait for the user to resolve a conflict before defaulting. */
 const CONFLICT_TIMEOUT_MS = 30_000
-
-/** Sanitize a filename for Windows (mirrors the interactive recording handler). */
-function sanitizeFileName(name: string): string {
-  // eslint-disable-next-line no-control-regex
-  const cleaned = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim()
-  return cleaned || 'Enregistrement'
-}
-
-/** Filesystem-safe local timestamp: "2026-06-03 14-30-05". */
-function recordingTimestamp(d = new Date()): string {
-  const p = (n: number): string => String(n).padStart(2, '0')
-  return (
-    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-    `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
-  )
-}
 
 export class ReminderScheduler {
   private emit: Emitter = () => {}
@@ -251,12 +233,7 @@ export class ReminderScheduler {
     }
     let filePath: string
     try {
-      const base = sanitizeFileName(`${r.channelName} - ${r.title}`)
-      const liveDir = join(settings.downloadDir, downloadSubfolder('live'))
-      filePath = assertPathWithin(
-        join(liveDir, `${base} ${recordingTimestamp()}.ts`),
-        settings.downloadDir
-      )
+      filePath = buildLiveRecordingPath(settings.downloadDir, `${r.channelName} - ${r.title}`)
     } catch {
       this.markStatus(r.id, 'failed')
       return

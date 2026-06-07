@@ -1,6 +1,8 @@
 import { useMemo, type ReactElement } from 'react'
 import type { Reminder, ReminderStatus } from '@shared/index'
+import { isActiveReminderStatus } from '@shared/index'
 import { useReminders } from '../../lib/reminders'
+import { formatDateTimeFromEpochSecs } from '../../lib/format'
 import {
   Button,
   Badge,
@@ -30,29 +32,10 @@ const MODE_LABEL = {
   notify_record: '🔔⏺ Rappel + enregistrement'
 } as const
 
-function dateTime(secs: number): string {
-  try {
-    return new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(new Date(secs * 1000))
-  } catch {
-    return ''
-  }
-}
-
-/** Whether a reminder is still pending/active (not in a terminal state). */
-function isActive(r: Reminder): boolean {
-  return r.status === 'scheduled' || r.status === 'notified' || r.status === 'recording'
-}
-
 function ReminderCard({ r }: { r: Reminder }): ReactElement {
   const reminders = useReminders()
   const meta = STATUS_META[r.status]
-  const cancelable = isActive(r) || r.status === 'conflict'
+  const cancelable = isActiveReminderStatus(r.status)
   return (
     <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-surface-raised p-3">
       <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
@@ -64,7 +47,7 @@ function ReminderCard({ r }: { r: Reminder }): ReactElement {
           <Badge tone={meta.tone}>{meta.label}</Badge>
         </p>
         <p className="mt-0.5 truncate text-xs text-gray-400">
-          {r.channelName} · {dateTime(r.startSecs)}
+          {r.channelName} · {formatDateTimeFromEpochSecs(r.startSecs)}
         </p>
         <p className="mt-0.5 text-xs text-gray-600">{MODE_LABEL[r.mode]}</p>
         {r.filePath && (

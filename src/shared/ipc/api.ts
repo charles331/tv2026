@@ -52,8 +52,7 @@ import type {
   Reminder,
   ReminderOpenChannelEvent,
   ReminderUpdatedEvent,
-  ResolveConflictRequest,
-  UpdateReminderRequest
+  ResolveConflictRequest
 } from '../types/reminders'
 import type {
   AddDownloadRequest,
@@ -151,8 +150,6 @@ export interface RemindersApi {
   add(req: AddReminderRequest): Promise<Result<Reminder>>
   /** Cancel a reminder/recording (stops an in-progress recording). */
   cancel(id: number): Promise<Result<Reminder>>
-  /** Update mode/lead (status is normally driven by main). */
-  update(req: UpdateReminderRequest): Promise<Result<Reminder>>
   /** Reply to a recording-vs-playback conflict prompt. */
   resolveConflict(req: ResolveConflictRequest): Promise<Result<{ ok: true }>>
   /** Subscribe to reminder row changes (status / filePath). */

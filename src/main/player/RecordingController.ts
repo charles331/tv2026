@@ -147,11 +147,6 @@ export class RecordingController {
     this.killActive()
   }
 
-  /** Stop whatever is recording (used on shutdown / conflict switch). */
-  stopAny(): void {
-    if (this.active) this.killActive()
-  }
-
   private killActive(): void {
     const proc = this.active?.proc
     if (proc && proc.exitCode === null && !proc.killed) {

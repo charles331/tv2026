@@ -3,6 +3,7 @@ import type { EpgEntry, LiveStream, ReminderMode } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useReminders } from '../../lib/reminders'
 import { useToast } from '../../lib/toast'
+import { formatClockFromEpochSecs } from '../../lib/format'
 import {
   Button,
   Poster,
@@ -15,16 +16,6 @@ import {
   IconBroadcast,
   IconRecord
 } from '../../components/ui'
-
-/** Format an epoch (seconds) as a short local time, e.g. "20:00". */
-function clock(secs: number | null): string {
-  if (secs == null) return ''
-  try {
-    return new Date(secs * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
-}
 
 /** A French day header, e.g. "Aujourd'hui" / "Lundi 9 juin". */
 function dayLabel(secs: number): string {
@@ -206,7 +197,7 @@ export function ChannelGuide({
                           }
                         >
                           <div className="w-12 shrink-0 pt-0.5 text-xs tabular-nums text-gray-400">
-                            {clock(e.startSecs)}
+                            {formatClockFromEpochSecs(e.startSecs)}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="flex items-center gap-2 text-sm text-gray-100">

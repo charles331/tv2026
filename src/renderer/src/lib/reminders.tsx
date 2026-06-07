@@ -16,12 +16,7 @@ import {
   type ReactElement,
   type ReactNode
 } from 'react'
-import type {
-  AddReminderRequest,
-  Reminder,
-  ReminderUpdatedEvent,
-  UpdateReminderRequest
-} from '@shared/index'
+import type { AddReminderRequest, Reminder, ReminderUpdatedEvent } from '@shared/index'
 import { api, describeError, unwrap } from './ipc'
 
 interface RemindersContextValue {
@@ -31,7 +26,6 @@ interface RemindersContextValue {
   has: (streamId: number, startSecs: number, title: string) => Reminder | undefined
   add: (req: AddReminderRequest) => Promise<Reminder | null>
   cancel: (id: number) => Promise<void>
-  update: (req: UpdateReminderRequest) => Promise<void>
   reload: () => Promise<void>
 }
 
@@ -98,19 +92,8 @@ export function RemindersProvider({ children }: { children: ReactNode }): ReactE
     }
   }, [])
 
-  const update = useCallback(async (req: UpdateReminderRequest) => {
-    try {
-      const r = unwrap(await api().reminders.update(req))
-      setReminders((prev) => prev.map((p) => (p.id === r.id ? r : p)))
-    } catch (e) {
-      console.warn('reminders.update a échoué :', describeError(e))
-    }
-  }, [])
-
   return (
-    <RemindersContext.Provider
-      value={{ reminders, loading, has, add, cancel, update, reload }}
-    >
+    <RemindersContext.Provider value={{ reminders, loading, has, add, cancel, reload }}>
       {children}
     </RemindersContext.Provider>
   )

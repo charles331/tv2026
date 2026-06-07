@@ -37,7 +37,7 @@ import {
 import { reminderScheduler } from '../reminders/ReminderScheduler'
 import { recordingController } from '../player/RecordingController'
 import { downloadManager } from '../downloads/DownloadManager'
-import { downloadSubfolder } from '../downloads/helpers'
+import { downloadSubfolder, sanitizeFileName, buildLiveRecordingPath } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
 import * as tmdbKey from '../secrets/tmdbKey'
@@ -73,30 +73,11 @@ function fromXtreamError(e: unknown): ReturnType<typeof err> {
 }
 
 /**
- * Sanitize a filename for the Windows filesystem: strip reserved characters
- * (\ / : * ? " < > |) plus control chars, collapse whitespace, and trim.
- */
-function sanitizeFileName(name: string): string {
-  // eslint-disable-next-line no-control-regex
-  const cleaned = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim()
-  return cleaned || 'download'
-}
-
-/**
  * Join a download directory and filename. The directory is a Windows path at
  * runtime; path.join handles the separators for the host platform.
  */
 function joinPath(dir: string, fileName: string): string {
   return pathJoin(dir, fileName)
-}
-
-/** Filesystem-safe local timestamp for recording filenames: "2026-06-03 14-30-05". */
-function recordingTimestamp(d = new Date()): string {
-  const p = (n: number): string => String(n).padStart(2, '0')
-  return (
-    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-    `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
-  )
 }
 
 /**
@@ -456,28 +437,6 @@ export const handlers: IpcHandlers = {
     return ok(reminder)
   },
 
-  [InvokeChannels.REMINDERS_UPDATE]: (req) => {
-    assert(isObject(req), 'request must be an object')
-    const id = requireInt(req, 'id')
-    const patch: { mode?: ReminderMode; leadSecs?: number; status?: never } = {}
-    if ('mode' in req) {
-      const mode = requireString(req, 'mode', 16)
-      assert(
-        mode === 'notify' || mode === 'record' || mode === 'notify_record',
-        'invalid reminder mode'
-      )
-      patch.mode = mode as ReminderMode
-    }
-    if ('leadSecs' in req) {
-      const v = requireInt(req, 'leadSecs')
-      assert(v >= 0 && v <= 3600, 'leadSecs out of range (0..3600)')
-      patch.leadSecs = v
-    }
-    const reminder = remindersRepo.updateReminder(id, patch)
-    if (!reminder) return err('NOT_FOUND', `Rappel ${id} introuvable`)
-    return ok(reminder)
-  },
-
   [InvokeChannels.RECORDING_RESOLVE_CONFLICT]: (req) => {
     assert(isObject(req), 'request must be an object')
     const reminderId = requireInt(req, 'reminderId')
@@ -658,13 +617,11 @@ export const handlers: IpcHandlers = {
     if (!playerController.canRecord()) {
       return err('INVALID_INPUT', 'Aucune lecture en direct en cours à enregistrer.')
     }
-    // Build a sanitized, timestamped .ts filename inside the Live subfolder, then
-    // confirm it stays within the download directory (defense in depth).
-    const base = sanitizeFileName(optionalString(req, 'name', 512) ?? 'Enregistrement')
-    const liveDir = joinPath(settings.downloadDir, downloadSubfolder('live'))
-    const filePath = assertPathWithin(
-      joinPath(liveDir, `${base} ${recordingTimestamp()}.ts`),
-      settings.downloadDir
+    // Sanitized, timestamped .ts path inside the Live subfolder, confined to the
+    // download dir (shared with the scheduled recorder — see buildLiveRecordingPath).
+    const filePath = buildLiveRecordingPath(
+      settings.downloadDir,
+      optionalString(req, 'name', 512) ?? 'Enregistrement'
     )
     return ok(await playerController.startRecording(filePath))
   },

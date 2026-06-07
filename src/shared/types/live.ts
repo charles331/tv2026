@@ -44,8 +44,6 @@ export interface EpgEntry {
   nowPlaying: boolean
   /** Provider EPG id (`id`/`epg_id`) if present — not guaranteed stable. */
   epgId: string | null
-  /** Whether catch-up/archive is available for this programme. */
-  hasArchive: boolean
 }
 
 /** Listing request for live channels, with optional category filter. */
