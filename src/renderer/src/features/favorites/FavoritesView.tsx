@@ -1,7 +1,7 @@
 import { type ReactElement } from 'react'
 import type { FavoriteItem, FavoriteKind } from '@shared/index'
 import { useFavorites } from '../../lib/favorites'
-import { Badge, Button, Poster, EmptyState, IconStar, IconPlay } from '../../components/ui'
+import { Badge, Button, Poster, EmptyState, IconStar, IconPlay, IconTv } from '../../components/ui'
 import { FavoriteButton } from './FavoriteButton'
 
 /** Build the AddFavoriteRequest snapshot from a stored favorite (for the toggle). */
@@ -37,11 +37,14 @@ function OfflineBadge(): ReactElement {
  */
 export function FavoritesView({
   kind,
-  onActivate
+  onActivate,
+  onOpenGuide
 }: {
   kind: FavoriteKind
   /** Open (movie/series) or play (live) the favorite. */
   onActivate: (item: FavoriteItem) => void
+  /** Live only: open the programme guide for a favorite channel. */
+  onOpenGuide?: (item: FavoriteItem) => void
 }): ReactElement {
   const { lists } = useFavorites()
   const items = lists[kind]
@@ -81,6 +84,17 @@ export function FavoritesView({
                   </div>
                 )}
               </div>
+              {onOpenGuide && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<IconTv size={14} />}
+                  title="Guide des programmes"
+                  onClick={() => onOpenGuide(f)}
+                >
+                  Guide
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="secondary"

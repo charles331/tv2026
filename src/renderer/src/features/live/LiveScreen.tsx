@@ -137,7 +137,11 @@ export function LiveScreen({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-2">
           {isFavorites ? (
-            <FavoritesView kind="live" onActivate={(f) => onPlayChannel(favToLive(f))} />
+            <FavoritesView
+              kind="live"
+              onActivate={(f) => onPlayChannel(favToLive(f))}
+              onOpenGuide={(f) => setGuideChannel(favToLive(f))}
+            />
           ) : feed.loading ? (
             <LoadingState label="Chargement des chaînes…" />
           ) : feed.error ? (

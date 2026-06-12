@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type { EpgEntry, LiveStream, ReminderMode } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useReminders } from '../../lib/reminders'
@@ -92,6 +92,15 @@ export function ChannelGuide({
 
   const days = useMemo(() => (epg ? groupByDay(epg) : []), [epg])
   const nowSecs = Math.floor(Date.now() / 1000)
+
+  // Once the guide loads, jump to the programme on air so the user doesn't have
+  // to scroll past hours of earlier listings.
+  const nowRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (epg && epg.length > 0) {
+      nowRef.current?.scrollIntoView({ block: 'center' })
+    }
+  }, [epg])
 
   const handleAdd = async (e: EpgEntry, mode: ReminderMode): Promise<void> => {
     if (e.startSecs == null || e.endSecs == null) return
@@ -187,6 +196,7 @@ export function ChannelGuide({
                       return (
                         <div
                           key={`${e.startSecs}-${i}`}
+                          ref={isNow ? nowRef : undefined}
                           className={
                             'flex items-start gap-3 rounded-lg border p-2.5 ' +
                             (isNow
