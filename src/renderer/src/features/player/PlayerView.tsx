@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { PlayRequest } from '@shared/index'
 import {
   Button,
@@ -63,6 +63,19 @@ export function PlayerView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request.kind, request.streamId, request.filePath])
+
+  // Close the transport bar when the mpv window is closed (or playback ends):
+  // once playback has actually started, a transition back to idle/ended means
+  // the mpv process is gone, so the bar should disappear with it.
+  const startedRef = useRef(false)
+  useEffect(() => {
+    const s = status.state
+    if (s === 'loading' || s === 'playing' || s === 'paused') {
+      startedRef.current = true
+    } else if (startedRef.current && (s === 'idle' || s === 'ended')) {
+      onClose()
+    }
+  }, [status.state, onClose])
 
   const duration = status.durationSecs ?? 0
   const position = seekPreview ?? status.positionSecs
