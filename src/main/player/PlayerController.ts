@@ -184,12 +184,23 @@ export class PlayerController {
     }
 
     // stream: acquire the single connection BEFORE opening the provider URL.
+    const url = this.streamUrl(req)
+    // Playback priority: acquiring 'playback' makes download-engineer pause its
+    // active transfer (it listens to the lock's busy changes).
+    this.lockToken = await connectionLock.acquire('playback')
+    return url
+  }
+
+  /**
+   * Build the canonical (unsigned) provider URL from decrypted credentials.
+   * mpv follows the 302 -> signed URL itself (we never cache the signed one).
+   * Pure URL building only — does NOT touch the connection lock (used both by
+   * resolveSource and by the live reconnect, which already holds the lock).
+   */
+  private streamUrl(req: PlayRequest): string {
     if (typeof req.streamId !== 'number') {
       throw new PlayerError('streamId manquant pour la lecture en streaming.')
     }
-    // Build the canonical (unsigned) URL from decrypted credentials. Series
-    // episodes use a different endpoint than movies. mpv follows the 302 ->
-    // signed URL itself (we never cache the signed one).
     const client = getXtreamClient()
     let url: string
     if (req.mediaKind === 'live') {
@@ -199,11 +210,7 @@ export class PlayerController {
     } else {
       url = client.buildMovieUrl(req.streamId, req.containerExtension ?? 'mkv')
     }
-    await client.close().catch(() => undefined)
-
-    // Playback priority: acquiring 'playback' makes download-engineer pause its
-    // active transfer (it listens to the lock's busy changes).
-    this.lockToken = await connectionLock.acquire('playback')
+    void client.close().catch(() => undefined)
     return url
   }
 
@@ -302,6 +309,14 @@ export class PlayerController {
         '--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=30'
       )
     }
+
+    // Carry the user's audio/window prefs across a respawn (e.g. a live
+    // reconnect after mpv crashed): restore volume/mute/fullscreen as launch
+    // args so there's no audible jump-to-100% or fullscreen-exit. Defaults are
+    // omitted so a first play doesn't override the user's mpv.conf.
+    if (this.status.volume !== 100) args.push(`--volume=${this.status.volume}`)
+    if (this.status.muted) args.push('--mute=yes')
+    if (this.status.fullscreen) args.push('--fullscreen=yes')
 
     args.push(url)
     return args
@@ -453,19 +468,25 @@ export class PlayerController {
   }
 
   /**
-   * A live stream dropped unexpectedly. Tear down the dead mpv, show
-   * 'reconnecting', and schedule a re-open with capped backoff. Attempts are
-   * unlimited until the user stops (stop() clears currentReq + the timer and
-   * bumps the session, so a pending/in-flight reconnect is abandoned).
+   * A live stream dropped unexpectedly. Show 'reconnecting' and schedule a
+   * re-open with capped backoff. Attempts are unlimited until the user stops
+   * (stop() clears currentReq + the timer and bumps the session, so a
+   * pending/in-flight reconnect is abandoned). The actual re-open is in-place
+   * when mpv is still alive (see attemptReconnect).
    */
   private reconnectLive(): void {
     const req = this.currentReq
     if (!req || req.mediaKind !== 'live') return
-    // Invalidate the dead session so its trailing exit/close events are ignored.
-    this.sessionId++
-    void this.teardown()
+    if (this.retryTimer) return // already scheduled (dedupes the eof + exit + close events)
+    // A reconnect always interrupts an in-progress recording (loadfile/respawn
+    // resets mpv's stream-record). Clear the flag so the UI stops showing REC
+    // and can warn the user.
+    if (this.recordingPath || this.status.recording) {
+      this.recordingPath = null
+      this.status.recording = false
+      this.status.recordingPath = null
+    }
     this.retryAttempt++
-    this.clearRetryTimer()
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
     const delay = liveReconnectDelay(this.retryAttempt)
     this.retryTimer = setTimeout(() => {
@@ -474,36 +495,48 @@ export class PlayerController {
     }, delay)
   }
 
-  /** Re-resolve the (token-fresh) live URL and re-spawn mpv; keep retrying on failure. */
+  /**
+   * Re-open the live stream. Prefer reloading the URL IN PLACE on the still-alive
+   * mpv (it parks on the last frame thanks to --keep-open/--idle), which keeps
+   * the window, volume, mute, fullscreen and track selection and holds the
+   * connection lock — no flicker, no focus steal, no audio jump. Only respawn
+   * when mpv has genuinely exited; that path reuses the held lock (no download
+   * thrash) and restores volume/mute/fullscreen via launch args.
+   */
   private async attemptReconnect(req: PlayRequest): Promise<void> {
+    if (this.currentReq !== req) return // superseded by stop()/new play()
+
+    // SOFT: mpv still running → reload the (token-fresh) URL in place.
+    if (this.proc && this.proc.exitCode === null && this.ipc?.isConnected()) {
+      const url = this.streamUrl(req)
+      await this.ipc.command(['loadfile', url, 'replace']).catch(() => {
+        if (this.currentReq === req) this.reconnectLive()
+      })
+      return
+    }
+
+    // HARD: mpv exited → respawn, reusing the still-held lock.
     const binary = resolveMpvBinary()
     if (!binary) {
       this.toError('Lecteur mpv introuvable.')
       return
     }
+    this.ipc?.dispose()
+    this.ipc = null
+    this.proc = null
     const session = ++this.sessionId
-    let url: string
     try {
-      url = await this.resolveSource(req)
-    } catch {
-      // Couldn't resolve/acquire the connection — keep trying until the user stops.
-      if (session === this.sessionId) this.reconnectLive()
-      return
-    }
-    if (session !== this.sessionId) {
-      // Superseded (user stopped or started something else) while resolving:
-      // release the connection we just acquired so it doesn't leak.
-      if (this.lockToken) {
-        connectionLock.release(this.lockToken)
-        this.lockToken = null
+      if (!this.lockToken) this.lockToken = await connectionLock.acquire('playback')
+      if (session !== this.sessionId) {
+        if (this.lockToken) {
+          connectionLock.release(this.lockToken)
+          this.lockToken = null
+        }
+        return
       }
-      return
-    }
-    try {
-      await this.spawnMpv(binary, url, req, session)
+      await this.spawnMpv(binary, this.streamUrl(req), req, session)
     } catch {
-      await this.teardown()
-      if (session === this.sessionId) this.reconnectLive()
+      if (this.currentReq === req && session === this.sessionId) this.reconnectLive()
     }
   }
 
@@ -705,7 +738,9 @@ export class PlayerController {
     this.emit(EventChannels.PLAYER_STATE, {
       state,
       error: state === 'error' ? this.status.error : undefined,
-      recording: this.status.recording
+      recording: this.status.recording,
+      // Surfaced only while reconnecting, so the bar can show "(tentative N)".
+      reconnectAttempt: state === 'reconnecting' ? this.retryAttempt : undefined
     })
     // Always push a position tick alongside a state change so the UI syncs.
     this.emitPosition(true)

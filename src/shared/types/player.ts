@@ -41,6 +41,8 @@ export interface PlayerStatus {
   recording: boolean
   /** Absolute path of the file being recorded, when recording. */
   recordingPath?: string | null
+  /** Consecutive live-reconnect attempt number (set only while reconnecting). */
+  reconnectAttempt?: number
   /** Set when state === 'error'. */
   error?: string
 }
@@ -83,4 +85,6 @@ export interface PlayerStateEvent {
   error?: string
   /** Current recording flag, so the UI stays in sync when playback ends/stops. */
   recording?: boolean
+  /** Consecutive live-reconnect attempt number (set only while reconnecting). */
+  reconnectAttempt?: number
 }

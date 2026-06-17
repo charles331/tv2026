@@ -62,7 +62,8 @@ export function usePlayer(): PlayerController {
         ...s,
         state: e.state,
         error: e.error,
-        recording: e.recording ?? s.recording
+        recording: e.recording ?? s.recording,
+        reconnectAttempt: e.reconnectAttempt
       }))
       if (e.state === 'error' && e.error) setError(e.error)
     })

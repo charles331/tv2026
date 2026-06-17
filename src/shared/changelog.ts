@@ -22,7 +22,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-06-12',
     changes: [
       'Direct : un flux qui se coupe tout seul (coupure réseau, hoquet du fournisseur) se reconnecte désormais automatiquement, au lieu de fermer la lecture.',
-      'La barre affiche « Reconnexion… » et réessaie tant que vous ne cliquez pas vous-même sur « Arrêter ».'
+      'La reconnexion recharge le flux dans la même fenêtre : le volume, le plein écran et les pistes audio/sous-titres sont conservés (pas de fenêtre qui se ferme et rouvre).',
+      'La barre affiche « Reconnexion… » (avec le numéro de tentative) et réessaie tant que vous ne cliquez pas vous-même sur « Arrêter ».'
     ]
   },
   {
