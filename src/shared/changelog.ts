@@ -18,11 +18,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.2',
+    date: '2026-06-17',
+    changes: [
+      'Direct : correction de la reconnexion automatique qui pouvait rester bloquée sur « Reconnexion… » — elle relance maintenant proprement la connexion (comme un « Arrêter » puis « Regarder »), ce qui récupère réellement le flux.',
+      'Après la reprise, le volume, le plein écran, la pause et la langue/les sous-titres choisis sont restaurés.'
+    ]
+  },
+  {
     version: '0.9.1',
     date: '2026-06-12',
     changes: [
       'Direct : un flux qui se coupe tout seul (coupure réseau, hoquet du fournisseur) se reconnecte désormais automatiquement, au lieu de fermer la lecture.',
-      'La reconnexion recharge le flux dans la même fenêtre : le volume, le plein écran et les pistes audio/sous-titres sont conservés (pas de fenêtre qui se ferme et rouvre).',
       'La barre affiche « Reconnexion… » (avec le numéro de tentative) et réessaie tant que vous ne cliquez pas vous-même sur « Arrêter ».'
     ]
   },

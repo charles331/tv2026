@@ -319,7 +319,7 @@ export class PlayerController {
         '--cache=yes',
         '--demuxer-max-bytes=256MiB',
         '--demuxer-max-back-bytes=256MiB',
-        '--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=30'
+        '--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5'
       )
     }
 
@@ -512,24 +512,31 @@ export class PlayerController {
   }
 
   /**
-   * A live stream dropped unexpectedly. Show 'reconnecting' and schedule a
-   * re-open with capped backoff. Attempts are unlimited until the user stops
-   * (stop() clears currentReq + the timer and bumps the session, so a
-   * pending/in-flight reconnect is abandoned). The actual re-open is in-place
-   * when mpv is still alive (see attemptReconnect).
+   * A live stream dropped unexpectedly. KILL mpv now (so its provider socket
+   * closes and the panel's single connection is freed during the backoff), then
+   * schedule a fresh re-open. Attempts are unlimited until the user stops
+   * (stop() clears currentReq + the timer and bumps the session).
+   *
+   * Why kill instead of reloading in place: reusing the same mpv via
+   * `loadfile replace` keeps the old provider connection alive, so a
+   * single-connection panel refuses the new one and the stream stays stuck on
+   * "Reconnexion…" forever. Killing + respawning mirrors a manual Stop+Play
+   * (which recovers). We keep the internal connection lock so downloads aren't
+   * thrashed; only mpv + its socket close.
    */
   private reconnectLive(): void {
     const req = this.currentReq
     if (!req || req.mediaKind !== 'live') return
-    if (this.retryTimer) return // already scheduled (dedupes the eof + exit + close events)
-    // A reconnect always interrupts an in-progress recording (loadfile/respawn
-    // resets mpv's stream-record). Clear the flag so the UI stops showing REC
-    // and can warn the user.
+    if (this.retryTimer) return // dedupes the eof + exit + close events of one drop
+    // A reconnect always interrupts an in-progress recording (the process is
+    // killed). Clear the flag so the UI stops showing REC and can warn the user.
     if (this.recordingPath || this.status.recording) {
       this.recordingPath = null
       this.status.recording = false
       this.status.recordingPath = null
     }
+    this.killMpv()
+    this.sessionId++ // ignore the dead mpv's trailing exit/close events
     this.retryAttempt++
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
     const delay = liveReconnectDelay(this.retryAttempt)
@@ -540,34 +547,19 @@ export class PlayerController {
   }
 
   /**
-   * Re-open the live stream. Prefer reloading the URL IN PLACE on the still-alive
-   * mpv (it parks on the last frame thanks to --keep-open/--idle), which keeps
-   * the window, volume, mute, fullscreen and track selection and holds the
-   * connection lock — no flicker, no focus steal, no audio jump. Only respawn
-   * when mpv has genuinely exited; that path reuses the held lock (no download
-   * thrash) and restores volume/mute/fullscreen via launch args.
+   * Re-open the live stream in a FRESH mpv (the reliable recovery — it matches a
+   * manual Stop+Play, which frees the provider connection). Reuses the still-held
+   * connection lock (no download thrash). Keeps retrying with growing backoff on
+   * failure; the respawn restores volume/mute/fullscreen (launch args) and
+   * audio/subtitle track + pause (on file-loaded).
    */
   private async attemptReconnect(req: PlayRequest): Promise<void> {
     if (this.currentReq !== req) return // superseded by stop()/new play()
-
-    // SOFT: mpv still running → reload the (token-fresh) URL in place.
-    if (this.proc && this.proc.exitCode === null && this.ipc?.isConnected()) {
-      const url = this.streamUrl(req)
-      await this.ipc.command(['loadfile', url, 'replace']).catch(() => {
-        if (this.currentReq === req) this.reconnectLive()
-      })
-      return
-    }
-
-    // HARD: mpv exited → respawn, reusing the still-held lock.
     const binary = resolveMpvBinary()
     if (!binary) {
       this.toError('Lecteur mpv introuvable.')
       return
     }
-    this.ipc?.dispose()
-    this.ipc = null
-    this.proc = null
     const session = ++this.sessionId
     try {
       if (!this.lockToken) this.lockToken = await connectionLock.acquire('playback')
@@ -581,6 +573,25 @@ export class PlayerController {
       await this.spawnMpv(binary, this.streamUrl(req), req, session)
     } catch {
       if (this.currentReq === req && session === this.sessionId) this.reconnectLive()
+    }
+  }
+
+  /**
+   * Kill the mpv process + dispose its IPC, KEEPING the connection lock. Used by
+   * the live reconnect, which must free the provider socket (process death closes
+   * it) without releasing the internal download lock.
+   */
+  private killMpv(): void {
+    const ipc = this.ipc
+    const proc = this.proc
+    this.ipc = null
+    this.proc = null
+    ipc?.dispose()
+    if (proc && proc.exitCode === null && !proc.killed) {
+      proc.kill()
+      setTimeout(() => {
+        if (proc.exitCode === null && !proc.killed) proc.kill('SIGKILL')
+      }, 1500)
     }
   }
 
@@ -860,7 +871,7 @@ function clampVolume(v: number): number {
  * Backoff (ms) before the Nth consecutive live-reconnect attempt. Capped so we
  * never tight-loop; attempts themselves are unlimited (until the user stops).
  */
-const LIVE_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000]
+const LIVE_RECONNECT_DELAYS_MS = [2000, 4000, 8000, 15000]
 function liveReconnectDelay(attempt: number): number {
   const i = Math.min(Math.max(attempt - 1, 0), LIVE_RECONNECT_DELAYS_MS.length - 1)
   return LIVE_RECONNECT_DELAYS_MS[i]!
