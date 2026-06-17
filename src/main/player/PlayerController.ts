@@ -73,7 +73,9 @@ const OBS = {
   volume: 4,
   mute: 5,
   fullscreen: 6,
-  eofReached: 7
+  eofReached: 7,
+  aid: 8,
+  sid: 9
 } as const
 
 /** ms between throttled position events to the renderer. */
@@ -110,6 +112,14 @@ export class PlayerController {
   private retryAttempt = 0
   /** Pending live-reconnect timer, if any. */
   private retryTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * Per-file selections to carry across a live reconnect (a reload/respawn
+   * re-runs track selection and resets pause). Only a user-chosen track id
+   * (a number) is remembered; auto/none is left to mpv's defaults.
+   */
+  private currentAid: number | null = null
+  private currentSid: number | null = null
+  private lastPaused = false
 
   /**
    * Wire the typed event emitter (called once from main/index.ts). mpv renders
@@ -147,9 +157,12 @@ export class PlayerController {
 
     const session = ++this.sessionId
     // Remember the request so a LIVE drop can auto-reconnect; reset the backoff
-    // for this fresh, user-initiated playback.
+    // and the carried-over track/pause selections for this fresh playback.
     this.currentReq = req
     this.retryAttempt = 0
+    this.currentAid = null
+    this.currentSid = null
+    this.lastPaused = false
     this.setState('loading', { source: req.kind, title: req.title ?? null })
 
     let url: string
@@ -338,10 +351,28 @@ export class PlayerController {
       if (session !== this.sessionId) return
       void this.handleExit(null)
     })
+    ipc.on('event', (msg: Record<string, unknown>) => {
+      if (session !== this.sessionId) return
+      // Once a file is loaded (first play, soft reload, or respawn), re-apply the
+      // per-file selections a (re)load resets: chosen audio/subtitle track + pause.
+      if (msg.event === 'file-loaded') void this.restorePrefs(ipc)
+    })
     ipc.on('error', () => {
       // Logged at the socket level; non-fatal. Genuine drops surface as 'close'.
     })
     void source
+  }
+
+  /**
+   * Re-apply per-file selections lost on a (re)load: the user-chosen audio and
+   * subtitle track, and pause. Volume/mute/fullscreen are global (mpv keeps them
+   * across loadfile, and the respawn path restores them via launch args), so
+   * they are not re-applied here. Best-effort; defaults are left untouched.
+   */
+  private async restorePrefs(ipc: MpvIpc): Promise<void> {
+    if (this.currentAid !== null) await ipc.setProperty('aid', this.currentAid).catch(() => undefined)
+    if (this.currentSid !== null) await ipc.setProperty('sid', this.currentSid).catch(() => undefined)
+    if (this.lastPaused) await ipc.setProperty('pause', true).catch(() => undefined)
   }
 
   private async observeProperties(ipc: MpvIpc): Promise<void> {
@@ -352,7 +383,9 @@ export class PlayerController {
       ipc.observeProperty(OBS.volume, 'volume'),
       ipc.observeProperty(OBS.mute, 'mute'),
       ipc.observeProperty(OBS.fullscreen, 'fullscreen'),
-      ipc.observeProperty(OBS.eofReached, 'eof-reached')
+      ipc.observeProperty(OBS.eofReached, 'eof-reached'),
+      ipc.observeProperty(OBS.aid, 'aid'),
+      ipc.observeProperty(OBS.sid, 'sid')
     ]).catch(() => undefined)
   }
 
@@ -371,8 +404,19 @@ export class PlayerController {
         this.status.durationSecs = dur !== null && dur > 0 ? dur : null
         break
       }
+      case 'aid': {
+        // Remember a user-selected audio track (a numeric id) to restore on a
+        // reconnect; auto/none (non-number) falls back to mpv's default.
+        this.currentAid = typeof change.data === 'number' ? change.data : null
+        break
+      }
+      case 'sid': {
+        this.currentSid = typeof change.data === 'number' ? change.data : null
+        break
+      }
       case 'pause': {
         const paused = change.data === true
+        this.lastPaused = paused
         // Becomes authoritative once mpv starts decoding (from loading OR a
         // live reconnect). A successful (re)start clears the reconnect backoff.
         if (
