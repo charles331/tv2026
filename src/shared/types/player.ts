@@ -22,7 +22,7 @@ export interface PlayRequest {
   startSecs?: number
 }
 
-export type PlayerState = 'idle' | 'loading' | 'playing' | 'paused' | 'ended' | 'error'
+export type PlayerState = 'idle' | 'loading' | 'reconnecting' | 'playing' | 'paused' | 'ended' | 'error'
 
 export interface PlayerStatus {
   state: PlayerState

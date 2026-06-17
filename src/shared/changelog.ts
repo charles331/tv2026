@@ -18,6 +18,23 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.1',
+    date: '2026-06-12',
+    changes: [
+      'Direct : un flux qui se coupe tout seul (coupure réseau, hoquet du fournisseur) se reconnecte désormais automatiquement, au lieu de fermer la lecture.',
+      'La barre affiche « Reconnexion… » et réessaie tant que vous ne cliquez pas vous-même sur « Arrêter ».'
+    ]
+  },
+  {
+    version: '0.9.0',
+    date: '2026-06-12',
+    changes: [
+      'Direct : le bouton « Guide » est aussi disponible sur les chaînes en favori.',
+      'À l’ouverture du guide, l’affichage se place directement sur le programme en cours.',
+      'La barre de lecture se ferme automatiquement quand vous fermez la fenêtre vidéo.'
+    ]
+  },
+  {
     version: '0.8.0',
     date: '2026-06-07',
     changes: [

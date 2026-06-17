@@ -70,7 +70,7 @@ export function PlayerView({
   const startedRef = useRef(false)
   useEffect(() => {
     const s = status.state
-    if (s === 'loading' || s === 'playing' || s === 'paused') {
+    if (s === 'loading' || s === 'reconnecting' || s === 'playing' || s === 'paused') {
       startedRef.current = true
     } else if (startedRef.current && (s === 'idle' || s === 'ended')) {
       onClose()
@@ -80,7 +80,9 @@ export function PlayerView({
   const duration = status.durationSecs ?? 0
   const position = seekPreview ?? status.positionSecs
   const isPlaying = status.state === 'playing'
-  const isLoading = status.state === 'loading'
+  const isReconnecting = status.state === 'reconnecting'
+  // Treat reconnecting like loading for the transport control (spinner).
+  const isLoading = status.state === 'loading' || isReconnecting
   const title = status.title ?? request.title ?? 'Lecture'
   const isError = status.state === 'error'
 
@@ -88,15 +90,17 @@ export function PlayerView({
     ? 'Lecteur indisponible'
     : isError
       ? 'Erreur'
-      : isLoading
-        ? 'Préparation…'
-        : status.state === 'paused'
-          ? 'En pause'
-          : status.state === 'ended'
-            ? 'Terminé'
-            : status.state === 'playing'
-              ? 'En lecture'
-              : ''
+      : isReconnecting
+        ? 'Reconnexion…'
+        : status.state === 'loading'
+          ? 'Préparation…'
+          : status.state === 'paused'
+            ? 'En pause'
+            : status.state === 'ended'
+              ? 'Terminé'
+              : status.state === 'playing'
+                ? 'En lecture'
+                : ''
 
   const close = (): void => {
     void player.stop()
@@ -114,7 +118,16 @@ export function PlayerView({
           <p className="truncate text-sm font-medium text-gray-100" title={title}>
             {title}
           </p>
-          <p className={cn('text-xs', isError || unavailable ? 'text-red-300' : 'text-gray-500')}>
+          <p
+            className={cn(
+              'text-xs',
+              isError || unavailable
+                ? 'text-red-300'
+                : isReconnecting
+                  ? 'text-amber-300'
+                  : 'text-gray-500'
+            )}
+          >
             {stateLabel}
           </p>
         </div>

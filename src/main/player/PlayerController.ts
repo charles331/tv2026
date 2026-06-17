@@ -100,6 +100,16 @@ export class PlayerController {
   private lastPositionEmit = 0
   /** Absolute path of the file currently being recorded (mpv stream-record). */
   private recordingPath: string | null = null
+  /**
+   * The request currently being played, kept so a LIVE stream can be re-opened
+   * automatically after an unexpected drop. Cleared by stop()/shutdown (a user
+   * stop must never trigger a reconnect).
+   */
+  private currentReq: PlayRequest | null = null
+  /** Consecutive live-reconnect attempts (drives the backoff; reset on success). */
+  private retryAttempt = 0
+  /** Pending live-reconnect timer, if any. */
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
 
   /**
    * Wire the typed event emitter (called once from main/index.ts). mpv renders
@@ -131,10 +141,15 @@ export class PlayerController {
       )
     }
 
-    // Stop any previous session (releases its lock, kills its process).
+    // Stop any previous session (releases its lock, kills its process). This also
+    // clears any pending live-reconnect from the previous source.
     await this.stop()
 
     const session = ++this.sessionId
+    // Remember the request so a LIVE drop can auto-reconnect; reset the backoff
+    // for this fresh, user-initiated playback.
+    this.currentReq = req
+    this.retryAttempt = 0
     this.setState('loading', { source: req.kind, title: req.title ?? null })
 
     let url: string
@@ -275,14 +290,16 @@ export class PlayerController {
       '--sub-auto=fuzzy'
     ]
 
-    // Live: keep a generous demuxer cache + back-buffer. mpv's stream-record
-    // flushes the cached data when recording starts, so a larger back-buffer
-    // lets a recording capture some content from BEFORE the user hit "record".
+    // Live: keep a generous demuxer cache + back-buffer (also lets a recording
+    // capture some pre-roll), and ask FFmpeg's HTTP reader to auto-reconnect on
+    // transient drops so a network blip doesn't end the stream. The controller
+    // still reconnects at a higher level if mpv exits anyway (see reconnectLive).
     if (req.mediaKind === 'live') {
       args.push(
         '--cache=yes',
         '--demuxer-max-bytes=256MiB',
-        '--demuxer-max-back-bytes=256MiB'
+        '--demuxer-max-back-bytes=256MiB',
+        '--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=30'
       )
     }
 
@@ -341,10 +358,15 @@ export class PlayerController {
       }
       case 'pause': {
         const paused = change.data === true
-        // Only meaningful once we're out of loading.
-        if (this.status.state === 'loading') {
-          this.setState(paused ? 'paused' : 'playing')
-        } else if (this.status.state === 'playing' || this.status.state === 'paused') {
+        // Becomes authoritative once mpv starts decoding (from loading OR a
+        // live reconnect). A successful (re)start clears the reconnect backoff.
+        if (
+          this.status.state === 'loading' ||
+          this.status.state === 'reconnecting' ||
+          this.status.state === 'playing' ||
+          this.status.state === 'paused'
+        ) {
+          if (!paused) this.retryAttempt = 0
           this.setState(paused ? 'paused' : 'playing')
         }
         break
@@ -370,6 +392,13 @@ export class PlayerController {
   }
 
   private onEndFile(e: MpvEndFile): void {
+    // LIVE: an eof/error is almost always a provider/network drop, not a real
+    // end. Reconnect instead of closing (the user stopping is handled by the
+    // session guard, so we never get here for a user-initiated stop).
+    if (this.isLiveSession() && (e.reason === 'eof' || e.reason === 'error')) {
+      this.reconnectLive()
+      return
+    }
     // 'eof' = natural end; 'error' = decode/network failure; others = stop/quit.
     if (e.reason === 'error') {
       void this.teardown()
@@ -390,6 +419,12 @@ export class PlayerController {
   }
 
   private async handleExit(code: number | null): Promise<void> {
+    // LIVE: an unexpected mpv exit (crash, window closed by the OS, stream gone)
+    // is a drop, not a user stop — reconnect rather than tear the bar down.
+    if (this.isLiveSession()) {
+      this.reconnectLive()
+      return
+    }
     // mpv process gone. If it ended cleanly we keep 'ended'; otherwise error
     // unless we're already idle (a stop() we initiated).
     const wasError = code !== null && code !== 0
@@ -400,6 +435,75 @@ export class PlayerController {
       this.toError(`mpv s’est arrêté (code ${code}).`)
     } else {
       this.setState('idle')
+    }
+  }
+
+  // ------------------------------------------------------------- live reconnect
+
+  /** True while a LIVE stream is the active source (drives auto-reconnect). */
+  private isLiveSession(): boolean {
+    return this.currentReq?.mediaKind === 'live'
+  }
+
+  private clearRetryTimer(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+  }
+
+  /**
+   * A live stream dropped unexpectedly. Tear down the dead mpv, show
+   * 'reconnecting', and schedule a re-open with capped backoff. Attempts are
+   * unlimited until the user stops (stop() clears currentReq + the timer and
+   * bumps the session, so a pending/in-flight reconnect is abandoned).
+   */
+  private reconnectLive(): void {
+    const req = this.currentReq
+    if (!req || req.mediaKind !== 'live') return
+    // Invalidate the dead session so its trailing exit/close events are ignored.
+    this.sessionId++
+    void this.teardown()
+    this.retryAttempt++
+    this.clearRetryTimer()
+    this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
+    const delay = liveReconnectDelay(this.retryAttempt)
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null
+      void this.attemptReconnect(req)
+    }, delay)
+  }
+
+  /** Re-resolve the (token-fresh) live URL and re-spawn mpv; keep retrying on failure. */
+  private async attemptReconnect(req: PlayRequest): Promise<void> {
+    const binary = resolveMpvBinary()
+    if (!binary) {
+      this.toError('Lecteur mpv introuvable.')
+      return
+    }
+    const session = ++this.sessionId
+    let url: string
+    try {
+      url = await this.resolveSource(req)
+    } catch {
+      // Couldn't resolve/acquire the connection — keep trying until the user stops.
+      if (session === this.sessionId) this.reconnectLive()
+      return
+    }
+    if (session !== this.sessionId) {
+      // Superseded (user stopped or started something else) while resolving:
+      // release the connection we just acquired so it doesn't leak.
+      if (this.lockToken) {
+        connectionLock.release(this.lockToken)
+        this.lockToken = null
+      }
+      return
+    }
+    try {
+      await this.spawnMpv(binary, url, req, session)
+    } catch {
+      await this.teardown()
+      if (session === this.sessionId) this.reconnectLive()
     }
   }
 
@@ -518,13 +622,18 @@ export class PlayerController {
    * Safe to call when nothing is playing.
    */
   async stop(): Promise<PlayerStatus> {
+    // Cancel any pending/in-flight live reconnect and forget the source FIRST,
+    // so a user stop can never trigger a reconnect (even mid-backoff, when no
+    // proc/ipc/lock is held). Bumping the session abandons an in-flight attempt.
+    this.clearRetryTimer()
+    this.currentReq = null
+    this.retryAttempt = 0
+    this.sessionId++
     if (!this.proc && !this.ipc && !this.lockToken) {
       // Nothing active; ensure idle.
-      if (this.status.state !== 'idle') this.setState('idle')
+      if (this.status.state !== 'idle') this.setState('idle', { source: null, title: null })
       return this.getStatus()
     }
-    // Invalidate the session so in-flight events from this mpv are ignored.
-    this.sessionId++
     await this.teardown()
     this.setState('idle', { source: null, title: null })
     return this.getStatus()
@@ -565,6 +674,8 @@ export class PlayerController {
    */
   disposeForShutdown(): void {
     this.sessionId++
+    this.clearRetryTimer()
+    this.currentReq = null
     const proc = this.proc
     this.ipc?.dispose()
     this.ipc = null
@@ -664,6 +775,16 @@ function asNumber(v: unknown): number | null {
 
 function clampVolume(v: number): number {
   return Math.max(0, Math.min(100, Math.round(v)))
+}
+
+/**
+ * Backoff (ms) before the Nth consecutive live-reconnect attempt. Capped so we
+ * never tight-loop; attempts themselves are unlimited (until the user stops).
+ */
+const LIVE_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000]
+function liveReconnectDelay(attempt: number): number {
+  const i = Math.min(Math.max(attempt - 1, 0), LIVE_RECONNECT_DELAYS_MS.length - 1)
+  return LIVE_RECONNECT_DELAYS_MS[i]!
 }
 
 function describeError(e: unknown): string {
