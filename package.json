@@ -31,7 +31,7 @@
   "dependencies": {
     "better-sqlite3": "^12.10.0",
     "electron-updater": "^6.8.3",
-    "undici": "^8.3.0"
+    "undici": "^8.5.0"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
