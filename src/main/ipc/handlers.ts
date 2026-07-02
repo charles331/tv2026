@@ -46,7 +46,12 @@ import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
 import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
 import { refreshLive, getShortEpg, getFullEpg } from '../xtream/liveService'
 import type { AddReminderRequest, ReminderMode } from '@shared/index'
-import { checkForUpdatesNow, downloadUpdateNow, installUpdateNow } from '../updater'
+import {
+  checkForUpdatesNow,
+  downloadUpdateNow,
+  getUpdateState,
+  installUpdateNow
+} from '../updater'
 import {
   assert,
   assertPathWithin,
@@ -107,6 +112,8 @@ export const handlers: IpcHandlers = {
       return err('UNKNOWN', (e as Error).message)
     }
   },
+
+  [InvokeChannels.APP_GET_UPDATE_STATE]: () => ok(getUpdateState()),
 
   // ---------------- connection / settings (real) ----------------
   [InvokeChannels.CONNECTION_TEST]: async () => {

@@ -35,7 +35,7 @@ import type {
   DownloadProgressEvent,
   DownloadStateEvent,
   DownloadStatus,
-  EventContract
+  EventEmitterFn
 } from '@shared/index'
 import { EventChannels } from '@shared/index'
 
@@ -87,14 +87,8 @@ export function __setTestByteCap(bytes: number | null): void {
   testByteCap = bytes
 }
 
-/**
- * Typed event emitter, matching the shape returned by `makeEmitter` in
- * ipc/register.ts. We only ever emit the two download channels.
- */
-export type DownloadEventEmitter = <C extends keyof EventContract>(
-  channel: C,
-  payload: EventContract[C]
-) => void
+/** Typed event emitter (shared shape) — we only ever emit the two download channels. */
+export type DownloadEventEmitter = EventEmitterFn
 
 /** Raised internally to abort the active transfer for a known reason. */
 class TransferInterrupt extends Error {

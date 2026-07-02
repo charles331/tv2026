@@ -18,7 +18,7 @@
 
 import { app, Notification, type BrowserWindow } from 'electron'
 
-import type { ConflictResolution, EventContract, Reminder } from '@shared/index'
+import type { ConflictResolution, EventEmitterFn, Reminder } from '@shared/index'
 import { EventChannels } from '@shared/index'
 
 import { remindersRepo, settingsRepo } from '../store'
@@ -28,7 +28,7 @@ import { recordingController, RecordingError } from '../player/RecordingControll
 import { computeDueActions } from './schedulerLogic'
 
 /** Typed emitter shape (matches makeEmitter() in ipc/register.ts). */
-type Emitter = <C extends keyof EventContract>(channel: C, payload: EventContract[C]) => void
+type Emitter = EventEmitterFn
 
 /** Tick cadence — the spec asks for ~20–30 s. */
 const TICK_MS = 20_000

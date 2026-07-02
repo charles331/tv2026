@@ -136,20 +136,41 @@ function AppShell(): ReactElement {
     })
   }, [])
 
-  // Background update check found a newer release → tell the user ONCE per
-  // version (nothing downloads without their go-ahead, in the Réglages).
-  const announcedUpdateRef = useRef<string | null>(null)
+  // App-update lifecycle: announce key transitions ONCE each (per version) —
+  // available (background check), downloaded (user may have left Réglages
+  // mid-download), and download failures. The initial pull covers events that
+  // fired before this subscription existed (startup check vs React boot).
+  const announcedUpdateRef = useRef<Set<string>>(new Set())
   useEffect(() => {
-    return api().app.onUpdateStatus((e) => {
-      if (e.phase !== 'available' || !e.latestVersion) return
-      if (announcedUpdateRef.current === e.latestVersion) return
-      announcedUpdateRef.current = e.latestVersion
-      toast.show(
-        `Mise à jour ${e.latestVersion} disponible — ouvrez les Réglages pour la télécharger.`,
-        'info',
-        10000
-      )
-    })
+    const announce = (e: { phase: string; latestVersion?: string; message?: string }): void => {
+      const key = `${e.phase}:${e.latestVersion ?? ''}`
+      if (announcedUpdateRef.current.has(key)) return
+      announcedUpdateRef.current.add(key)
+      if (e.phase === 'available' && e.latestVersion) {
+        toast.show(
+          `Mise à jour ${e.latestVersion} disponible — ouvrez les Réglages pour la télécharger.`,
+          'info',
+          10000
+        )
+      } else if (e.phase === 'downloaded') {
+        toast.show(
+          `Mise à jour ${e.latestVersion ?? ''} prête — ouvrez les Réglages pour l’installer.`,
+          'success',
+          10000
+        )
+      } else if (e.phase === 'error') {
+        toast.show(
+          `Échec du téléchargement de la mise à jour : ${e.message ?? 'erreur inconnue'}.`,
+          'error'
+        )
+      }
+    }
+    void api()
+      .app.getUpdateState()
+      .then((r) => {
+        if (r.ok && r.data) announce(r.data)
+      })
+    return api().app.onUpdateStatus(announce)
   }, [toast])
 
   // A clicked reminder notification asks the renderer to open/play the channel.

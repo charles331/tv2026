@@ -113,13 +113,10 @@ export interface UpdateCheckOutcome {
  */
 export interface UpdateStatusEvent {
   phase: 'available' | 'downloading' | 'downloaded' | 'error'
-  currentVersion: string
   latestVersion?: string
   /** 0..100 while downloading. */
   percent?: number
   /** Instantaneous download speed (bytes/sec) while downloading. */
   bytesPerSecond?: number
-  transferredBytes?: number
-  totalBytes?: number
   message?: string
 }

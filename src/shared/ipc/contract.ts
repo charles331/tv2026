@@ -93,6 +93,7 @@ export interface IpcContract {
   [InvokeChannels.APP_CHECK_UPDATES]: { request: void; response: UpdateCheckOutcome }
   [InvokeChannels.APP_DOWNLOAD_UPDATE]: { request: void; response: { ok: true } }
   [InvokeChannels.APP_INSTALL_UPDATE]: { request: void; response: { ok: true } }
+  [InvokeChannels.APP_GET_UPDATE_STATE]: { request: void; response: UpdateStatusEvent | null }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
@@ -196,6 +197,16 @@ export interface EventContract {
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
   [EventChannels.UPDATE_STATUS]: UpdateStatusEvent
 }
+
+/**
+ * Typed main→renderer event emitter (the shape `makeEmitter()` returns).
+ * Domain modules (downloads, player, reminders, updater) accept this instead of
+ * re-declaring the signature.
+ */
+export type EventEmitterFn = <C extends keyof EventContract>(
+  channel: C,
+  payload: EventContract[C]
+) => void
 
 /** Convenience aliases. */
 export type IpcRequest<C extends keyof IpcContract> = IpcContract[C]['request']

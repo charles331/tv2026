@@ -88,6 +88,8 @@ export interface AppApi {
   downloadUpdate(): Promise<Result<{ ok: true }>>
   /** Quit and run the VISIBLE (non-silent) installer of the downloaded update. */
   installUpdate(): Promise<Result<{ ok: true }>>
+  /** Last known update status (mount-time sync; events may predate subscription). */
+  getUpdateState(): Promise<Result<UpdateStatusEvent | null>>
   /** Subscribe to the app-update lifecycle (available/downloading/downloaded/error). */
   onUpdateStatus(cb: (e: UpdateStatusEvent) => void): Unsubscribe
 }

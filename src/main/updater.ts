@@ -12,39 +12,37 @@
  *     to the renderer ('downloading' → 'downloaded').
  *  3. The user clicks install → installUpdateNow() quits the app and runs the
  *     NSIS installer VISIBLY (non-silent), then relaunches the app.
+ *
+ * The last UPDATE_STATUS event is kept and exposed via getUpdateState() so the
+ * renderer can sync on mount — push events can fire before it subscribes
+ * (startup check vs React boot) or while Réglages is unmounted.
+ *
  * Failures (offline, rate limit, no release yet) are swallowed or surfaced as
  * an 'error' event — they must never crash or block the app.
  */
 
 import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
-import type { EventContract, UpdateCheckOutcome, UpdateStatusEvent } from '@shared/index'
-import { EventChannels } from '@shared/index'
-
-/** Typed emitter shape (matches makeEmitter() in ipc/register.ts). */
-type Emitter = <C extends keyof EventContract>(channel: C, payload: EventContract[C]) => void
+import type { EventEmitterFn, UpdateCheckOutcome, UpdateStatusEvent } from '@shared/index'
+import { EventChannels, isVersionNewer } from '@shared/index'
 
 let started = false
-let emit: Emitter = () => {}
+let emit: EventEmitterFn = () => {}
 /** True between a user-accepted downloadUpdate() and its downloaded/error end. */
 let downloading = false
-/** Set once an update has fully downloaded (gates installUpdateNow). */
-let downloaded = false
+/** Version an update has fully downloaded for (gates installUpdateNow). */
+let downloadedVersion: string | null = null
+/** Last emitted status — pulled by the renderer on mount (getUpdateState). */
+let lastStatus: UpdateStatusEvent | null = null
 
-/** Compare dotted numeric versions; true if `a` is strictly newer than `b`. */
-function isNewer(a: string, b: string): boolean {
-  const pa = a.split('.').map((n) => parseInt(n, 10) || 0)
-  const pb = b.split('.').map((n) => parseInt(n, 10) || 0)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const da = pa[i] ?? 0
-    const db = pb[i] ?? 0
-    if (da !== db) return da > db
-  }
-  return false
+function emitStatus(e: UpdateStatusEvent): void {
+  lastStatus = e
+  emit(EventChannels.UPDATE_STATUS, e)
 }
 
-function emitStatus(e: Omit<UpdateStatusEvent, 'currentVersion'>): void {
-  emit(EventChannels.UPDATE_STATUS, { currentVersion: app.getVersion(), ...e })
+/** Last known update status, for mount-time sync in the renderer. */
+export function getUpdateState(): UpdateStatusEvent | null {
+  return lastStatus
 }
 
 /**
@@ -63,7 +61,7 @@ export async function checkForUpdatesNow(): Promise<UpdateCheckOutcome> {
   try {
     const result = await autoUpdater.checkForUpdates()
     const latestVersion = result?.updateInfo?.version
-    if (latestVersion && isNewer(latestVersion, currentVersion)) {
+    if (latestVersion && isVersionNewer(latestVersion, currentVersion)) {
       return {
         status: 'available',
         currentVersion,
@@ -88,23 +86,34 @@ export async function checkForUpdatesNow(): Promise<UpdateCheckOutcome> {
 
 /**
  * The user accepted the update → download it. Progress streams to the renderer
- * via UPDATE_STATUS events. Throws (a plain Error) on immediate failure; async
- * failures surface as an 'error' event.
+ * via UPDATE_STATUS events. A fresh check runs FIRST so a release published
+ * after an earlier download is picked up (never silently reuse a stale one);
+ * the already-downloaded short-circuit only applies to the SAME version.
+ * Throws a plain Error on immediate failure; async failures surface as an
+ * 'error' event.
  */
 export async function downloadUpdateNow(): Promise<void> {
   if (!app.isPackaged) throw new Error('Mises à jour inactives hors application installée.')
   if (downloading) return // already in flight; progress events keep the UI live
-  if (downloaded) {
-    emitStatus({ phase: 'downloaded' })
-    return
+
+  const check = await checkForUpdatesNow()
+  if (check.status === 'error') {
+    // Offline but an update is already fully downloaded → it stays installable.
+    if (downloadedVersion) {
+      emitStatus({ phase: 'downloaded', latestVersion: downloadedVersion })
+      return
+    }
+    throw new Error(check.message ?? 'Échec de la vérification.')
   }
-  // electron-updater requires a prior check in this session; do one defensively
-  // (cheap, and guarantees the internal update info is primed).
-  const check = await autoUpdater.checkForUpdates()
-  const latest = check?.updateInfo?.version
-  if (!latest || !isNewer(latest, app.getVersion())) {
+  if (check.status !== 'available' || !check.latestVersion) {
     throw new Error('Aucune mise à jour à télécharger — vous êtes à jour.')
   }
+  if (downloadedVersion === check.latestVersion) {
+    // This exact version is already on disk — straight to "ready to install".
+    emitStatus({ phase: 'downloaded', latestVersion: downloadedVersion })
+    return
+  }
+
   downloading = true
   try {
     await autoUpdater.downloadUpdate()
@@ -117,10 +126,10 @@ export async function downloadUpdateNow(): Promise<void> {
 
 /**
  * Quit the app and run the downloaded update's installer VISIBLY (non-silent
- * NSIS UI), relaunching the app afterwards. Only valid once 'downloaded'.
+ * NSIS UI), relaunching the app afterwards. Only valid once downloaded.
  */
 export function installUpdateNow(): void {
-  if (!downloaded) {
+  if (!downloadedVersion) {
     throw new Error('Aucune mise à jour téléchargée — lancez d’abord le téléchargement.')
   }
   // isSilent=false → the classic installer window shows; isForceRunAfter=true →
@@ -133,9 +142,11 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 h
 
 /**
  * Start the updater: wire events + a periodic availability CHECK (no download).
- * `emitter` pushes UPDATE_STATUS events to the renderer (toast + Réglages UI).
+ * `emitter` pushes UPDATE_STATUS events to the renderer (toast + Réglages UI);
+ * the renderer also pulls getUpdateState() on mount, which covers the startup
+ * race where the first check finishes before React subscribes.
  */
-export function initAutoUpdates(emitter: Emitter): void {
+export function initAutoUpdates(emitter: EventEmitterFn): void {
   emit = emitter
   if (!app.isPackaged || started) return
   started = true
@@ -145,20 +156,23 @@ export function initAutoUpdates(emitter: Emitter): void {
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('update-available', (info) => {
+    // Don't demote an ongoing/completed download of the SAME version; a newer
+    // version showing up while one is downloaded should surface again.
+    if (downloading) return
+    if (downloadedVersion && !isVersionNewer(info.version, downloadedVersion)) return
     emitStatus({ phase: 'available', latestVersion: info.version })
   })
   autoUpdater.on('download-progress', (p) => {
     emitStatus({
       phase: 'downloading',
+      latestVersion: lastStatus?.latestVersion,
       percent: p.percent,
-      bytesPerSecond: p.bytesPerSecond,
-      transferredBytes: p.transferred,
-      totalBytes: p.total
+      bytesPerSecond: p.bytesPerSecond
     })
   })
   autoUpdater.on('update-downloaded', (info) => {
     downloading = false
-    downloaded = true
+    downloadedVersion = info.version
     emitStatus({ phase: 'downloaded', latestVersion: info.version })
   })
   autoUpdater.on('error', (err) => {

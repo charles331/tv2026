@@ -7,7 +7,7 @@ import type {
   TmdbKeyStatus,
   UpdateStatusEvent
 } from '@shared/index'
-import { CHANGELOG } from '@shared/index'
+import { CHANGELOG, isVersionNewer } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import {
   Button,
@@ -20,7 +20,27 @@ import {
   IconRefresh,
   IconDownload
 } from '../../components/ui'
-import { formatDateFromEpochSecs, formatSpeed } from '../../lib/format'
+import { formatDateFromEpochSecs, formatPercent, formatSpeed } from '../../lib/format'
+
+/**
+ * Fold an update event into the screen's state: a late 'available' (periodic
+ * re-check) must not demote an ongoing download or a ready-to-install state —
+ * unless it announces a STRICTLY NEWER version than the one downloading/downloaded.
+ */
+function foldUpdateEvent(
+  prev: UpdateStatusEvent | null,
+  e: UpdateStatusEvent | null
+): UpdateStatusEvent | null {
+  if (!e) return prev
+  if (
+    e.phase === 'available' &&
+    (prev?.phase === 'downloading' || prev?.phase === 'downloaded') &&
+    !(e.latestVersion && prev.latestVersion && isVersionNewer(e.latestVersion, prev.latestVersion))
+  ) {
+    return prev
+  }
+  return e
+}
 
 const STATUS_LABELS: Record<
   ConnectionTestResult['status'],
@@ -314,17 +334,10 @@ export function SettingsScreen({
       const o = r.data
       const tone = o.status === 'error' ? 'error' : o.status === 'available' ? 'ok' : 'info'
       setUpdateMessage({ tone, text: o.message ?? o.status })
-      if (o.status === 'available') {
-        // Surface the download button right away (the event also arrives, but
-        // don't depend on ordering).
-        setUpdateStatus({
-          phase: 'available',
-          currentVersion: o.currentVersion,
-          latestVersion: o.latestVersion
-        })
-      } else {
-        setUpdateStatus(null)
-      }
+      // The check itself makes main emit/refresh its state; re-sync through the
+      // same fold so an ongoing download is never clobbered.
+      const s = await api().app.getUpdateState()
+      if (s.ok) setUpdateStatus((prev) => foldUpdateEvent(prev, s.data))
     } catch (err) {
       setUpdateMessage({ tone: 'error', text: describeError(err) })
     } finally {
@@ -332,20 +345,16 @@ export function SettingsScreen({
     }
   }, [])
 
-  // Live app-update lifecycle from main (progress ticks, downloaded, errors).
+  // App-update lifecycle from main: sync on mount (events may have fired while
+  // this screen was unmounted / before it subscribed), then follow live events.
   useEffect(() => {
-    return api().app.onUpdateStatus((e) => {
-      setUpdateStatus((prev) => {
-        // Never let a late 'available' (periodic re-check) demote an ongoing
-        // download or a ready-to-install state.
-        if (
-          e.phase === 'available' &&
-          (prev?.phase === 'downloading' || prev?.phase === 'downloaded')
-        ) {
-          return prev
-        }
-        return e
+    void api()
+      .app.getUpdateState()
+      .then((r) => {
+        if (r.ok) setUpdateStatus((prev) => foldUpdateEvent(prev, r.data))
       })
+    return api().app.onUpdateStatus((e) => {
+      setUpdateStatus((prev) => foldUpdateEvent(prev, e))
     })
   }, [])
 
@@ -353,8 +362,7 @@ export function SettingsScreen({
     setStartingDownload(true)
     setUpdateMessage(null)
     try {
-      const r = await api().app.downloadUpdate()
-      if (!r.ok) setUpdateMessage({ tone: 'error', text: r.error.message })
+      unwrap(await api().app.downloadUpdate())
       // Progress/downloaded arrive via onUpdateStatus.
     } catch (err) {
       setUpdateMessage({ tone: 'error', text: describeError(err) })
@@ -365,8 +373,7 @@ export function SettingsScreen({
 
   const handleInstallUpdate = useCallback(async () => {
     try {
-      const r = await api().app.installUpdate()
-      if (!r.ok) setUpdateMessage({ tone: 'error', text: r.error.message })
+      unwrap(await api().app.installUpdate())
       // On success the app quits and the visible installer takes over.
     } catch (err) {
       setUpdateMessage({ tone: 'error', text: describeError(err) })
@@ -759,7 +766,7 @@ export function SettingsScreen({
             <div className="flex items-center justify-between text-xs text-gray-400">
               <span>
                 Téléchargement de la mise à jour {updateStatus.latestVersion ?? ''}…{' '}
-                {Math.round(updateStatus.percent ?? 0)}%
+                {formatPercent((updateStatus.percent ?? 0) / 100)}
               </span>
               {updateStatus.bytesPerSecond != null && (
                 <span>{formatSpeed(updateStatus.bytesPerSecond)}</span>

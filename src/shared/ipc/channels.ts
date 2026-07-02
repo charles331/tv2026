@@ -16,6 +16,7 @@ export const InvokeChannels = {
   APP_CHECK_UPDATES: 'app:checkUpdates', // manual "check for updates" trigger
   APP_DOWNLOAD_UPDATE: 'app:downloadUpdate', // user accepted → download (progress events)
   APP_INSTALL_UPDATE: 'app:installUpdate', // quit + run the visible installer
+  APP_GET_UPDATE_STATE: 'app:getUpdateState', // pull the last update status (mount-time sync)
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',
