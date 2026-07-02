@@ -122,12 +122,6 @@ export const IconFolder = (p: IconProps): ReactElement => (
   </svg>
 )
 
-export const IconChevronLeft = (p: IconProps): ReactElement => (
-  <svg {...base(p)}>
-    <path d="m14 6-6 6 6 6" />
-  </svg>
-)
-
 export const IconStar = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <path

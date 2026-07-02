@@ -66,6 +66,7 @@ Sources :
 | App | `app.checkForUpdates()` | `app:checkUpdates` | — | `UpdateCheckOutcome` |
 | App | `app.downloadUpdate()` | `app:downloadUpdate` | — | `{ ok: true }` (progression via `event:update:status`) |
 | App | `app.installUpdate()` | `app:installUpdate` | — | `{ ok: true }` (quitte + installeur visible) |
+| App | `app.getUpdateState()` | `app:getUpdateState` | — | `UpdateStatusEvent \| null` (sync au montage) |
 | Connexion | `connection.test()` | `connection:test` | — | `ConnectionTestResult` |
 | Connexion | `connection.getCredentialsStatus()` | `credentials:get` | — | `CredentialsStatus` |
 | Connexion | `connection.setCredentials(c)` | `credentials:set` | `XtreamCredentials` | `CredentialsStatus` |

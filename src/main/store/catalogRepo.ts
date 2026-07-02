@@ -198,13 +198,6 @@ export function searchStreams(req: SearchRequest): Page<VodStream> {
   return { items: rows.map(mapStream), page, pageSize, total }
 }
 
-export function getStream(streamId: number): VodStream | null {
-  const row = getDb()
-    .prepare('SELECT * FROM vod_streams WHERE stream_id = ?')
-    .get(streamId) as StreamRow | undefined
-  return row ? mapStream(row) : null
-}
-
 // --- info cache ---
 
 export function cacheVodInfo(info: VodInfo): void {

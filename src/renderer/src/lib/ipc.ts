@@ -61,14 +61,3 @@ export function describeError(error: unknown): string {
   if (error instanceof Error) return error.message
   return 'Une erreur inattendue est survenue.'
 }
-
-/** Extract the error code if available (for redirect-to-settings logic etc.). */
-export function errorCode(error: unknown): ErrorCode | null {
-  return error instanceof IpcError ? error.code : null
-}
-
-/** True when an error means the user must (re)configure the connection. */
-export function isConnectionError(error: unknown): boolean {
-  const code = errorCode(error)
-  return code === 'NOT_CONNECTED' || code === 'AUTH_FAILED'
-}

@@ -58,7 +58,3 @@ export function ok<T>(data: T): Result<T> {
 export function err(code: ErrorCode, message: string, details?: string): Result<never> {
   return { ok: false, error: { code, message, details } }
 }
-
-export function notImplemented(what: string): Result<never> {
-  return err('NOT_IMPLEMENTED', `${what} is not implemented yet (stub).`)
-}
