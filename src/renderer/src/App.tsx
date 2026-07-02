@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type {
   Episode,
   CredentialsStatus,
@@ -52,6 +52,9 @@ function AppShell(): ReactElement {
   const [playRequest, setPlayRequest] = useState<PlayRequest | null>(null)
   const [confirmUpdateAll, setConfirmUpdateAll] = useState(false)
   const [updatingAll, setUpdatingAll] = useState(false)
+  // Bumped when "Tout mettre à jour" finishes: used as the key of the catalogue
+  // screens so the one currently displayed remounts and refetches fresh data.
+  const [catalogEpoch, setCatalogEpoch] = useState(0)
 
   const { items } = useDownloads()
   const busy = useConnectionBusy()
@@ -133,6 +136,22 @@ function AppShell(): ReactElement {
     })
   }, [])
 
+  // Background update check found a newer release → tell the user ONCE per
+  // version (nothing downloads without their go-ahead, in the Réglages).
+  const announcedUpdateRef = useRef<string | null>(null)
+  useEffect(() => {
+    return api().app.onUpdateStatus((e) => {
+      if (e.phase !== 'available' || !e.latestVersion) return
+      if (announcedUpdateRef.current === e.latestVersion) return
+      announcedUpdateRef.current = e.latestVersion
+      toast.show(
+        `Mise à jour ${e.latestVersion} disponible — ouvrez les Réglages pour la télécharger.`,
+        'info',
+        10000
+      )
+    })
+  }, [toast])
+
   // A clicked reminder notification asks the renderer to open/play the channel.
   useEffect(() => {
     return api().reminders.onOpenChannel((e) => {
@@ -186,6 +205,9 @@ function AppShell(): ReactElement {
       const live = unwrap(await api().live.refresh({ force: true }))
       // Availability of favorites may have changed (sources added/removed).
       await reloadFavorites()
+      // Remount the catalogue screens so the fresh data shows immediately —
+      // without this the displayed screen kept its pre-refresh list.
+      setCatalogEpoch((e) => e + 1)
       toast.show(
         `Catalogues à jour : ${movies.streams} films, ${series.series} séries, ${live.channels} chaînes.`,
         'success'
@@ -222,16 +244,25 @@ function AppShell(): ReactElement {
 
         <main className="min-w-0 flex-1">
           {route === 'catalog' && (
-            <CatalogScreen onSelectMovie={setSelected} onGoToSettings={() => setRoute('settings')} />
+            <CatalogScreen
+              key={catalogEpoch}
+              onSelectMovie={setSelected}
+              onGoToSettings={() => setRoute('settings')}
+            />
           )}
           {route === 'series' && (
             <SeriesScreen
+              key={catalogEpoch}
               onSelectSeries={setSelectedSeries}
               onGoToSettings={() => setRoute('settings')}
             />
           )}
           {route === 'live' && (
-            <LiveScreen onPlayChannel={handlePlayChannel} onGoToSettings={() => setRoute('settings')} />
+            <LiveScreen
+              key={catalogEpoch}
+              onPlayChannel={handlePlayChannel}
+              onGoToSettings={() => setRoute('settings')}
+            />
           )}
           {route === 'scheduled' && <ScheduledScreen />}
           {route === 'downloads' && <DownloadsScreen />}

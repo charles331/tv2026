@@ -47,7 +47,16 @@ const api: RendererApi = {
     checkForUpdates: () =>
       invoke(InvokeChannels.APP_CHECK_UPDATES) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_CHECK_UPDATES>>
-      >
+      >,
+    downloadUpdate: () =>
+      invoke(InvokeChannels.APP_DOWNLOAD_UPDATE) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_DOWNLOAD_UPDATE>>
+      >,
+    installUpdate: () =>
+      invoke(InvokeChannels.APP_INSTALL_UPDATE) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_INSTALL_UPDATE>>
+      >,
+    onUpdateStatus: (cb) => subscribe(EventChannels.UPDATE_STATUS, cb)
   },
 
   connection: {

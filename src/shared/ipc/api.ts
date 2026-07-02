@@ -17,6 +17,7 @@ import type {
   CredentialsStatus,
   TmdbKeyStatus,
   UpdateCheckOutcome,
+  UpdateStatusEvent,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -81,8 +82,14 @@ export type Unsubscribe = () => void
 export interface AppApi {
   /** App metadata (version) for the renderer. */
   info(): Promise<Result<AppInfo>>
-  /** Manually check for an app update (downloads + installs on quit if newer). */
+  /** Check for an app update (reports availability; downloads nothing). */
   checkForUpdates(): Promise<Result<UpdateCheckOutcome>>
+  /** User accepted the update → start downloading (progress via onUpdateStatus). */
+  downloadUpdate(): Promise<Result<{ ok: true }>>
+  /** Quit and run the VISIBLE (non-silent) installer of the downloaded update. */
+  installUpdate(): Promise<Result<{ ok: true }>>
+  /** Subscribe to the app-update lifecycle (available/downloading/downloaded/error). */
+  onUpdateStatus(cb: (e: UpdateStatusEvent) => void): Unsubscribe
 }
 
 export interface ConnectionApi {

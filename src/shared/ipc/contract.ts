@@ -20,6 +20,7 @@ import type {
   CredentialsStatus,
   TmdbKeyStatus,
   UpdateCheckOutcome,
+  UpdateStatusEvent,
   XtreamCredentials
 } from '../types/settings'
 import type {
@@ -90,6 +91,8 @@ export interface IpcContract {
   // app
   [InvokeChannels.APP_INFO]: { request: void; response: AppInfo }
   [InvokeChannels.APP_CHECK_UPDATES]: { request: void; response: UpdateCheckOutcome }
+  [InvokeChannels.APP_DOWNLOAD_UPDATE]: { request: void; response: { ok: true } }
+  [InvokeChannels.APP_INSTALL_UPDATE]: { request: void; response: { ok: true } }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
@@ -191,6 +194,7 @@ export interface EventContract {
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
+  [EventChannels.UPDATE_STATUS]: UpdateStatusEvent
 }
 
 /** Convenience aliases. */

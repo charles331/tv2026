@@ -4,7 +4,8 @@ import type {
   ConnectionTestResult,
   CredentialsStatus,
   RefreshCatalogResult,
-  TmdbKeyStatus
+  TmdbKeyStatus,
+  UpdateStatusEvent
 } from '@shared/index'
 import { CHANGELOG } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
@@ -14,10 +15,12 @@ import {
   TextInput,
   Badge,
   Spinner,
+  ProgressBar,
   IconFolder,
-  IconRefresh
+  IconRefresh,
+  IconDownload
 } from '../../components/ui'
-import { formatDateFromEpochSecs } from '../../lib/format'
+import { formatDateFromEpochSecs, formatSpeed } from '../../lib/format'
 
 const STATUS_LABELS: Record<
   ConnectionTestResult['status'],
@@ -71,6 +74,9 @@ export function SettingsScreen({
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<{ tone: 'ok' | 'info' | 'error'; text: string } | null>(null)
+  // App-update lifecycle (available → downloading → downloaded), pushed by main.
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatusEvent | null>(null)
+  const [startingDownload, setStartingDownload] = useState(false)
 
   // Prefill from stored (non-secret) status.
   useEffect(() => {
@@ -308,10 +314,62 @@ export function SettingsScreen({
       const o = r.data
       const tone = o.status === 'error' ? 'error' : o.status === 'available' ? 'ok' : 'info'
       setUpdateMessage({ tone, text: o.message ?? o.status })
+      if (o.status === 'available') {
+        // Surface the download button right away (the event also arrives, but
+        // don't depend on ordering).
+        setUpdateStatus({
+          phase: 'available',
+          currentVersion: o.currentVersion,
+          latestVersion: o.latestVersion
+        })
+      } else {
+        setUpdateStatus(null)
+      }
     } catch (err) {
       setUpdateMessage({ tone: 'error', text: describeError(err) })
     } finally {
       setCheckingUpdate(false)
+    }
+  }, [])
+
+  // Live app-update lifecycle from main (progress ticks, downloaded, errors).
+  useEffect(() => {
+    return api().app.onUpdateStatus((e) => {
+      setUpdateStatus((prev) => {
+        // Never let a late 'available' (periodic re-check) demote an ongoing
+        // download or a ready-to-install state.
+        if (
+          e.phase === 'available' &&
+          (prev?.phase === 'downloading' || prev?.phase === 'downloaded')
+        ) {
+          return prev
+        }
+        return e
+      })
+    })
+  }, [])
+
+  const handleDownloadUpdate = useCallback(async () => {
+    setStartingDownload(true)
+    setUpdateMessage(null)
+    try {
+      const r = await api().app.downloadUpdate()
+      if (!r.ok) setUpdateMessage({ tone: 'error', text: r.error.message })
+      // Progress/downloaded arrive via onUpdateStatus.
+    } catch (err) {
+      setUpdateMessage({ tone: 'error', text: describeError(err) })
+    } finally {
+      setStartingDownload(false)
+    }
+  }, [])
+
+  const handleInstallUpdate = useCallback(async () => {
+    try {
+      const r = await api().app.installUpdate()
+      if (!r.ok) setUpdateMessage({ tone: 'error', text: r.error.message })
+      // On success the app quits and the visible installer takes over.
+    } catch (err) {
+      setUpdateMessage({ tone: 'error', text: describeError(err) })
     }
   }, [])
 
@@ -675,6 +733,55 @@ export function SettingsScreen({
             }
           >
             {updateMessage.text}
+          </p>
+        )}
+
+        {/* App-update flow: the user drives everything (download, then a visible installer). */}
+        {updateStatus?.phase === 'available' && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5">
+            <p className="text-sm text-gray-200">
+              Mise à jour <strong>{updateStatus.latestVersion}</strong> disponible.
+            </p>
+            <Button
+              className="ml-auto"
+              variant="primary"
+              size="sm"
+              icon={<IconDownload size={14} />}
+              loading={startingDownload}
+              onClick={handleDownloadUpdate}
+            >
+              Télécharger la mise à jour
+            </Button>
+          </div>
+        )}
+        {updateStatus?.phase === 'downloading' && (
+          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-surface-sunken px-3 py-2.5">
+            <div className="flex items-center justify-between text-xs text-gray-400">
+              <span>
+                Téléchargement de la mise à jour {updateStatus.latestVersion ?? ''}…{' '}
+                {Math.round(updateStatus.percent ?? 0)}%
+              </span>
+              {updateStatus.bytesPerSecond != null && (
+                <span>{formatSpeed(updateStatus.bytesPerSecond)}</span>
+              )}
+            </div>
+            <ProgressBar value={(updateStatus.percent ?? 0) / 100} />
+          </div>
+        )}
+        {updateStatus?.phase === 'downloaded' && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+            <p className="text-sm text-emerald-200">
+              Mise à jour {updateStatus.latestVersion ?? ''} prête. L’application va se fermer et
+              l’installateur s’affichera à l’écran.
+            </p>
+            <Button className="ml-auto" variant="primary" size="sm" onClick={handleInstallUpdate}>
+              Installer maintenant
+            </Button>
+          </div>
+        )}
+        {updateStatus?.phase === 'error' && (
+          <p className="mt-2 text-sm text-red-300">
+            Échec du téléchargement de la mise à jour : {updateStatus.message ?? 'erreur inconnue'}.
           </p>
         )}
 
