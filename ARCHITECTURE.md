@@ -9,7 +9,7 @@ manière dont chaque autre agent vient s'y brancher. **Les contrats du dossier
 
 - Electron + **electron-vite** (Electron + Vite + React + TS)
 - React 19 + TailwindCSS (renderer)
-- better-sqlite3 (store local), undici (HTTP, à venir), mpv (lecture, à venir)
+- better-sqlite3 (store local), undici (HTTP), mpv (lecture)
 - electron-builder → Windows (NSIS .exe + portable). Dev sous WSL2.
 
 ## Arborescence
@@ -19,18 +19,20 @@ tv2026/
 ├── electron.vite.config.ts      # build des 3 process (main/preload/renderer)
 ├── electron-builder.yml         # packaging Windows (NSIS + portable)
 ├── tsconfig*.json               # base (strict) + node + web
-├── tailwind.config.cjs, postcss.config.cjs, .eslintrc.cjs, .prettierrc.json
+├── tailwind.config.cjs, postcss.config.cjs, eslint.config.mjs, .prettierrc.json
 ├── resources/bin/win/           # emplacement du binaire mpv Windows (à fournir)
 ├── build/                       # ressources electron-builder (icônes, etc.)
 └── src/
     ├── shared/                  # ★ SOURCE DE VÉRITÉ (types + contrats IPC)
-    │   ├── types/{common,settings,catalog,downloads,player}.ts
+    │   ├── types/{common,settings,catalog,series,live,favorites,reminders,downloads,player}.ts
     │   ├── ipc/{channels,contract,api}.ts
     │   └── index.ts             # barrel: import depuis '@shared/index'
     ├── main/                    # process principal Node
     │   ├── index.ts             # entrée: fenêtre, sécurité, cycle de vie
+    │   ├── updater.ts           # mises à jour (electron-updater, pilotées par l'utilisateur)
     │   ├── ipc/{handlers,register,validate}.ts
-    │   ├── store/{db,schema,settingsRepo,catalogRepo,downloadsRepo,index}.ts
+    │   ├── store/{db,schema,settingsRepo,catalogRepo,seriesRepo,liveRepo,favoritesRepo,remindersRepo,downloadsRepo,index}.ts
+    │   ├── xtream/, downloads/, player/, tmdb/, reminders/  # services par domaine
     │   ├── secrets/credentials.ts   # safeStorage (identifiants chiffrés)
     │   └── lock/ConnectionLock.ts   # verrou 1 connexion
     ├── preload/                 # pont contextBridge
@@ -38,7 +40,7 @@ tv2026/
     │   └── index.d.ts           # déclaration globale Window.api
     └── renderer/                # UI React + Tailwind
         ├── index.html
-        └── src/{main.tsx,App.tsx,env.d.ts,assets/main.css}
+        └── src/{main.tsx,App.tsx,components/,features/,lib/,assets/}
 ```
 
 Alias TS/Vite : `@shared/*` → `src/shared/*`, `@main/*`, `@renderer/*`.
@@ -61,18 +63,42 @@ Sources :
 | Domaine | `window.api.*` | Canal | Requête | Réponse |
 |---|---|---|---|---|
 | App | `app.info()` | `app:info` | — | `AppInfo` (`{ version }`) |
+| App | `app.checkForUpdates()` | `app:checkUpdates` | — | `UpdateCheckOutcome` |
+| App | `app.downloadUpdate()` | `app:downloadUpdate` | — | `{ ok: true }` (progression via `event:update:status`) |
+| App | `app.installUpdate()` | `app:installUpdate` | — | `{ ok: true }` (quitte + installeur visible) |
 | Connexion | `connection.test()` | `connection:test` | — | `ConnectionTestResult` |
-| Connexion | `connection.getCredentials()` | `credentials:get` | — | `CredentialsStatus` |
+| Connexion | `connection.getCredentialsStatus()` | `credentials:get` | — | `CredentialsStatus` |
 | Connexion | `connection.setCredentials(c)` | `credentials:set` | `XtreamCredentials` | `CredentialsStatus` |
 | Connexion | `connection.clearCredentials()` | `credentials:clear` | — | `CredentialsStatus` |
 | Réglages | `settings.get()` | `settings:get` | — | `AppSettings` |
 | Réglages | `settings.set(p)` | `settings:set` | `Partial<AppSettings>` | `AppSettings` |
 | Réglages | `settings.pickDownloadDir()` | `settings:pickDownloadDir` | — | `{ path: string \| null }` |
+| TMDB | `tmdb.getStatus()` | `tmdb:getStatus` | — | `TmdbKeyStatus` |
+| TMDB | `tmdb.setKey(key)` | `tmdb:setKey` | `{ key: string }` | `TmdbKeyStatus` |
+| TMDB | `tmdb.clearKey()` | `tmdb:clearKey` | — | `TmdbKeyStatus` |
 | Catalogue | `catalog.listCategories()` | `catalog:listCategories` | — | `VodCategory[]` |
 | Catalogue | `catalog.listStreams(r)` | `catalog:listStreams` | `ListStreamsRequest` | `Page<VodStream>` |
 | Catalogue | `catalog.getInfo(id)` | `catalog:getInfo` | `{ streamId }` | `VodInfo` |
 | Catalogue | `catalog.search(r)` | `catalog:search` | `SearchRequest` | `Page<VodStream>` |
 | Catalogue | `catalog.refresh(r)` | `catalog:refresh` | `RefreshCatalogRequest` | `RefreshCatalogResult` |
+| Séries | `series.listCategories()` | `series:listCategories` | — | `SeriesCategory[]` |
+| Séries | `series.list(r)` | `series:list` | `ListSeriesRequest` | `Page<SeriesStream>` |
+| Séries | `series.getInfo(id)` | `series:getInfo` | `{ seriesId }` | `SeriesInfo` |
+| Séries | `series.search(r)` | `series:search` | `SearchSeriesRequest` | `Page<SeriesStream>` |
+| Séries | `series.refresh(r)` | `series:refresh` | `RefreshCatalogRequest` | `RefreshSeriesResult` |
+| Direct | `live.listCategories()` | `live:listCategories` | — | `LiveCategory[]` |
+| Direct | `live.list(r)` | `live:list` | `ListLiveRequest` | `Page<LiveStream>` |
+| Direct | `live.search(r)` | `live:search` | `SearchLiveRequest` | `Page<LiveStream>` |
+| Direct | `live.refresh(r)` | `live:refresh` | `RefreshCatalogRequest` | `RefreshLiveResult` |
+| Direct | `live.epg(id, limit?)` | `live:epg` | `ShortEpgRequest` | `EpgEntry[]` |
+| Direct | `live.fullEpg(id)` | `live:fullEpg` | `FullEpgRequest` | `EpgEntry[]` |
+| Favoris | `favorites.list(kind)` | `favorites:list` | `{ kind: FavoriteKind }` | `FavoriteItem[]` |
+| Favoris | `favorites.add(r)` | `favorites:add` | `AddFavoriteRequest` | `{ ok: true }` |
+| Favoris | `favorites.remove(kind, id)` | `favorites:remove` | `FavoriteRef` | `{ ok: true }` |
+| Rappels | `reminders.list()` | `reminders:list` | — | `Reminder[]` |
+| Rappels | `reminders.add(r)` | `reminders:add` | `AddReminderRequest` | `Reminder` |
+| Rappels | `reminders.cancel(id)` | `reminders:cancel` | `{ id }` | `Reminder` |
+| Rappels | `reminders.resolveConflict(r)` | `recording:resolveConflict` | `ResolveConflictRequest` | `{ ok: true }` |
 | Téléch. | `downloads.add(r)` | `download:add` | `AddDownloadRequest` | `DownloadItem` |
 | Téléch. | `downloads.list()` | `download:list` | — | `DownloadItem[]` |
 | Téléch. | `downloads.pause(id)` | `download:pause` | `{ id }` | `DownloadItem` |
@@ -80,7 +106,8 @@ Sources :
 | Téléch. | `downloads.cancel(id)` | `download:cancel` | `{ id }` | `DownloadItem` |
 | Téléch. | `downloads.reorder(r)` | `download:reorder` | `ReorderQueueRequest` | `DownloadItem[]` |
 | Téléch. | `downloads.clearCompleted()` | `download:clearCompleted` | — | `{ removed: number }` |
-| Téléch. | `downloads.localPath(streamId)` | `download:localPath` | `{ streamId }` | `LocalPathResult` (`{ path: string \| null }`) |
+| Téléch. | `downloads.localPath(streamId, kind?)` | `download:localPath` | `{ streamId; kind? }` | `LocalPathResult` (`{ path: string \| null }`) |
+| Téléch. | `downloads.completedIds()` | `download:completedIds` | — | `{ ids: number[] }` |
 | Lecture | `player.play(r)` | `player:play` | `PlayRequest` | `PlayerStatus` |
 | Lecture | `player.pause()` | `player:pause` | — | `PlayerStatus` |
 | Lecture | `player.resume()` | `player:resume` | — | `PlayerStatus` |
@@ -89,6 +116,11 @@ Sources :
 | Lecture | `player.setVolume(r)` | `player:volume` | `VolumeRequest` | `PlayerStatus` |
 | Lecture | `player.setFullscreen(r)` | `player:fullscreen` | `FullscreenRequest` | `PlayerStatus` |
 | Lecture | `player.status()` | `player:status` | — | `PlayerStatus` |
+| Lecture | `player.cycleSubtitle()` | `player:cycleSubtitle` | — | `PlayerStatus` |
+| Lecture | `player.cycleAudio()` | `player:cycleAudio` | — | `PlayerStatus` |
+| Lecture | `player.setSubtitleVisible(r)` | `player:setSubtitleVisible` | `SubtitleVisibleRequest` | `PlayerStatus` |
+| Lecture | `player.startRecording(r)` | `player:startRecording` | `StartRecordingRequest` | `PlayerStatus` |
+| Lecture | `player.stopRecording()` | `player:stopRecording` | — | `PlayerStatus` |
 
 ### Canaux d'évènements (main → renderer, un seul sens)
 
@@ -99,6 +131,11 @@ Sources :
 | `player.onPosition(cb)` | `event:player:position` | `PlayerPositionEvent` |
 | `player.onState(cb)` | `event:player:state` | `PlayerStateEvent` |
 | `connectionLock.onBusyChange(cb)` | `event:connection:busy` | `{ busy: boolean; reason: 'download'\|'playback'\|null }` |
+| `reminders.onUpdated(cb)` | `event:reminder:updated` | `ReminderUpdatedEvent` |
+| `reminders.onOpenChannel(cb)` | `event:reminder:openChannel` | `ReminderOpenChannelEvent` |
+| `reminders.onConflict(cb)` | `event:recording:conflict` | `RecordingConflictEvent` |
+| `reminders.onConflictResolved(cb)` | `event:recording:conflictResolved` | `RecordingConflictResolvedEvent` |
+| `app.onUpdateStatus(cb)` | `event:update:status` | `UpdateStatusEvent` |
 
 Chaque `on*` renvoie une fonction `Unsubscribe`. Le preload n'autorise QUE les
 canaux listés dans `ALL_EVENT_CHANNELS` (allowlist).
@@ -133,13 +170,19 @@ canaux listés dans `ALL_EVENT_CHANNELS` (allowlist).
 | `download_queue` | `id PK AUTOINC`, `stream_id`, `name`, `file_name`, `dest_path`, `container_extension`, `status`, `total_bytes`, `received_bytes`, `queue_position`, `error`, `created_at`, `updated_at` | file persistante |
 | `download_history` | `id PK AUTOINC`, `stream_id`, `name`, `file_name`, `dest_path`, `total_bytes`, `status`, `completed_at` | terminés/annulés (+ flag « déjà téléchargé ») |
 
+S'y ajoutent (migrations suivantes, mêmes patterns) : `series_categories`, `series`,
+`series_info_cache`, `live_categories`, `live_streams`, `favorites`,
+`programme_reminders` — voir `src/main/store/schema.ts`.
+
 Repos disponibles :
 - `settingsRepo.getSettings()/setSettings(patch)` (les champs verrouillés par la
   contrainte 1-connexion sont re-forcés : `maxConcurrentDownloads=1`, `pauseDownloadsWhilePlaying=true`).
 - `catalogRepo.upsertCategories/upsertStreams/cacheVodInfo`,
-  `listCategories/listStreams/searchStreams/getStream/getCachedVodInfo/catalogCounts`.
+  `listCategories/listStreams/searchStreams/getCachedVodInfo/catalogCounts`.
 - `downloadsRepo.addDownload/getDownload/listDownloads/updateStatus/updateProgress/`
   `reorder/archiveToHistory/clearFinished/isDownloaded/reconcileOnStartup`.
+- `seriesRepo` / `liveRepo` / `favoritesRepo` / `remindersRepo` — mêmes patterns
+  pour les séries, le direct, les favoris et les rappels/enregistrements.
 
 ## Secrets (identifiants Xtream)
 

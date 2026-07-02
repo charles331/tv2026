@@ -52,8 +52,9 @@ consultez un professionnel du droit.*
 - ⬇️ **Téléchargement** de films et d'épisodes : file d'attente, **reprise après
   coupure**, progression temps réel (vitesse / ETA), nommage propre des fichiers.
 - ▶️ Lecture via **mpv** (fichier téléchargé hors-ligne, ou streaming direct).
-- 🔄 **Mise à jour automatique** de l'application (via GitHub Releases) + bouton
-  « Vérifier les mises à jour ».
+- 🔄 **Mises à jour intégrées** de l'application (via GitHub Releases) :
+  notification quand une version est disponible, téléchargement et installation
+  **à votre demande** + bouton « Vérifier les mises à jour ».
 
 > ℹ️ **Contrainte importante** : la plupart des abonnements n'autorisent
 > **qu'une seule connexion simultanée**. L'app en tient compte : les
@@ -88,9 +89,12 @@ gauche) rafraîchit films + séries + direct en une fois.
 
 ### Mise à jour
 
-Avec l'installeur, les mises à jour sont **automatiques** : l'app vérifie au
-démarrage (et périodiquement) s'il existe une version plus récente sur GitHub
-Releases, la télécharge en arrière-plan, et l'installe à la prochaine fermeture.
+Avec l'installeur, l'app **vérifie** au démarrage (et périodiquement) s'il existe
+une version plus récente sur GitHub Releases et vous **en informe** — rien n'est
+téléchargé ni installé sans votre accord. Dans *Réglages*, cliquez sur
+**« Télécharger la mise à jour »** (progression affichée en direct), puis sur
+**« Installer maintenant »** : l'application se ferme, l'installeur s'exécute
+**de façon visible**, et l'application redémarre dans la nouvelle version.
 
 ---
 
@@ -110,9 +114,10 @@ automatiquement (avec notes de version + `latest.yml` pour l'auto-MAJ).
 
 | Préfixe de commit | Effet sur la version |
 |---|---|
-| `fix:` / `perf:` / `docs:` / `chore:` … | **patch** (0.1.1 → 0.1.2) |
+| `fix:` / `perf:` / `revert:` | **patch** (0.1.1 → 0.1.2) |
 | `feat:` | **minor** (0.1.1 → 0.2.0) |
 | `feat!:` ou `BREAKING CHANGE:` | **major** (0.1.1 → 1.0.0) |
+| `docs:` / `chore:` / `ci:` / `refactor:` / `test:` / `build:` / `style:` | **aucune release** |
 
 > Aucun `git tag` ni bump manuel de `package.json` : tout est piloté par les commits.
 

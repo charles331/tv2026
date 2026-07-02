@@ -17,7 +17,10 @@ TV2026 est un client de bureau. Points d'attention particuliers :
 - **Identifiants Xtream et clé TMDB** : chiffrés via `safeStorage` (clé de l'OS),
   stockés localement, jamais en clair en base ni dans les logs, jamais exposés au
   processus de rendu.
-- **Mises à jour automatiques** : via GitHub Releases (`electron-updater`).
+- **Mises à jour de l'application** : distribuées via GitHub Releases
+  (`electron-updater`). L'app ne fait que **détecter** les nouvelles versions ;
+  le téléchargement puis l'installation (installeur NSIS **visible**) ne sont
+  déclenchés que sur **action explicite de l'utilisateur**.
 - **Sécurité Electron** : `contextIsolation`, `sandbox`, `nodeIntegration: false`,
   CSP restrictive, navigation externe bloquée.
 
