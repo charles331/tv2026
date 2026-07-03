@@ -9,15 +9,11 @@ native.
 ## Lancer
 
 ```bash
-pnpm install        # met à jour le lockfile (ajoute vitest)
+pnpm install        # installe les dépendances
 pnpm test           # exécution unique
 pnpm test:watch     # mode watch
 pnpm test:coverage  # avec couverture v8
 ```
-
-> ⚠️ Après cette branche, le `pnpm-lock.yaml` doit être régénéré (ajout de
-> `vitest` + `@vitest/coverage-v8`). Lancez `pnpm install` une fois et committez
-> le lockfile mis à jour si vous utilisez `--frozen-lockfile` en CI.
 
 ## Couverture
 
@@ -26,7 +22,11 @@ pnpm test:coverage  # avec couverture v8
 | `main/ConnectionLock.test.ts` | `src/main/lock/ConnectionLock.ts` | acquire/release, FIFO, `tryAcquire`, garde de token, **préemption playback > download**, `reset()` (rejet `LockResetError`), `onBusyChange`, isolation des listeners |
 | `main/validate.test.ts` | `src/main/ipc/validate.ts` | validateurs IPC + **`assertPathWithin`** (anti path-traversal) |
 | `main/xtream.test.ts` | `src/main/xtream/XtreamClient.ts` | `maskUrl`, `buildMovieUrl`, coercition string→nombre, `auth:0`/HTTP 512/401/403 → `AUTH_FAILED`, corps malformé → `MALFORMED`, mapping catégories/streams/info (`undici` mocké) |
-| `main/downloadHelpers.test.ts` | `src/main/downloads/helpers.ts` | `parseContentRangeTotal` (reprise), `describeError`, `formatBytes`, `partPath`, `headerValue` |
+| `main/xtream-series.test.ts` | `src/main/xtream/XtreamClient.ts` (séries) | `buildEpisodeUrl` (extension, défaut `mkv`), mapping catégories/liste séries, `getSeriesInfo` (saisons/épisodes) |
+| `main/xtream-live.test.ts` | `src/main/xtream/XtreamClient.ts` (direct) | `buildLiveUrl` (`.ts` par défaut, extension explicite), mapping catégories/chaînes, `getShortEpg`/`getFullEpg` (titres base64, timestamps) |
+| `main/tmdb.test.ts` | `src/main/tmdb/TmdbClient.ts` | `parseTmdbMovie` (coercition, note nulle sans votes, id IMDb), `buildTmdbMovieUrl`, `fetchTmdbMovie` (`undici` mocké) |
+| `main/schedulerLogic.test.ts` | `src/main/reminders/schedulerLogic.ts` | logique pure du scheduler rappels/enregistrements : modes notify/record, fenêtres (lead/padding), échéances notify/record/stop, détection `missed`, `computeDueActions` |
+| `main/downloadHelpers.test.ts` | `src/main/downloads/helpers.ts` | `parseContentRangeTotal` (reprise), `describeError`, `formatBytes`, `partPath`, `downloadSubfolder`, `headerValue`, `renameWithRetry` |
 | `renderer/format.test.ts` | `src/renderer/src/lib/format.ts` | formatage octets/vitesse/durée/ETA/%/note/date/trailer (locale fr) |
 | `shared/changelog.test.ts` | `src/shared/changelog.ts` | intégrité du changelog : entrées bien formées, dates ISO, versions uniques, version courante de `package.json` documentée |
 

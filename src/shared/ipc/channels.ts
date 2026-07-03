@@ -14,6 +14,9 @@ export const InvokeChannels = {
   // --- app ---
   APP_INFO: 'app:info', // app metadata (version) for the renderer
   APP_CHECK_UPDATES: 'app:checkUpdates', // manual "check for updates" trigger
+  APP_DOWNLOAD_UPDATE: 'app:downloadUpdate', // user accepted → download (progress events)
+  APP_INSTALL_UPDATE: 'app:installUpdate', // quit + run the visible installer
+  APP_GET_UPDATE_STATE: 'app:getUpdateState', // pull the last update status (mount-time sync)
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',
@@ -105,7 +108,9 @@ export const EventChannels = {
   /** A scheduled recording conflicts with current playback (ASK the user). */
   RECORDING_CONFLICT: 'event:recording:conflict',
   /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */
-  RECORDING_CONFLICT_RESOLVED: 'event:recording:conflictResolved'
+  RECORDING_CONFLICT_RESOLVED: 'event:recording:conflictResolved',
+  /** App-update lifecycle: available / downloading (progress) / downloaded / error. */
+  UPDATE_STATUS: 'event:update:status'
 } as const
 
 export type InvokeChannel = (typeof InvokeChannels)[keyof typeof InvokeChannels]

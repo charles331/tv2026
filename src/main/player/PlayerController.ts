@@ -43,7 +43,7 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
 import type {
-  EventContract,
+  EventEmitterFn,
   FullscreenRequest,
   PlayerState,
   PlayerStatus,
@@ -59,11 +59,8 @@ import { getXtreamClient } from '../xtream'
 import { resolveMpvBinary } from './mpvBinary'
 import { MpvIpc, type MpvEndFile, type MpvPropertyChange } from './mpvIpc'
 
-/** Typed emitter shape (matches makeEmitter() in ipc/register.ts). */
-export type PlayerEventEmitter = <C extends keyof EventContract>(
-  channel: C,
-  payload: EventContract[C]
-) => void
+/** Typed emitter (shared shape from the IPC contract). */
+export type PlayerEventEmitter = EventEmitterFn
 
 /** Property observation ids (arbitrary, just need to be unique). */
 const OBS = {

@@ -93,12 +93,30 @@ export interface UpdateCheckOutcome {
   status:
     | 'dev-disabled' // not a packaged build → auto-update inactive
     | 'up-to-date' // already on the latest release
-    | 'available' // a newer release exists; it downloads and installs on quit
+    | 'available' // a newer release exists; the USER decides to download/install
     | 'error' // the check failed (offline, no release, etc.)
   /** Version currently running. */
   currentVersion: string
   /** Latest version seen on the update feed, if known. */
   latestVersion?: string
   /** Human-readable detail for the UI. */
+  message?: string
+}
+
+/**
+ * Live app-update lifecycle pushed main -> renderer. Nothing downloads or
+ * installs without the user's explicit go-ahead:
+ *  - available   : a newer release exists (manual or background check)
+ *  - downloading : the user accepted; progress ticks stream in
+ *  - downloaded  : ready — the user can launch the visible (non-silent) installer
+ *  - error       : the download failed
+ */
+export interface UpdateStatusEvent {
+  phase: 'available' | 'downloading' | 'downloaded' | 'error'
+  latestVersion?: string
+  /** 0..100 while downloading. */
+  percent?: number
+  /** Instantaneous download speed (bytes/sec) while downloading. */
+  bytesPerSecond?: number
   message?: string
 }

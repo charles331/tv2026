@@ -1,6 +1,9 @@
 # Feature — Guide EPG complet, rappels de programmes & enregistrement programmé
 
-> Statut : **proposition / analyse** (aucune implémentation encore).
+> Statut : **implémenté** — livré en **v0.8.0** (étapes 1 → 5 du plan §5 :
+> guide complet, rappels, scheduler/notifications, enregistrement programmé,
+> vue « Programmés » + réglages). L'étape 6 (fonctionnement en arrière-plan :
+> tray + lancement au démarrage) n'est **pas** faite.
 > Branche : `feat/live-epg-reminders-recording`.
 > Domaine : Live TV. Étend la section « Direct » existante (EPG now/next déjà en place).
 

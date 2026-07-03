@@ -1,5 +1,10 @@
 # Plan — Application IPTV de téléchargement de films (VOD)
 
+> ⚠️ **Document de planification historique.** Conservé pour référence :
+> certaines décisions ci-dessous ont été remplacées depuis. Pour l'état actuel
+> du projet, voir [`ARCHITECTURE.md`](ARCHITECTURE.md) et les documents de
+> [`docs/features/`](docs/features/).
+
 > App de bureau **Electron + TypeScript**, catalogue cliquable, **téléchargement** de films
 > + **lecture intégrée**. Source : panel Xtream Codes `mon-panel.exemple`.
 

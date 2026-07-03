@@ -18,6 +18,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.9.3',
+    date: '2026-06-22',
+    changes: [
+      '« Tout mettre à jour » recharge désormais les films, séries et le direct à la fin — plus besoin de redémarrer l’application pour voir les nouveautés.',
+      'Mises à jour de l’application : plus rien ne se télécharge ni ne s’installe en arrière-plan. L’application vous prévient, vous lancez le téléchargement (progression visible dans les Réglages), puis l’installateur classique s’affiche à l’écran.'
+    ]
+  },
+  {
     version: '0.9.2',
     date: '2026-06-17',
     changes: [

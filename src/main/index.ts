@@ -161,8 +161,10 @@ if (!gotLock) {
 
     createWindow()
 
-    // Check GitHub Releases for a newer version (packaged builds only).
-    initAutoUpdates()
+    // Check GitHub Releases for a newer version (packaged builds only). The
+    // check only DETECTS: download + visible install are user-driven, and the
+    // lifecycle streams to the renderer via UPDATE_STATUS events.
+    initAutoUpdates(makeEmitter(getWindows))
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -1,5 +1,5 @@
 /**
- * Reusable renderer hooks: debounced values, async resources, media queries.
+ * Reusable renderer hooks: debounced values, async resources.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -62,20 +62,4 @@ export function useAsync<T>(loader: () => Promise<T>, deps: readonly unknown[]):
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   return { data, loading, error, reload }
-}
-
-/** Track a CSS media query (used to pick poster grid density). */
-export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false
-  )
-  useEffect(() => {
-    if (!window.matchMedia) return
-    const mql = window.matchMedia(query)
-    const handler = (e: MediaQueryListEvent): void => setMatches(e.matches)
-    setMatches(mql.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [query])
-  return matches
 }
