@@ -44,6 +44,31 @@ function foldUpdateEvent(
   return e
 }
 
+/** Settings tabs: label shown in the tab bar + the header hint for that page. */
+type SettingsTab = 'connexion' | 'catalogues' | 'telechargements' | 'application' | 'journal'
+const SETTINGS_TABS: Record<SettingsTab, { label: string; hint: string }> = {
+  connexion: {
+    label: 'Connexion',
+    hint: 'Identifiants du panel Xtream et test du compte.'
+  },
+  catalogues: {
+    label: 'Catalogues',
+    hint: 'Rafraîchissement des films, séries et du direct, et notes TMDB.'
+  },
+  telechargements: {
+    label: 'Téléchargements',
+    hint: 'Dossier de destination, rappels et enregistrements programmés.'
+  },
+  application: {
+    label: 'Application',
+    hint: 'Version, mises à jour et nouveautés.'
+  },
+  journal: {
+    label: 'Journal',
+    hint: 'Trace des actions et des erreurs, pour diagnostiquer un problème.'
+  }
+}
+
 const STATUS_LABELS: Record<
   ConnectionTestResult['status'],
   { label: string; tone: 'success' | 'danger' | 'warning' | 'neutral' }
@@ -60,6 +85,7 @@ export function SettingsScreen({
 }: {
   onCatalogRefreshed?: (result: RefreshCatalogResult) => void
 }): ReactElement {
+  const [tab, setTab] = useState<SettingsTab>('connexion')
   const [creds, setCreds] = useState<CredentialsStatus | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
 
@@ -433,12 +459,31 @@ export function SettingsScreen({
     <div className="mx-auto max-w-3xl space-y-6 p-6 fade-in">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-white">Réglages</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          Connexion au panel Xtream, dossier de téléchargement et catalogue.
-        </p>
+        <p className="mt-1 text-sm text-gray-400">{SETTINGS_TABS[tab].hint}</p>
       </header>
 
+      {/* Onglets : chaque groupe de réglages sur sa propre page (fini le long défilement). */}
+      <nav className="flex flex-wrap gap-2" aria-label="Sections des réglages">
+        {(Object.keys(SETTINGS_TABS) as SettingsTab[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={
+              'rounded-lg px-3 py-1.5 text-sm transition-colors ' +
+              (tab === key
+                ? 'bg-accent/20 font-medium text-accent-hover'
+                : 'bg-white/[0.06] text-gray-300 hover:bg-white/[0.12]')
+            }
+            aria-current={tab === key ? 'page' : undefined}
+          >
+            {SETTINGS_TABS[key].label}
+          </button>
+        ))}
+      </nav>
+
       {/* Connexion */}
+      {tab === 'connexion' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Connexion</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -539,8 +584,10 @@ export function SettingsScreen({
           </div>
         )}
       </section>
+      )}
 
       {/* Dossier de téléchargement */}
+      {tab === 'telechargements' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Dossier de téléchargement</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -561,8 +608,10 @@ export function SettingsScreen({
           </Button>
         </div>
       </section>
+      )}
 
       {/* Rafraîchir le catalogue */}
+      {tab === 'catalogues' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Catalogue</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -591,8 +640,10 @@ export function SettingsScreen({
           </p>
         )}
       </section>
+      )}
 
       {/* Rafraîchir les séries */}
+      {tab === 'catalogues' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Séries</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -617,8 +668,10 @@ export function SettingsScreen({
         {seriesError && <p className="mt-3 text-sm text-red-300">{seriesError}</p>}
         {seriesMessage && <p className="mt-3 text-sm text-emerald-300">{seriesMessage}</p>}
       </section>
+      )}
 
       {/* Rafraîchir le direct */}
+      {tab === 'catalogues' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Direct (TV)</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -643,8 +696,10 @@ export function SettingsScreen({
         {liveError && <p className="mt-3 text-sm text-red-300">{liveError}</p>}
         {liveMessage && <p className="mt-3 text-sm text-emerald-300">{liveMessage}</p>}
       </section>
+      )}
 
       {/* Rappels & enregistrements programmés */}
+      {tab === 'telechargements' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Rappels & enregistrements</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -692,8 +747,10 @@ export function SettingsScreen({
           </Button>
         </form>
       </section>
+      )}
 
       {/* Notes TMDB */}
+      {tab === 'catalogues' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Notes des films (TMDB)</h2>
         <p className="mt-1 text-xs text-gray-500">
@@ -754,8 +811,10 @@ export function SettingsScreen({
           </div>
         </form>
       </section>
+      )}
 
       {/* Nouveautés (changelog) */}
+      {tab === 'application' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <div className="flex items-center gap-3">
           <h2 className="text-base font-medium text-gray-100">Nouveautés</h2>
@@ -861,8 +920,10 @@ export function SettingsScreen({
           })}
         </ol>
       </section>
+      )}
 
       {/* Journal de l'application */}
+      {tab === 'journal' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-medium text-gray-100">Journal de l’application</h2>
@@ -940,6 +1001,7 @@ export function SettingsScreen({
           {logsMessage && <span className="text-xs text-gray-500">{logsMessage}</span>}
         </div>
       </section>
+      )}
     </div>
   )
 }
