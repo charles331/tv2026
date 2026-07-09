@@ -18,6 +18,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.11.0',
+    date: '2026-07-09',
+    changes: [
+      'Réglages réorganisés en onglets — Connexion, Catalogues, Téléchargements, Application, Journal — fini le long défilement.',
+      'Chaque onglet affiche une description de ce qu’on y trouve.'
+    ]
+  },
+  {
     version: '0.10.0',
     date: '2026-07-02',
     changes: [
