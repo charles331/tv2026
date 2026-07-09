@@ -24,6 +24,7 @@ import { downloadManager } from './downloads/DownloadManager'
 import { playerController } from './player/PlayerController'
 import { reminderScheduler } from './reminders/ReminderScheduler'
 import { initAutoUpdates } from './updater'
+import { appLog } from './log/logger'
 
 let mainWindow: BrowserWindow | null = null
 let unwireLock: (() => void) | null = null
@@ -128,6 +129,26 @@ if (!gotLock) {
     // Must match `appId` in electron-builder.yml (Windows taskbar grouping,
     // notifications). Neutral id — no employer domain leaked.
     electronApp.setAppUserModelId('io.github.charles331.tv2026')
+
+    appLog.info('app', `TV2026 ${app.getVersion()} démarré (Electron ${process.versions.electron})`)
+
+    // Crash traps: journal them so the Réglages viewer explains "why it died".
+    // uncaughtException is logged then continues (desktop-app pragmatism: a
+    // background hiccup shouldn't kill playback); the journal keeps the trace.
+    process.on('uncaughtException', (e) => {
+      appLog.error('app', `uncaughtException : ${e?.stack ?? e?.message ?? String(e)}`)
+    })
+    process.on('unhandledRejection', (reason) => {
+      appLog.warn('app', `unhandledRejection : ${String(reason).slice(0, 500)}`)
+    })
+    app.on('render-process-gone', (_e, _wc, details) => {
+      appLog.error('app', `Renderer terminé : ${details.reason} (code ${details.exitCode ?? '?'})`)
+    })
+    app.on('child-process-gone', (_e, details) => {
+      // GPU/utility process losses often explain video glitches.
+      if (details.reason === 'clean-exit') return
+      appLog.error('app', `Processus ${details.type} terminé : ${details.reason}`)
+    })
 
     // Initialize store + reconcile any download left mid-flight by a crash.
     initDatabase()

@@ -25,6 +25,7 @@ import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { EventEmitterFn, UpdateCheckOutcome, UpdateStatusEvent } from '@shared/index'
 import { EventChannels, isVersionNewer } from '@shared/index'
+import { appLog } from './log/logger'
 
 let started = false
 let emit: EventEmitterFn = () => {}
@@ -37,6 +38,12 @@ let lastStatus: UpdateStatusEvent | null = null
 
 function emitStatus(e: UpdateStatusEvent): void {
   lastStatus = e
+  // Journal the lifecycle, but not the (chatty) per-tick download progress.
+  if (e.phase !== 'downloading') {
+    const line = `Mise à jour : ${e.phase}${e.latestVersion ? ` (${e.latestVersion})` : ''}${e.message ? ` — ${e.message}` : ''}`
+    if (e.phase === 'error') appLog.error('updater', line)
+    else appLog.info('updater', line)
+  }
   emit(EventChannels.UPDATE_STATUS, e)
 }
 

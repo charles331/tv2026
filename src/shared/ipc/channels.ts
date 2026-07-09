@@ -66,6 +66,12 @@ export const InvokeChannels = {
   /** Renderer replies to a recording-vs-playback conflict prompt. */
   RECORDING_RESOLVE_CONFLICT: 'recording:resolveConflict',
 
+  // --- journal (lightweight app logs) ---
+  LOGS_GET: 'logs:get',
+  LOGS_CLEAR: 'logs:clear',
+  LOGS_OPEN_FOLDER: 'logs:openFolder', // reveal the on-disk log folder
+  LOGS_WRITE: 'logs:write', // renderer append (global error handlers)
+
   // --- downloads ---
   DOWNLOAD_ADD: 'download:add',
   DOWNLOAD_LIST: 'download:list',

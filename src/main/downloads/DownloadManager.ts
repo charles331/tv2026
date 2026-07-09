@@ -42,6 +42,7 @@ import { EventChannels } from '@shared/index'
 import { downloadsRepo } from '../store'
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
+import { appLog } from '../log/logger'
 import {
   HttpStatusError,
   partPath,
@@ -628,6 +629,13 @@ export class DownloadManager {
     extra?: { error?: string; destPath?: string }
   ): void {
     const payload: DownloadStateEvent = { id, streamId, status, ...extra }
+    // State transitions are rare (not progress ticks) → journal them all; a
+    // failure carries its reason.
+    if (status === 'failed') {
+      appLog.error('downloads', `Téléchargement #${id} échoué : ${extra?.error ?? '?'}`)
+    } else {
+      appLog.info('downloads', `Téléchargement #${id} → ${status}`)
+    }
     this.emit(EventChannels.DOWNLOAD_STATE, payload)
   }
 }
