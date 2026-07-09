@@ -25,6 +25,7 @@ import { mkdir } from 'fs/promises'
 import { dirname } from 'path'
 
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
+import { appLog } from '../log/logger'
 import { getXtreamClient } from '../xtream'
 import { resolveMpvBinary } from './mpvBinary'
 
@@ -121,6 +122,7 @@ export class RecordingController {
       windowsHide: true
     })
     this.active = { reminderId: opts.reminderId, proc: child, token, filePath: opts.filePath }
+    appLog.info('recorder', `Enregistrement programmé démarré (rappel #${opts.reminderId})`)
 
     const finalize = (): void => {
       // Only act if this is still the active recording (guards double events).
@@ -128,10 +130,12 @@ export class RecordingController {
       const wasActive = this.active
       this.active = null
       connectionLock.release(wasActive.token)
+      appLog.info('recorder', `Enregistrement programmé terminé (rappel #${wasActive.reminderId})`)
       opts.onExit()
     }
 
     child.on('error', (err) => {
+      appLog.error('recorder', `Échec du lancement de mpv (enregistrement) : ${err.message}`)
       console.error('[RecordingController] mpv spawn error', err.message)
       finalize()
     })

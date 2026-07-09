@@ -51,6 +51,7 @@ import type {
   ShortEpgRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from '../types/favorites'
+import type { ListLogsRequest, LogEntry, WriteLogRequest } from '../types/logs'
 import type {
   AddReminderRequest,
   RecordingConflictEvent,
@@ -147,6 +148,12 @@ export interface IpcContract {
     request: ResolveConflictRequest
     response: { ok: true }
   }
+
+  // journal (lightweight app logs)
+  [InvokeChannels.LOGS_GET]: { request: ListLogsRequest; response: LogEntry[] }
+  [InvokeChannels.LOGS_CLEAR]: { request: void; response: { ok: true } }
+  [InvokeChannels.LOGS_OPEN_FOLDER]: { request: void; response: { ok: true } }
+  [InvokeChannels.LOGS_WRITE]: { request: WriteLogRequest; response: { ok: true } }
 
   // downloads
   [InvokeChannels.DOWNLOAD_ADD]: { request: AddDownloadRequest; response: DownloadItem }

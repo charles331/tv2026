@@ -56,6 +56,7 @@ import { EventChannels } from '@shared/index'
 
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
+import { appLog } from '../log/logger'
 import { resolveMpvBinary } from './mpvBinary'
 import { MpvIpc, type MpvEndFile, type MpvPropertyChange } from './mpvIpc'
 
@@ -117,6 +118,8 @@ export class PlayerController {
   private currentAid: number | null = null
   private currentSid: number | null = null
   private lastPaused = false
+  /** Tail of the current mpv process's stderr (diagnosis of unexpected stops). */
+  private lastStderrTail: string[] = []
 
   /**
    * Wire the typed event emitter (called once from main/index.ts). mpv renders
@@ -153,6 +156,10 @@ export class PlayerController {
     await this.stop()
 
     const session = ++this.sessionId
+    appLog.info(
+      'player',
+      `Lecture demandée : ${req.mediaKind ?? 'movie'} « ${req.title ?? '?'} » (${req.kind})`
+    )
     // Remember the request so a LIVE drop can auto-reconnect; reset the backoff
     // and the carried-over track/pause selections for this fresh playback.
     this.currentReq = req
@@ -240,16 +247,40 @@ export class PlayerController {
       windowsHide: false
     })
     this.proc = child
+    appLog.info('player', `mpv lancé (pid ${child.pid ?? '?'}) pour « ${req.title ?? '?'} »`)
+
+    // Keep the tail of mpv's stderr: when playback stops unexpectedly, these
+    // lines are usually the only clue WHY (codec abort, HTTP error, EOF cause).
+    const stderrTail: string[] = []
+    this.lastStderrTail = stderrTail
+    child.stderr?.setEncoding('utf8')
+    child.stderr?.on('data', (chunk: string) => {
+      for (const raw of chunk.split('\n')) {
+        const line = raw.trim()
+        if (!line) continue
+        stderrTail.push(line.slice(0, 300))
+        if (stderrTail.length > 12) stderrTail.shift()
+      }
+    })
 
     child.on('error', (err) => {
       // Spawn-level failure (e.g. binary vanished) — only act on live session.
       if (session !== this.sessionId) return
+      appLog.error('player', `Échec du lancement de mpv : ${err.message}`)
       void this.teardown()
       this.toError(`Échec du lancement de mpv: ${err.message}`)
     })
     child.on('exit', (code) => {
       if (session !== this.sessionId) return
       // mpv exited on its own (user closed window, crash, codec abort).
+      if (code !== null && code !== 0) {
+        appLog.error(
+          'player',
+          `mpv s’est arrêté seul (code ${code})${stderrTail.length ? ` — stderr : ${stderrTail.join(' | ')}` : ''}`
+        )
+      } else {
+        appLog.info('player', `mpv terminé (code ${code ?? '?'})`)
+      }
       void this.handleExit(code)
     })
 
@@ -452,16 +483,24 @@ export class PlayerController {
     // end. Reconnect instead of closing (the user stopping is handled by the
     // session guard, so we never get here for a user-initiated stop).
     if (this.isLiveSession() && (e.reason === 'eof' || e.reason === 'error')) {
+      appLog.warn('player', `Flux live interrompu (end-file: ${e.reason ?? '?'})`)
       this.reconnectLive()
       return
     }
     // 'eof' = natural end; 'error' = decode/network failure; others = stop/quit.
     if (e.reason === 'error') {
+      appLog.error(
+        'player',
+        `Lecture interrompue par mpv (end-file: error)${
+          this.lastStderrTail.length ? ` — stderr : ${this.lastStderrTail.join(' | ')}` : ''
+        }`
+      )
       void this.teardown()
       this.toError('Erreur de lecture mpv (codec ou réseau).')
       return
     }
     if (e.reason === 'eof') {
+      appLog.info('player', 'Fin de lecture (eof)')
       // Recording (if any) stops with the stream — clear the flag BEFORE emitting
       // 'ended' so the renderer never briefly shows "ended" while still REC.
       this.recordingPath = null
@@ -537,6 +576,10 @@ export class PlayerController {
     this.retryAttempt++
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
     const delay = liveReconnectDelay(this.retryAttempt)
+    appLog.warn(
+      'player',
+      `Reconnexion live « ${req.title ?? '?'} » — tentative ${this.retryAttempt} dans ${Math.round(delay / 1000)} s`
+    )
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       void this.attemptReconnect(req)
@@ -719,6 +762,7 @@ export class PlayerController {
       if (this.status.state !== 'idle') this.setState('idle', { source: null, title: null })
       return this.getStatus()
     }
+    appLog.info('player', 'Arrêt de la lecture (action utilisateur)')
     await this.teardown()
     this.setState('idle', { source: null, title: null })
     return this.getStatus()
@@ -799,6 +843,7 @@ export class PlayerController {
   }
 
   private toError(message: string): PlayerStatus {
+    appLog.error('player', message)
     this.status = { ...this.status, state: 'error', error: message }
     this.emit(EventChannels.PLAYER_STATE, {
       state: 'error',

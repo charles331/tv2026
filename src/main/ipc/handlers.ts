@@ -14,7 +14,7 @@
  */
 
 import { join as pathJoin } from 'path'
-import { app, dialog } from 'electron'
+import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
 import { InvokeChannels, ok, err } from '@shared/index'
 import type {
@@ -52,6 +52,7 @@ import {
   getUpdateState,
   installUpdateNow
 } from '../updater'
+import { appLog } from '../log/logger'
 import {
   assert,
   assertPathWithin,
@@ -471,6 +472,41 @@ export const handlers: IpcHandlers = {
       'invalid conflict resolution'
     )
     reminderScheduler.resolveConflict(reminderId, resolution)
+    return ok({ ok: true as const })
+  },
+
+  // ---------------- journal (lightweight app logs) ----------------
+  [InvokeChannels.LOGS_GET]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const limit = optionalNumber(req, 'limit')
+    const level = optionalString(req, 'level', 8)
+    assert(
+      level === undefined || level === 'all' || level === 'info' || level === 'warn' || level === 'error',
+      'invalid log level'
+    )
+    return ok(appLog.list({ limit, level: level as 'all' | 'info' | 'warn' | 'error' | undefined }))
+  },
+
+  [InvokeChannels.LOGS_CLEAR]: () => {
+    appLog.clear()
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.LOGS_OPEN_FOLDER]: async () => {
+    const dir = appLog.logDir()
+    if (!dir) return err('UNKNOWN', 'Dossier des journaux indisponible.')
+    await shell.openPath(dir)
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.LOGS_WRITE]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const level = requireString(req, 'level', 8)
+    assert(level === 'info' || level === 'warn' || level === 'error', 'invalid log level')
+    const scope = requireString(req, 'scope', 32)
+    const message = requireString(req, 'message', 2000)
+    // Prefix renderer scopes so main-side scopes can't be spoofed in the viewer.
+    appLog[level as 'info' | 'warn' | 'error'](`ui:${scope}`, message)
     return ok({ ok: true as const })
   },
 

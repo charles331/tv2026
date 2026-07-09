@@ -22,6 +22,7 @@ import type { ConflictResolution, EventEmitterFn, Reminder } from '@shared/index
 import { EventChannels } from '@shared/index'
 
 import { remindersRepo, settingsRepo } from '../store'
+import { appLog } from '../log/logger'
 import { buildLiveRecordingPath } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import { recordingController, RecordingError } from '../player/RecordingController'
@@ -317,7 +318,12 @@ export class ReminderScheduler {
       status,
       ...(filePath !== undefined ? { filePath } : {})
     })
-    if (updated) this.emit(EventChannels.REMINDER_UPDATED, { reminder: updated })
+    if (updated) {
+      const line = `Rappel #${id} « ${updated.title} » → ${status}`
+      if (status === 'failed' || status === 'missed') appLog.warn('reminders', line)
+      else appLog.info('reminders', line)
+      this.emit(EventChannels.REMINDER_UPDATED, { reminder: updated })
+    }
   }
 
   private focusWindow(): void {

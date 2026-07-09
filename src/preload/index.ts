@@ -220,6 +220,25 @@ const api: RendererApi = {
     onConflictResolved: (cb) => subscribe(EventChannels.RECORDING_CONFLICT_RESOLVED, cb)
   },
 
+  logs: {
+    list: (limit, level) =>
+      invoke(InvokeChannels.LOGS_GET, { limit, level }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LOGS_GET>>
+      >,
+    clear: () =>
+      invoke(InvokeChannels.LOGS_CLEAR) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LOGS_CLEAR>>
+      >,
+    openFolder: () =>
+      invoke(InvokeChannels.LOGS_OPEN_FOLDER) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LOGS_OPEN_FOLDER>>
+      >,
+    write: (level, scope, message) =>
+      invoke(InvokeChannels.LOGS_WRITE, { level, scope, message }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LOGS_WRITE>>
+      >
+  },
+
   downloads: {
     add: (req) =>
       invoke(InvokeChannels.DOWNLOAD_ADD, req) as Promise<

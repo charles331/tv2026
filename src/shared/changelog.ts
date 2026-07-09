@@ -18,6 +18,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.10.0',
+    date: '2026-07-02',
+    changes: [
+      'Réglages : nouveau « Journal de l’application » — trace les actions importantes (lecture, téléchargements, enregistrements, mises à jour, rappels) et les erreurs/crashs, avec filtres par niveau, copie et accès au fichier sur disque.',
+      'Les messages d’erreur du lecteur mpv sont désormais capturés dans le journal, pour comprendre pourquoi une lecture s’arrête toute seule.',
+      'Identifiants et URLs de flux sont automatiquement masqués dans le journal.'
+    ]
+  },
+  {
     version: '0.9.3',
     date: '2026-06-22',
     changes: [

@@ -3,6 +3,8 @@ import type {
   AppSettings,
   ConnectionTestResult,
   CredentialsStatus,
+  LogEntry,
+  LogLevel,
   RefreshCatalogResult,
   TmdbKeyStatus,
   UpdateStatusEvent
@@ -97,6 +99,50 @@ export function SettingsScreen({
   // App-update lifecycle (available → downloading → downloaded), pushed by main.
   const [updateStatus, setUpdateStatus] = useState<UpdateStatusEvent | null>(null)
   const [startingDownload, setStartingDownload] = useState(false)
+
+  // Journal de l'application (viewer).
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [logsLoading, setLogsLoading] = useState(true)
+  const [logLevel, setLogLevel] = useState<LogLevel | 'all'>('all')
+  const [logsMessage, setLogsMessage] = useState<string | null>(null)
+
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true)
+    setLogsMessage(null)
+    try {
+      setLogs(unwrap(await api().logs.list(500, logLevel)))
+    } catch (err) {
+      setLogsMessage(describeError(err))
+    } finally {
+      setLogsLoading(false)
+    }
+  }, [logLevel])
+
+  useEffect(() => {
+    void loadLogs()
+  }, [loadLogs])
+
+  const handleCopyLogs = useCallback(async () => {
+    const text = logs
+      .map((e) => `${new Date(e.tsMs).toISOString()} ${e.level.toUpperCase()} [${e.scope}] ${e.message}`)
+      .join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setLogsMessage('Journal copié dans le presse-papiers.')
+    } catch {
+      setLogsMessage('Impossible de copier le journal.')
+    }
+  }, [logs])
+
+  const handleClearLogs = useCallback(async () => {
+    try {
+      unwrap(await api().logs.clear())
+      setLogs([])
+      setLogsMessage('Journal vidé.')
+    } catch (err) {
+      setLogsMessage(describeError(err))
+    }
+  }, [])
 
   // Prefill from stored (non-secret) status.
   useEffect(() => {
@@ -815,6 +861,100 @@ export function SettingsScreen({
           })}
         </ol>
       </section>
+
+      {/* Journal de l'application */}
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-base font-medium text-gray-100">Journal de l’application</h2>
+          <div className="ml-auto flex items-center gap-2">
+            {(['all', 'info', 'warn', 'error'] as const).map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => setLogLevel(lvl)}
+                className={
+                  'rounded-md px-2 py-1 text-xs transition-colors ' +
+                  (logLevel === lvl
+                    ? 'bg-accent/20 font-medium text-accent-hover'
+                    : 'bg-white/[0.06] text-gray-400 hover:bg-white/[0.12]')
+                }
+              >
+                {lvl === 'all' ? 'Tout' : lvl === 'info' ? 'Infos' : lvl === 'warn' ? 'Avert.' : 'Erreurs'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          Trace les actions importantes (lecture, téléchargements, enregistrements, mises à jour) et
+          les erreurs — utile pour comprendre un arrêt de lecture inattendu. Identifiants et URLs de
+          flux sont masqués.
+        </p>
+
+        <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-white/10 bg-surface-sunken p-2 font-mono text-xs">
+          {logsLoading ? (
+            <div className="flex items-center gap-2 p-2 text-gray-500">
+              <Spinner size={14} /> Chargement du journal…
+            </div>
+          ) : logs.length === 0 ? (
+            <p className="p-2 text-gray-600">Journal vide pour le moment.</p>
+          ) : (
+            [...logs].reverse().map((e) => (
+              <div key={e.id} className="flex gap-2 px-1 py-0.5 leading-relaxed">
+                <span className="shrink-0 text-gray-600">{formatLogTime(e.tsMs)}</span>
+                <span
+                  className={
+                    'shrink-0 ' +
+                    (e.level === 'error'
+                      ? 'text-red-400'
+                      : e.level === 'warn'
+                        ? 'text-amber-400'
+                        : 'text-gray-500')
+                  }
+                >
+                  [{e.scope}]
+                </span>
+                <span className="min-w-0 break-words text-gray-300">{e.message}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<IconRefresh size={14} />}
+            onClick={() => void loadLogs()}
+          >
+            Actualiser
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleCopyLogs} disabled={logs.length === 0}>
+            Copier
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => void api().logs.openFolder()}>
+            Ouvrir le dossier des journaux
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleClearLogs}>
+            Vider
+          </Button>
+          {logsMessage && <span className="text-xs text-gray-500">{logsMessage}</span>}
+        </div>
+      </section>
     </div>
   )
+}
+
+/** "dd/MM HH:mm:ss" for a journal line. */
+function formatLogTime(tsMs: number): string {
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }).format(new Date(tsMs))
+  } catch {
+    return ''
+  }
 }

@@ -46,6 +46,7 @@ import type {
   SearchLiveRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind } from '../types/favorites'
+import type { LogEntry, LogLevel } from '../types/logs'
 import type {
   AddReminderRequest,
   RecordingConflictEvent,
@@ -171,6 +172,17 @@ export interface RemindersApi {
   onConflictResolved(cb: (e: RecordingConflictResolvedEvent) => void): Unsubscribe
 }
 
+export interface LogsApi {
+  /** Recent journal entries (newest kept when limit trims), optional level filter. */
+  list(limit?: number, level?: LogLevel | 'all'): Promise<Result<LogEntry[]>>
+  /** Clear the in-memory buffer + the on-disk file. */
+  clear(): Promise<Result<{ ok: true }>>
+  /** Reveal the on-disk log folder in the OS file manager. */
+  openFolder(): Promise<Result<{ ok: true }>>
+  /** Append a renderer-side entry (used by the global error handlers). */
+  write(level: LogLevel, scope: string, message: string): Promise<Result<{ ok: true }>>
+}
+
 export interface DownloadsApi {
   add(req: AddDownloadRequest): Promise<Result<DownloadItem>>
   list(): Promise<Result<DownloadItem[]>>
@@ -236,6 +248,7 @@ export interface RendererApi {
   live: LiveApi
   favorites: FavoritesApi
   reminders: RemindersApi
+  logs: LogsApi
   downloads: DownloadsApi
   player: PlayerApi
   connectionLock: ConnectionLockApi
