@@ -79,6 +79,50 @@ export function buildLiveRecordingPath(downloadDir: string, baseName: string): s
   return assertPathWithin(join(downloadDir, downloadSubfolder('live'), file), downloadDir)
 }
 
+// ---------------------------------------------------------------- chunked mode
+
+/** Block-mode bounds: start at 8 MiB, adapt within [2, 64] MiB. */
+export const CHUNK_INITIAL_BYTES = 8 * 1024 * 1024
+export const CHUNK_MIN_BYTES = 2 * 1024 * 1024
+export const CHUNK_MAX_BYTES = 64 * 1024 * 1024
+
+/** What the measurement inside one block says about the block size. */
+export type ChunkDecision = 'grow' | 'shrink' | 'keep'
+
+/**
+ * Decide from a block's throughput whether the block outlived the provider's
+ * burst.
+ *
+ * `peakBps` is the best sustained rate observed inside the block AFTER the
+ * slow-start region, `tailBps` the rate over its last quarter. Comparing tail to
+ * PEAK (rather than first half to second half) matters: every block opens a new
+ * connection, so TCP slow start sits in the first half and would make each block
+ * look like it accelerates — biasing the size upward until it pegs at the
+ * maximum, i.e. back to one big continuous request.
+ *
+ * Pure: same inputs → same output (unit-tested).
+ */
+export function chunkSizeDecision(peakBps: number, tailBps: number): ChunkDecision {
+  // No usable measurement (block too small / instant) → don't react to noise.
+  if (!(peakBps > 0) || !(tailBps >= 0)) return 'keep'
+  const ratio = tailBps / peakBps
+  if (ratio < 0.6) return 'shrink' // throttled before the block ended
+  if (ratio >= 0.85) return 'grow' // rode the burst all the way
+  return 'keep' // near the sweet spot
+}
+
+/** Apply a decision to the current block size, clamped to the allowed range. */
+export function applyChunkDecision(
+  current: number,
+  decision: ChunkDecision,
+  bounds?: { minBytes?: number; maxBytes?: number }
+): number {
+  const min = bounds?.minBytes ?? CHUNK_MIN_BYTES
+  const max = bounds?.maxBytes ?? CHUNK_MAX_BYTES
+  const factor = decision === 'grow' ? 1.5 : decision === 'shrink' ? 0.7 : 1
+  return Math.max(min, Math.min(max, Math.floor(current * factor)))
+}
+
 /** Read a single header value (undici may surface a header as string[]). */
 export function headerValue(h: string | string[] | undefined): string | undefined {
   if (Array.isArray(h)) return h[0]
@@ -94,8 +138,36 @@ export function parseContentRangeTotal(cr: string | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/**
+ * Parse the START offset out of `Content-Range: bytes 200-1023/1234`.
+ *
+ * The block engine MUST verify this: appending a block that does not actually
+ * start where our `.part` ends would silently corrupt the file.
+ */
+export function parseContentRangeStart(cr: string | undefined): number | null {
+  if (!cr) return null
+  const m = /bytes\s+(\d+)\s*-/i.exec(cr.trim())
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/**
+ * Raised when a transfer would (or did) compromise file integrity — a block that
+ * does not start where the `.part` ends, or a remote file whose size changed
+ * mid-download. Always terminal: never retried, never finalized.
+ */
+export class IntegrityError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'IntegrityError'
+  }
+}
+
 /** Map a transfer error to a human-readable, renderer-safe message. */
 export function describeError(e: unknown): string {
+  // Already a precise, user-facing French message.
+  if (e instanceof IntegrityError) return e.message
   if (e instanceof HttpStatusError) {
     if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 512) {
       return 'Authentication failed or the download token expired. Try again.'

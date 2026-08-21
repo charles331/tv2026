@@ -194,6 +194,11 @@ export const handlers: IpcHandlers = {
       assert(v >= 0 && v <= 3600, 'recordPadAfterSecs out of range (0..3600)')
       patch.recordPadAfterSecs = v
     }
+    if ('chunkedDownloads' in req) {
+      const v = optionalBoolean(req, 'chunkedDownloads')
+      assert(v !== undefined, 'chunkedDownloads must be a boolean')
+      patch.chunkedDownloads = v
+    }
     return ok(settingsRepo.setSettings(patch))
   },
 

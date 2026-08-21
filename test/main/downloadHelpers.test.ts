@@ -4,10 +4,15 @@ import {
   partPath,
   headerValue,
   parseContentRangeTotal,
+  parseContentRangeStart,
   describeError,
   formatBytes,
   renameWithRetry,
-  downloadSubfolder
+  downloadSubfolder,
+  chunkSizeDecision,
+  applyChunkDecision,
+  CHUNK_MIN_BYTES,
+  CHUNK_MAX_BYTES
 } from '../../src/main/downloads/helpers'
 
 /** Build an errno-style error with a .code, like Node's fs throws. */
@@ -28,6 +33,64 @@ describe('downloadSubfolder', () => {
     expect(downloadSubfolder('movie')).toBe('Films')
     expect(downloadSubfolder('series')).toBe('Séries')
     expect(downloadSubfolder('live')).toBe('Live')
+  })
+})
+
+describe('parseContentRangeStart (garde-fou anti-corruption)', () => {
+  it('extracts the start offset', () => {
+    expect(parseContentRangeStart('bytes 200-1023/1234')).toBe(200)
+    expect(parseContentRangeStart('bytes 0-99/1000')).toBe(0)
+  })
+  it('tolerates an unknown total', () => {
+    expect(parseContentRangeStart('bytes 512-1023/*')).toBe(512)
+  })
+  it('returns null on malformed / missing input', () => {
+    expect(parseContentRangeStart(undefined)).toBeNull()
+    expect(parseContentRangeStart('')).toBeNull()
+    expect(parseContentRangeStart('garbage')).toBeNull()
+  })
+})
+
+describe('chunkSizeDecision / applyChunkDecision', () => {
+  const MiB = 1024 * 1024
+
+  it('shrinks when the tail collapsed against the block peak (burst ended)', () => {
+    expect(chunkSizeDecision(10e6, 1e6)).toBe('shrink')
+    expect(applyChunkDecision(8 * MiB, 'shrink')).toBe(Math.floor(8 * MiB * 0.7))
+  })
+
+  it('grows when the tail held the peak rate (rode the burst throughout)', () => {
+    expect(chunkSizeDecision(10e6, 10e6)).toBe('grow')
+    expect(applyChunkDecision(8 * MiB, 'grow')).toBe(Math.floor(8 * MiB * 1.5))
+  })
+
+  it('keeps the size in the in-between zone', () => {
+    expect(chunkSizeDecision(10e6, 7e6)).toBe('keep')
+    expect(applyChunkDecision(8 * MiB, 'keep')).toBe(8 * MiB)
+  })
+
+  it('keeps the size when there is no usable measurement', () => {
+    expect(chunkSizeDecision(0, 0)).toBe('keep')
+    expect(chunkSizeDecision(-1, 5)).toBe('keep')
+  })
+
+  it('never leaves the allowed range', () => {
+    expect(applyChunkDecision(CHUNK_MIN_BYTES, 'shrink')).toBe(CHUNK_MIN_BYTES)
+    expect(applyChunkDecision(CHUNK_MAX_BYTES, 'grow')).toBe(CHUNK_MAX_BYTES)
+  })
+
+  it('converges towards the burst size instead of pegging at the maximum', () => {
+    // Provider whose burst is ~5 MiB: a block bigger than that sees its tail
+    // throttled. Compare tail-vs-peak (not first-vs-second half, which would be
+    // biased by TCP slow start and would grow forever).
+    const burst = 5 * MiB
+    let size = 8 * MiB
+    for (let i = 0; i < 10; i++) {
+      const tail = size > burst ? 1e6 : 10e6
+      size = applyChunkDecision(size, chunkSizeDecision(10e6, tail))
+    }
+    expect(size).toBeLessThanOrEqual(8 * MiB)
+    expect(size).toBeGreaterThanOrEqual(CHUNK_MIN_BYTES)
   })
 })
 

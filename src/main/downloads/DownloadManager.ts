@@ -39,12 +39,13 @@ import type {
 } from '@shared/index'
 import { EventChannels } from '@shared/index'
 
-import { downloadsRepo } from '../store'
+import { downloadsRepo, settingsRepo } from '../store'
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
 import { appLog } from '../log/logger'
 import {
   HttpStatusError,
+  IntegrityError,
   partPath,
   headerValue,
   parseContentRangeTotal,
@@ -52,12 +53,19 @@ import {
   formatBytes,
   renameWithRetry
 } from './helpers'
+import {
+  runBlockDownload,
+  type BlockEngineOutcome,
+  type BlockResponse
+} from './blockEngine'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) tv2026/0.1 Safari/537.36'
 
 /** ms between throttled progress events to the renderer. */
 const PROGRESS_THROTTLE_MS = 500
+/** ms between throughput lines written to the journal (engine comparison). */
+const SPEED_LOG_WINDOW_MS = 30_000
 /** Safety margin required on top of the remaining bytes before starting. */
 const DISK_SPACE_MARGIN_BYTES = 64 * 1024 * 1024 // 64 MiB
 
@@ -353,8 +361,9 @@ export class DownloadManager {
   }
 
   /**
-   * Resolve URL (fresh, never persisted), open the stream with Range when a
-   * `.part` exists, validate the response, and pipe to disk with backpressure.
+   * Resolve the URL (fresh, never persisted), then delegate to the BLOCK engine
+   * or the CONTINUOUS one. Both append to the same `.part` and end with the same
+   * atomic rename, so pause/resume/cancel semantics are identical.
    */
   private async transfer(item: DownloadItem): Promise<void> {
     // Re-resolve the canonical URL on every (re)start — the signed 302 target
@@ -369,36 +378,113 @@ export class DownloadManager {
     // transfer uses its own redirect-following dispatcher.
     await client.close().catch(() => undefined)
 
-    const agent = makeDownloadDispatcher()
-    const dispatcher: Dispatcher = agent.compose(
-      interceptors.redirect({ maxRedirections: 5 })
-    )
+    const dest = item.destPath
+    const part = partPath(dest)
+    await mkdir(dirname(dest), { recursive: true })
 
-    try {
-      const dest = item.destPath
-      const part = partPath(dest)
-      await mkdir(dirname(dest), { recursive: true })
+    // How many bytes are already on disk in the .part file?
+    let resumeFrom = await fileSizeOrZero(part)
 
-      // How many bytes are already on disk in the .part file?
-      let resumeFrom = await fileSizeOrZero(part)
+    // Sanity: if the DB says we received more/less than the .part, trust disk.
+    if (resumeFrom !== item.receivedBytes) {
+      downloadsRepo.updateProgress(item.id, resumeFrom, item.totalBytes)
+    }
 
-      // Sanity: if the DB says we received more/less than the .part, trust disk.
-      if (resumeFrom !== item.receivedBytes) {
-        downloadsRepo.updateProgress(item.id, resumeFrom, item.totalBytes)
-      }
+    // Fast-path: the .part already holds the complete file (e.g. the transfer
+    // finished but the final rename failed — a transient Windows lock, EBUSY).
+    // Just finalize it; no need to re-open a connection or re-download.
+    if (item.totalBytes && resumeFrom >= item.totalBytes) {
+      await this.finalizeCompleted(item, part, dest, item.totalBytes)
+      return
+    }
 
-      // Fast-path: the .part already holds the complete file (e.g. the transfer
-      // finished but the final rename failed — a transient Windows lock, EBUSY).
-      // Just finalize it; no need to re-open a connection or re-download.
-      if (item.totalBytes && resumeFrom >= item.totalBytes) {
-        downloadsRepo.updateProgress(item.id, item.totalBytes, item.totalBytes)
-        await renameWithRetry(part, dest)
-        downloadsRepo.updateStatus(item.id, 'completed')
-        this.emitState(item.id, item.streamId, 'completed', { destPath: dest })
-        downloadsRepo.archiveToHistory(item.id, 'completed')
+    // Block mode is a user setting; it self-falls-back when the provider does
+    // not honour bounded ranges, so a failure here never blocks a download.
+    if (settingsRepo.getSettings().chunkedDownloads) {
+      const result = await this.transferChunked(item, url, part, resumeFrom)
+      if (result.outcome === 'done') {
+        // The engine's latched total is authoritative; finalizeCompleted refuses
+        // to rename a file whose size does not match it.
+        await this.finalizeCompleted(item, part, dest, result.totalBytes)
         return
       }
+      appLog.warn('downloads', `#${item.id} ${result.reason} → mode continu`)
+      // Fell back: continue from whatever the block engine already wrote.
+      resumeFrom = await fileSizeOrZero(part)
+    }
 
+    await this.transferContinuous(item, url, part, dest, resumeFrom)
+  }
+
+  /**
+   * BLOCK engine wrapper: wires the injectable `runBlockDownload` loop (which
+   * owns the range/integrity/adaptive logic and is integration-tested) to this
+   * manager's dispatcher, progress reporting, journal and interrupt handling.
+   *
+   * Returns the loop's outcome plus the AUTHORITATIVE total it latched, so the
+   * caller can validate the final file size before the atomic rename.
+   */
+  private async transferChunked(
+    item: DownloadItem,
+    url: string,
+    part: string,
+    startOffset: number
+  ): Promise<BlockEngineOutcome> {
+    const reporter = this.makeProgressReporter(item, startOffset, 'blocs')
+    // ONE dispatcher for the whole run: `connection: close` on each request is
+    // what forces a fresh socket per block (verified against undici), so a new
+    // Agent per block would only add churn.
+    const agent = makeDownloadDispatcher()
+    const dispatcher: Dispatcher = agent.compose(interceptors.redirect({ maxRedirections: 5 }))
+
+    appLog.info('downloads', `#${item.id} mode blocs, reprise à ${formatBytes(startOffset)}`)
+    try {
+      return await runBlockDownload({
+        url,
+        partPath: part,
+        startOffset,
+        knownTotal: item.totalBytes,
+        signal: this.active!.controller.signal,
+        request: async (target, init) => {
+          const res = await request(target, {
+            method: 'GET',
+            dispatcher,
+            headers: { 'user-agent': USER_AGENT, accept: '*/*', ...init.headers },
+            signal: init.signal
+          })
+          return {
+            statusCode: res.statusCode,
+            headers: res.headers as Record<string, string | string[] | undefined>,
+            body: res.body as unknown as BlockResponse['body']
+          }
+        },
+        onProgress: (received, total) => reporter.tick(received, total),
+        onBlockDone: (offset, total) => downloadsRepo.updateProgress(item.id, offset, total),
+        log: (level, message) => appLog[level]('downloads', `#${item.id} ${message}`),
+        interruptReason: () => this.active?.interruptReason ?? null,
+        makeInterruptError: (reason) =>
+          new TransferInterrupt(reason as TransferInterrupt['reason'])
+      })
+    } finally {
+      await agent.close().catch(() => undefined)
+    }
+  }
+
+  /**
+   * CONTINUOUS engine — one open-ended range request streamed to disk (the
+   * original behaviour, and the fallback when block mode is unsupported).
+   */
+  private async transferContinuous(
+    item: DownloadItem,
+    url: string,
+    part: string,
+    dest: string,
+    resumeFrom: number
+  ): Promise<void> {
+    const agent = makeDownloadDispatcher()
+    const dispatcher: Dispatcher = agent.compose(interceptors.redirect({ maxRedirections: 5 }))
+
+    try {
       const headers: Record<string, string> = {
         'user-agent': USER_AGENT,
         accept: '*/*'
@@ -422,17 +508,33 @@ export class DownloadManager {
       if (resumeFrom > 0) {
         if (res.statusCode === 206) {
           // Server honored the range. Derive total from Content-Range.
-          const cr = headerValue(res.headers['content-range'])
-          const totalFromRange = parseContentRangeTotal(cr)
+          const totalFromRange = parseContentRangeTotal(headerValue(res.headers['content-range']))
           if (totalFromRange !== null) totalBytes = totalFromRange
           appendMode = true
         } else if (res.statusCode === 200) {
-          // Server refused the range (sent the whole file). Clean restart.
+          // A bare 200 on a RANGED request is ambiguous: either the server does
+          // not support ranges and genuinely sent the whole file, or this is an
+          // error page / expired token. Deleting a multi-GB `.part` on the wrong
+          // guess is catastrophic, so demand corroboration — a body that
+          // plausibly IS the whole file, and not an HTML/JSON page.
+          const declared = Number(headerValue(res.headers['content-length']))
+          const contentType = (headerValue(res.headers['content-type']) ?? '').toLowerCase()
+          const looksLikePage = contentType.includes('text/') || contentType.includes('json')
+          const plausibleWholeFile =
+            Number.isFinite(declared) &&
+            (item.totalBytes ? declared === item.totalBytes : declared > resumeFrom)
+          if (looksLikePage || !plausibleWholeFile) {
+            await res.body.dump().catch(() => undefined)
+            throw new IntegrityError(
+              'Réponse inattendue du serveur (HTTP 200) : les octets déjà téléchargés sont ' +
+                'conservés, la reprise réessaiera.'
+            )
+          }
+          // Server really refused the range → clean restart from zero.
           await res.body.dump().catch(() => undefined)
           await unlink(part).catch(() => undefined)
-          resumeFrom = 0
           downloadsRepo.updateProgress(item.id, 0, null)
-          return await this.transfer(downloadsRepo.getDownload(item.id) ?? item)
+          return await this.transferContinuous(item, url, part, dest, 0)
         } else {
           await res.body.dump().catch(() => undefined)
           throw new HttpStatusError(res.statusCode)
@@ -444,8 +546,7 @@ export class DownloadManager {
           totalBytes = Number.isFinite(n) && n > 0 ? n : item.totalBytes
           // A 206 on a fresh start would have Content-Range too.
           if (res.statusCode === 206) {
-            const cr = headerValue(res.headers['content-range'])
-            const totalFromRange = parseContentRangeTotal(cr)
+            const totalFromRange = parseContentRangeTotal(headerValue(res.headers['content-range']))
             if (totalFromRange !== null) totalBytes = totalFromRange
           }
           appendMode = false
@@ -460,10 +561,7 @@ export class DownloadManager {
       // ---- pipe to disk with backpressure + progress accounting ----
       const out = createWriteStream(part, { flags: appendMode ? 'a' : 'w' })
       let received = resumeFrom
-      const startedAt = Date.now()
-      let lastEmit = 0
-      let lastBytes = resumeFrom
-      let lastSpeedTs = startedAt
+      const reporter = this.makeProgressReporter(item, resumeFrom, 'continu')
 
       // A counting passthrough preserves backpressure (pipeline drives it) while
       // letting us account bytes and throttle progress events.
@@ -474,21 +572,7 @@ export class DownloadManager {
           if (testByteCap !== null && received - resumeFrom >= testByteCap) {
             this.interruptActive('paused')
           }
-          const now = Date.now()
-          if (now - lastEmit >= PROGRESS_THROTTLE_MS) {
-            const dt = (now - lastSpeedTs) / 1000
-            const instBps = dt > 0 ? (received - lastBytes) / dt : 0
-            const avgBps =
-              (received - resumeFrom) / Math.max(0.001, (now - startedAt) / 1000)
-            const remaining = totalBytes ? totalBytes - received : null
-            const etaSecs =
-              remaining !== null && avgBps > 0 ? Math.round(remaining / avgBps) : null
-            downloadsRepo.updateProgress(item.id, received, totalBytes)
-            this.emitProgress(item, received, totalBytes, Math.round(instBps), etaSecs)
-            lastEmit = now
-            lastBytes = received
-            lastSpeedTs = now
-          }
+          reporter.tick(received, totalBytes)
           cb(null, chunk)
         }
       })
@@ -514,13 +598,88 @@ export class DownloadManager {
         throw new TransferInterrupt(this.active.interruptReason)
       }
 
-      // ---- complete: atomic rename .part -> final (retry transient Win locks) ----
-      await renameWithRetry(part, dest)
-      downloadsRepo.updateStatus(item.id, 'completed')
-      this.emitState(item.id, item.streamId, 'completed', { destPath: dest })
-      downloadsRepo.archiveToHistory(item.id, 'completed')
+      await this.finalizeCompleted(item, part, dest, totalBytes)
     } finally {
       await agent.close().catch(() => undefined)
+    }
+  }
+
+  /**
+   * Atomic rename + terminal bookkeeping, shared by both engines.
+   *
+   * INTEGRITY GATE: when the expected total is known, the file on disk MUST match
+   * it exactly. Without this a truncated `.part` (short block, error page, cut
+   * connection) would be renamed to the final name and archived as a complete
+   * movie — and, because the recorded total would be derived from the truncated
+   * size, it would look self-consistently "100 %" forever after.
+   */
+  private async finalizeCompleted(
+    item: DownloadItem,
+    part: string,
+    dest: string,
+    totalBytes: number | null
+  ): Promise<void> {
+    const size = await fileSizeOrZero(part)
+    if (totalBytes !== null && size !== totalBytes) {
+      // Keep the .part: a later resume repairs it via Range.
+      throw new IntegrityError(
+        `Fichier incomplet (${formatBytes(size)} sur ${formatBytes(totalBytes)}) : ` +
+          'le téléchargement n’a pas été finalisé, il reprendra là où il s’est arrêté.'
+      )
+    }
+    downloadsRepo.updateProgress(item.id, size, totalBytes ?? size)
+    // ---- complete: atomic rename .part -> final (retry transient Win locks) ----
+    await renameWithRetry(part, dest)
+    downloadsRepo.updateStatus(item.id, 'completed')
+    this.emitState(item.id, item.streamId, 'completed', { destPath: dest })
+    downloadsRepo.archiveToHistory(item.id, 'completed')
+  }
+
+  /**
+   * Shared progress accounting for both engines: throttled progress events to
+   * the renderer, persisted byte counts, and one throughput line per 30 s in the
+   * journal (tagged with the engine) so the two modes can be compared on real
+   * numbers rather than impressions.
+   */
+  private makeProgressReporter(
+    item: DownloadItem,
+    startOffset: number,
+    mode: 'blocs' | 'continu'
+  ): { tick: (received: number, totalBytes: number | null) => void } {
+    const startedAt = Date.now()
+    let lastEmit = 0
+    let lastBytes = startOffset
+    let lastSpeedTs = startedAt
+    let windowTs = startedAt
+    let windowBytes = startOffset
+
+    return {
+      tick: (received: number, totalBytes: number | null): void => {
+        const now = Date.now()
+        if (now - lastEmit >= PROGRESS_THROTTLE_MS) {
+          const dt = (now - lastSpeedTs) / 1000
+          const instBps = dt > 0 ? (received - lastBytes) / dt : 0
+          const avgBps = (received - startOffset) / Math.max(0.001, (now - startedAt) / 1000)
+          const remaining = totalBytes ? totalBytes - received : null
+          const etaSecs = remaining !== null && avgBps > 0 ? Math.round(remaining / avgBps) : null
+          downloadsRepo.updateProgress(item.id, received, totalBytes)
+          this.emitProgress(item, received, totalBytes, Math.round(instBps), etaSecs)
+          lastEmit = now
+          lastBytes = received
+          lastSpeedTs = now
+        }
+        // Journal: one line per window, to chart the throughput over time.
+        if (now - windowTs >= SPEED_LOG_WINDOW_MS) {
+          const winBps = (received - windowBytes) / ((now - windowTs) / 1000)
+          const pct = totalBytes ? ` — ${Math.round((received / totalBytes) * 100)} %` : ''
+          appLog.info(
+            'downloads',
+            `#${item.id} [${mode}] ${formatBytes(Math.round(winBps))}/s${pct}`
+          )
+          windowTs = now
+          windowBytes = received
+        }
+      }
     }
   }
 
