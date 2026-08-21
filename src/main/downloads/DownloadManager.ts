@@ -420,6 +420,16 @@ export class DownloadManager {
         return
       }
       appLog.warn('downloads', `#${item.id} ${result.reason} → mode continu`)
+      // The provider actively refused parallel connections: record that fact so
+      // every later download goes straight to a single connection instead of
+      // paying a failed wave each time. Self-healing, and visible in Réglages.
+      if (result.parallelRefused && settingsRepo.getSettings().downloadConnections > 1) {
+        settingsRepo.setSettings({ downloadConnections: 1 })
+        appLog.warn(
+          'downloads',
+          'Réglage « connexions en parallèle » ramené à 1 : le compte n’en autorise qu’une.'
+        )
+      }
       // Fell back: continue from whatever the block engine already wrote.
       resumeFrom = await fileSizeOrZero(part)
     }
