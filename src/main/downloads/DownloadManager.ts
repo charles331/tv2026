@@ -412,7 +412,26 @@ export class DownloadManager {
     // Block mode is a user setting; it self-falls-back when the provider does
     // not honour bounded ranges, so a failure here never blocks a download.
     if (settingsRepo.getSettings().chunkedDownloads) {
-      const result = await this.transferChunked(item, url, part, resumeFrom)
+      let result = await this.transferChunked(item, url, part, resumeFrom)
+
+      // The provider refused PARALLEL connections. That says nothing about block
+      // mode itself, which is measurably faster than one long connection (each
+      // new connection gets a burst allowance). So record the account limit and
+      // finish this file in block mode on ONE connection, instead of giving up
+      // the burst for the whole rest of the download. Runs at most once: with
+      // the setting back at 1 the engine never opens a parallel wave again.
+      if (result.outcome === 'fallback' && result.parallelRefused) {
+        if (settingsRepo.getSettings().downloadConnections > 1) {
+          settingsRepo.setSettings({ downloadConnections: 1 })
+          appLog.warn(
+            'downloads',
+            'Réglage « connexions en parallèle » ramené à 1 : le compte n’en autorise qu’une.'
+          )
+        }
+        resumeFrom = await fileSizeOrZero(part)
+        result = await this.transferChunked(item, url, part, resumeFrom)
+      }
+
       if (result.outcome === 'done') {
         // The engine's latched total is authoritative; finalizeCompleted refuses
         // to rename a file whose size does not match it.
@@ -420,16 +439,6 @@ export class DownloadManager {
         return
       }
       appLog.warn('downloads', `#${item.id} ${result.reason} → mode continu`)
-      // The provider actively refused parallel connections: record that fact so
-      // every later download goes straight to a single connection instead of
-      // paying a failed wave each time. Self-healing, and visible in Réglages.
-      if (result.parallelRefused && settingsRepo.getSettings().downloadConnections > 1) {
-        settingsRepo.setSettings({ downloadConnections: 1 })
-        appLog.warn(
-          'downloads',
-          'Réglage « connexions en parallèle » ramené à 1 : le compte n’en autorise qu’une.'
-        )
-      }
       // Fell back: continue from whatever the block engine already wrote.
       resumeFrom = await fileSizeOrZero(part)
     }
@@ -462,8 +471,8 @@ export class DownloadManager {
 
     appLog.info(
       'downloads',
-      `#${item.id} mode blocs, reprise à ${formatBytes(startOffset)}` +
-        `, ${settings.downloadConnections} connexion(s)`
+      `#${item.id} mode blocs de ${formatBytes(settings.downloadBlockBytes)}` +
+        `, reprise à ${formatBytes(startOffset)}, ${settings.downloadConnections} connexion(s)`
     )
     try {
       return await runBlockDownload({
@@ -473,6 +482,7 @@ export class DownloadManager {
         knownTotal: item.totalBytes,
         signal: this.active!.controller.signal,
         connections: settings.downloadConnections,
+        blockBytes: settings.downloadBlockBytes,
         request: async (target, init) => {
           const res = await request(target, {
             method: 'GET',

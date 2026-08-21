@@ -9,6 +9,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createServer, type Server } from 'http'
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
+import { createWriteStream } from 'fs'
+import type { Writable } from 'stream'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { Agent, request } from 'undici'
@@ -145,7 +147,7 @@ async function run(
       knownTotal: null,
       signal: new AbortController().signal,
       request: makeRequest(agent),
-      initialChunkBytes: 4096,
+      blockBytes: 4096,
       minChunkBytes: 1024,
       maxChunkBytes: 65536,
       interBlockDelayMs: 0,
@@ -324,7 +326,7 @@ describe('runBlockDownload — robustesse réseau', () => {
     const { url, requests } = await startServer(content)
     const part = await tempPart()
 
-    const res = await run(url, part, { initialChunkBytes: 4096, maxBlocks: 2 })
+    const res = await run(url, part, { blockBytes: 4096, maxBlocks: 2 })
 
     // 50 kB needs ~13 blocks of 4 kB, but the budget stops at 2 → fallback.
     expect(res.outcome).toBe('fallback')
@@ -394,7 +396,7 @@ describe('runBlockDownload — connexions parallèles', () => {
 
     const res = await run(url, part, {
       connections: 8,
-      initialChunkBytes: 8192,
+      blockBytes: 8192,
       maxChunkBytes: 64 * 1024 * 1024
     })
 
@@ -460,5 +462,117 @@ describe('runBlockDownload — le fournisseur refuse le parallèle', () => {
 
     const written = await readFile(part)
     expect(written).toEqual(content.subarray(0, written.length))
+  })
+})
+
+describe('runBlockDownload — taille de bloc et verrous locaux', () => {
+  // ------------------------------------------------------------ block sizing
+  //
+  // The engine used to infer the block size from in-block throughput. On a
+  // provider with a FLAT rate limiter that measurement is pure noise, and in
+  // production it drifted the size from 8 MiB up to 36 MiB — one reconnect every
+  // ~78 s, which erases the per-connection burst that makes block mode faster
+  // than one long connection. The size is now fixed for the whole file.
+
+  it('keeps the block size constant for the whole file', async () => {
+    const content = payload(40_000)
+    const { url } = await startServer(content)
+    const part = await tempPart()
+    const sizes: number[] = []
+
+    const agent = new Agent()
+    try {
+      const res = await runBlockDownload({
+        url,
+        partPath: part,
+        startOffset: 0,
+        knownTotal: null,
+        signal: new AbortController().signal,
+        blockBytes: 4096,
+        minChunkBytes: 1024,
+        maxChunkBytes: 65536,
+        interBlockDelayMs: 0,
+        sleep: async () => undefined,
+        request: async (target, init) => {
+          const range = String(init.headers?.range ?? '')
+          const m = /bytes=(\d+)-(\d+)/.exec(range)
+          if (m) sizes.push(Number(m[2]) - Number(m[1]) + 1)
+          return makeRequest(agent)(target, init)
+        }
+      })
+      expect(res.outcome).toBe('done')
+    } finally {
+      await agent.close()
+    }
+
+    expect(await readFile(part)).toEqual(content)
+    expect(sizes.length).toBeGreaterThan(5)
+    // Every block is the configured size, except the last one which is clipped
+    // to the end of the file.
+    expect(sizes.slice(0, -1)).toEqual(sizes.slice(0, -1).map(() => 4096))
+    expect(sizes[sizes.length - 1]).toBeLessThanOrEqual(4096)
+  })
+
+  // ------------------------------------------------------ local file locks
+  //
+  // On Windows an antivirus or the search indexer can hold the `.part` open for
+  // a few seconds, which fails the append with EBUSY. That is local and
+  // self-clearing, so it must not consume the retry budget reserved for provider
+  // hiccups (observed in the field on a real download).
+
+  function lockingOpen(failures: number): {
+    open: (path: string) => Writable
+    remaining: () => number
+  } {
+    let left = failures
+    return {
+      open: (path: string): Writable => {
+        if (left > 0) {
+          left--
+          const e = new Error('EBUSY: resource busy or locked') as NodeJS.ErrnoException
+          e.code = 'EBUSY'
+          throw e
+        }
+        return createWriteStream(path, { flags: 'a' })
+      },
+      remaining: () => left
+    }
+  }
+
+  it('survives a locked .part file and still writes byte-exact content', async () => {
+    const content = payload(20_000)
+    const { url } = await startServer(content)
+    const part = await tempPart()
+    const lock = lockingOpen(3)
+
+    const res = await run(url, part, {
+      // Would fail immediately if a lock consumed the NETWORK budget.
+      maxBlockRetries: 0,
+      maxLockRetries: 5,
+      openAppend: lock.open
+    })
+
+    expect(res.outcome).toBe('done')
+    expect(lock.remaining()).toBe(0)
+    expect(await readFile(part)).toEqual(content)
+  })
+
+  it('gives up once the lock budget is exhausted, keeping the .part intact', async () => {
+    const content = payload(20_000)
+    const { url } = await startServer(content)
+    const part = await tempPart()
+    // Resume scenario: bytes already on disk must survive a permanent lock.
+    await writeFile(part, content.subarray(0, 5000))
+
+    await expect(
+      run(url, part, {
+        startOffset: 5000,
+        maxLockRetries: 2,
+        openAppend: lockingOpen(99).open
+      })
+    ).rejects.toMatchObject({ code: 'EBUSY' })
+
+    // The already-downloaded bytes were never truncated or deleted.
+    expect(await readFile(part)).toEqual(content.subarray(0, 5000))
   })
 })

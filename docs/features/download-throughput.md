@@ -120,10 +120,79 @@ D'où une conception **prudente, mesurée et réversible** (§6).
   `Content-Range` absent, taille qui change, `200` en cours de route, coupure en pleine
   réponse, flux non borné, limitation, interruption, plafond de blocs.
 
-### Reste à faire (après mesure réelle)
-Ajustement fin de la taille de bloc selon la courbe observée, et éventuellement essai d'un
-`User-Agent` neutre (certains panels limitent selon l'UA — actuellement un UA de navigateur
-est envoyé).
+## 6bis. Résultat des mesures terrain (2026-08-21) — enquête close
+
+Trois campagnes de mesure sur le compte réel ont tranché.
+
+### Le débit est un plafond de compte, pas un défaut du client
+
+| Mesure | Valeur |
+|---|---|
+| Ligne de l'utilisateur (speedtest) | 85,6 Mbit/s |
+| Débit obtenu, mode continu | 3,7 Mbit/s (~471 Kio/s), soit **4,3 %** de la ligne |
+| Reconnexion à chaque bloc | aucun effet sur le débit moyen |
+| 2 ou 4 connexions en parallèle | **refusées** : le fournisseur coupe la connexion en trop |
+
+La tentative parallèle a produit `Response body length does not match content-length header`
+sur chaque vague. Une sonde locale (requêtes concurrentes avec `connection: close`, agent
+partagé / un agent par requête / sans l'en-tête) a montré que le client, lui, fonctionne :
+la troncature vient du panel. **Le compte n'autorise réellement qu'une connexion.**
+
+### Mais il reste un vrai levier : le burst par connexion
+
+Les fenêtres de 30 s du Journal sont **bimodales**, et de façon très nette :
+
+| Fenêtres de 30 s | Débit moyen |
+|---|---|
+| Mode continu (n = 23) | **471,4 Kio/s** (min 471,1 / max 471,6) |
+| Mode blocs, sans fin de bloc dans la fenêtre (n = 24) | **470,9 Kio/s** — *identique au continu* |
+| Mode blocs, avec une fin de bloc dans la fenêtre (n = 26) | **509,8 Kio/s** |
+
+Une connexion établie est donc bridée par un limiteur **plat** à 471 Kio/s ; le surplus
+n'apparaît qu'autour d'un changement de bloc. Le surplus vaut ≈ 1,1 Mio par fenêtre
+contenant une reconnexion : **chaque nouvelle connexion se voit accorder ~1 Mio hors
+limitation** avant que le limiteur n'engage (comportement typique d'un seau à jetons dont
+l'allocation est par connexion).
+
+Conséquence directe : **la taille de bloc est LE paramètre de débit.** Petit bloc =
+reconnexions fréquentes = bonus encaissé souvent.
+
+| Taille de bloc | Débit projeté |
+|---|---|
+| 2 Mio | ~0,84 Mio/s (×1,8) |
+| 4 Mio | ~0,60 Mio/s (×1,3) |
+| 8 Mio | ~0,52 Mio/s (×1,1) |
+| 36 Mio | ~0,47 Mio/s (×1,0 — indiscernable du mode continu) |
+
+### Pourquoi l'ajustement automatique a été supprimé
+
+Le contrôleur adaptatif comparait le débit de queue au pic à l'intérieur du bloc. Face à un
+limiteur **plat**, ce signal est du bruit : en production il a oscillé puis dérivé vers le
+haut — 8 → 5,6 → 8,4 → 12,6 → 28 → 19,8 → 29,8 → 20,8 → 31 → 21,8 → 32,7 → 22,9 → 34,4 →
+36 Mio. Or c'est exactement la mauvaise direction : à 36 Mio il n'y a plus qu'une
+reconnexion toutes les ~78 s et le bonus disparaît.
+
+Il est remplacé par un **réglage explicite** (`downloadBlockBytes`, défaut 2 Mio, choix
+1/2/4/8/16/32 Mio dans Réglages → Téléchargements). Plus simple, mesurable par
+l'utilisateur, et incapable de dériver dans le mauvais sens.
+
+### Autres correctifs issus des mesures
+
+- **Refus du parallèle → on reste en mode blocs sur 1 connexion** (et le réglage revient à 1
+  avec une ligne de Journal). Auparavant on retombait en mode continu, c'est-à-dire qu'on
+  abandonnait le bonus de reconnexion pour tout le reste du fichier.
+- **Verrou local Windows** : un `EBUSY` sur le `.part` (antivirus, indexeur — observé en
+  production) a désormais son propre budget de tentatives (12, patientes), distinct des 4
+  tentatives réservées aux incidents réseau. Une analyse antivirus ne peut plus faire échouer
+  un téléchargement par ailleurs sain.
+
+### Ce qui n'est PAS possible
+
+Aucune technique côté client ne dépassera l'allocation du compte : une connexion, ~471 Kio/s
+en régime établi. Le seul levier restant au-delà de la taille de bloc est **l'offre du
+fournisseur** (plus de connexions simultanées, ou plus de débit). Le réglage « identité du
+client » (UA navigateur ou lecteur) reste disponible au cas où le panel limiterait selon le
+logiciel.
 
 ## 7. Ce qui ne change pas
 
@@ -139,4 +208,5 @@ est envoyé).
    page d'erreur, ou `401/403`) — le moteur traite les deux sans risque pour le `.part`.
 3. Si ~100–2000 requêtes séquentielles par film déclenchent une limitation (le moteur se
    replie tout seul sur `429/403/503`).
-4. La taille de bloc vers laquelle l'auto-ajustement converge (visible dans le Journal).
+4. La taille de bloc qui donne le meilleur débit (comparer les lignes `[blocs]` du Journal
+   entre 1, 2 et 4 Mio) — cf. § 6bis.

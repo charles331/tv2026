@@ -9,10 +9,12 @@ import {
   formatBytes,
   renameWithRetry,
   downloadSubfolder,
-  chunkSizeDecision,
-  applyChunkDecision,
-  CHUNK_MIN_BYTES,
-  CHUNK_MAX_BYTES
+  clampBlockSize,
+  isTransientLockError,
+  BLOCK_SIZE_CHOICES,
+  BLOCK_SIZE_DEFAULT_BYTES,
+  BLOCK_SIZE_MIN_BYTES,
+  BLOCK_SIZE_MAX_BYTES
 } from '../../src/main/downloads/helpers'
 
 /** Build an errno-style error with a .code, like Node's fs throws. */
@@ -51,46 +53,52 @@ describe('parseContentRangeStart (garde-fou anti-corruption)', () => {
   })
 })
 
-describe('chunkSizeDecision / applyChunkDecision', () => {
+describe('clampBlockSize', () => {
   const MiB = 1024 * 1024
 
-  it('shrinks when the tail collapsed against the block peak (burst ended)', () => {
-    expect(chunkSizeDecision(10e6, 1e6)).toBe('shrink')
-    expect(applyChunkDecision(8 * MiB, 'shrink')).toBe(Math.floor(8 * MiB * 0.7))
+  it('keeps a size that is already in range', () => {
+    expect(clampBlockSize(4 * MiB)).toBe(4 * MiB)
   })
 
-  it('grows when the tail held the peak rate (rode the burst throughout)', () => {
-    expect(chunkSizeDecision(10e6, 10e6)).toBe('grow')
-    expect(applyChunkDecision(8 * MiB, 'grow')).toBe(Math.floor(8 * MiB * 1.5))
+  it('clamps to the allowed range instead of trusting the caller', () => {
+    expect(clampBlockSize(1)).toBe(BLOCK_SIZE_MIN_BYTES)
+    expect(clampBlockSize(1024 * MiB)).toBe(BLOCK_SIZE_MAX_BYTES)
   })
 
-  it('keeps the size in the in-between zone', () => {
-    expect(chunkSizeDecision(10e6, 7e6)).toBe('keep')
-    expect(applyChunkDecision(8 * MiB, 'keep')).toBe(8 * MiB)
+  it('falls back to the default on a non-finite value', () => {
+    expect(clampBlockSize(Number.NaN)).toBe(BLOCK_SIZE_DEFAULT_BYTES)
+    expect(clampBlockSize(Number.POSITIVE_INFINITY)).toBe(BLOCK_SIZE_DEFAULT_BYTES)
   })
 
-  it('keeps the size when there is no usable measurement', () => {
-    expect(chunkSizeDecision(0, 0)).toBe('keep')
-    expect(chunkSizeDecision(-1, 5)).toBe('keep')
+  it('honours narrower bounds (used by the tests to drive KB-sized blocks)', () => {
+    expect(clampBlockSize(4096, 1024, 65536)).toBe(4096)
+    expect(clampBlockSize(10, 1024, 65536)).toBe(1024)
   })
 
-  it('never leaves the allowed range', () => {
-    expect(applyChunkDecision(CHUNK_MIN_BYTES, 'shrink')).toBe(CHUNK_MIN_BYTES)
-    expect(applyChunkDecision(CHUNK_MAX_BYTES, 'grow')).toBe(CHUNK_MAX_BYTES)
+  it('offers only sizes that survive clamping, default included', () => {
+    for (const c of BLOCK_SIZE_CHOICES) expect(clampBlockSize(c)).toBe(c)
+    expect(BLOCK_SIZE_CHOICES).toContain(BLOCK_SIZE_DEFAULT_BYTES)
   })
 
-  it('converges towards the burst size instead of pegging at the maximum', () => {
-    // Provider whose burst is ~5 MiB: a block bigger than that sees its tail
-    // throttled. Compare tail-vs-peak (not first-vs-second half, which would be
-    // biased by TCP slow start and would grow forever).
-    const burst = 5 * MiB
-    let size = 8 * MiB
-    for (let i = 0; i < 10; i++) {
-      const tail = size > burst ? 1e6 : 10e6
-      size = applyChunkDecision(size, chunkSizeDecision(10e6, tail))
+  it('defaults small: the per-connection burst is collected once per block', () => {
+    // A big default would mean one reconnect every ~78 s at ~471 KiB/s, which
+    // makes block mode indistinguishable from one long connection.
+    expect(BLOCK_SIZE_DEFAULT_BYTES).toBeLessThanOrEqual(4 * MiB)
+  })
+})
+
+describe('isTransientLockError', () => {
+  it('recognises the Windows lock codes an antivirus/indexer produces', () => {
+    for (const code of ['EBUSY', 'EPERM', 'EACCES', 'EMFILE']) {
+      expect(isTransientLockError(errnoError(code))).toBe(true)
     }
-    expect(size).toBeLessThanOrEqual(8 * MiB)
-    expect(size).toBeGreaterThanOrEqual(CHUNK_MIN_BYTES)
+  })
+
+  it('does not treat a transfer failure as a local lock', () => {
+    expect(isTransientLockError(new Error('socket hang up'))).toBe(false)
+    expect(isTransientLockError(errnoError('ECONNRESET'))).toBe(false)
+    expect(isTransientLockError(null)).toBe(false)
+    expect(isTransientLockError(undefined)).toBe(false)
   })
 })
 

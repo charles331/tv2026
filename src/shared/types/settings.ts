@@ -80,6 +80,17 @@ export interface AppSettings {
    */
   downloadConnections: number
   /**
+   * Size of ONE block in block mode, in bytes. THE throughput knob.
+   *
+   * Measured on the target provider: a connection is rate-limited to a dead flat
+   * ~471 KiB/s, but each NEW connection is granted roughly 1 MiB before the
+   * limiter engages. Every block opens a new connection, so a SMALL block
+   * collects that allowance more often — 2 MiB blocks project to ~1.8x the
+   * throughput of one long connection, while 32 MiB blocks are indistinguishable
+   * from it. Adjustable because the allowance is provider-specific.
+   */
+  downloadBlockBytes: number
+  /**
    * User-Agent used for media transfers. Some panels shape "browser" traffic
    * differently from player traffic, so this is switchable for testing.
    */
@@ -99,6 +110,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   recordPadAfterSecs: 120, // +2 min after
   chunkedDownloads: true, // block mode by default (auto-falls back when unsupported)
   downloadConnections: 1, // opt-in: raising this uses several provider connections
+  downloadBlockBytes: 2 * 1024 * 1024, // small on purpose: more per-connection bursts
   downloadUserAgent: 'browser'
 }
 
