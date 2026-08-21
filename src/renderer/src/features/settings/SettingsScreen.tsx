@@ -46,6 +46,9 @@ function foldUpdateEvent(
 
 /** Settings tabs: label shown in the tab bar + the header hint for that page. */
 type SettingsTab = 'connexion' | 'catalogues' | 'telechargements' | 'application' | 'journal'
+/** Block sizes offered, in MiB (mirrors BLOCK_SIZE_CHOICES in the main process). */
+const BLOCK_SIZE_CHOICES_MIB = [1, 2, 4, 8, 16, 32] as const
+
 const SETTINGS_TABS: Record<SettingsTab, { label: string; hint: string }> = {
   connexion: {
     label: 'Connexion',
@@ -285,6 +288,18 @@ export function SettingsScreen({
         enabled
           ? 'Mode par blocs activé. Il s’applique au prochain téléchargement démarré.'
           : 'Mode continu rétabli. Il s’applique au prochain téléchargement démarré.'
+      )
+    } catch (err) {
+      setChunkedMessage(describeError(err))
+    }
+  }, [])
+
+  const handleSetBlockSize = useCallback(async (bytes: number) => {
+    setChunkedMessage(null)
+    try {
+      setSettings(unwrap(await api().settings.set({ downloadBlockBytes: bytes })))
+      setChunkedMessage(
+        `Blocs de ${bytes / (1024 * 1024)} Mio. S’applique au prochain téléchargement démarré.`
       )
     } catch (err) {
       setChunkedMessage(describeError(err))
@@ -676,6 +691,37 @@ export function SettingsScreen({
             </span>
           </span>
         </label>
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <h3 className="text-sm font-medium text-gray-200">Taille des blocs</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            C’est le réglage qui compte le plus. Chaque bloc ouvre une{' '}
+            <strong>nouvelle connexion</strong>, et le fournisseur en laisse passer environ 1 Mio à
+            pleine vitesse avant d’appliquer sa limite. Des blocs <strong>petits</strong> profitent
+            donc de ce bonus plus souvent : mesuré à ~471 Kio/s en connexion continue, contre ~510
+            Kio/s dès qu’un bloc se termine.
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            Essayez 1 ou 2 Mio. Si la vitesse baisse (trop de reconnexions pour rien), remontez.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {BLOCK_SIZE_CHOICES_MIB.map((mib) => (
+              <button
+                key={mib}
+                type="button"
+                onClick={() => void handleSetBlockSize(mib * 1024 * 1024)}
+                className={
+                  'rounded-lg px-3 py-1.5 text-sm transition-colors ' +
+                  ((settings?.downloadBlockBytes ?? 2 * 1024 * 1024) === mib * 1024 * 1024
+                    ? 'bg-accent/20 font-medium text-accent-hover'
+                    : 'bg-white/[0.06] text-gray-300 hover:bg-white/[0.12]')
+                }
+              >
+                {mib === 2 ? '2 Mio (défaut)' : `${mib} Mio`}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-5 border-t border-white/10 pt-4">
           <h3 className="text-sm font-medium text-gray-200">Connexions en parallèle</h3>
           <p className="mt-1 text-xs text-gray-500">

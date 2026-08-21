@@ -18,6 +18,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.14.0',
+    date: '2026-08-21',
+    changes: [
+      'Téléchargements plus rapides : nouveau réglage « Taille des blocs » (Réglages → Téléchargements). Mesures faites sur le fournisseur : une connexion est bridée à ~471 Kio/s, mais chaque nouvelle connexion passe environ 1 Mio à pleine vitesse avant que la limite ne s’applique. Des blocs petits (1 à 2 Mio) profitent donc de ce bonus beaucoup plus souvent.',
+      'La taille des blocs est désormais fixe et choisie par vous, au lieu d’être devinée : l’ajustement automatique dérivait jusqu’à 36 Mio, ce qui espaçait les reconnexions et supprimait tout le gain. Le défaut passe à 2 Mio.',
+      'Si le fournisseur refuse plusieurs connexions, le téléchargement continue maintenant en mode blocs sur une seule connexion — il ne retombe plus en mode continu, qui est le plus lent.',
+      'Un fichier verrouillé quelques secondes par l’antivirus ou l’indexeur Windows ne compte plus dans les tentatives réservées aux incidents réseau : le téléchargement patiente et continue.'
+    ]
+  },
+  {
     version: '0.13.1',
     date: '2026-08-21',
     changes: [

@@ -31,20 +31,19 @@ import { createWriteStream } from 'fs'
 import { appendFile, stat } from 'fs/promises'
 import { pipeline } from 'stream/promises'
 import { Transform } from 'stream'
-import type { Readable } from 'stream'
+import type { Readable, Writable } from 'stream'
 
 import {
-  CHUNK_INITIAL_BYTES,
-  CHUNK_MAX_BYTES,
-  CHUNK_MIN_BYTES,
+  BLOCK_SIZE_DEFAULT_BYTES,
+  BLOCK_SIZE_MAX_BYTES,
+  BLOCK_SIZE_MIN_BYTES,
   HttpStatusError,
   IntegrityError,
-  applyChunkDecision,
-  chunkSizeDecision,
+  clampBlockSize,
   headerValue,
+  isTransientLockError,
   parseContentRangeStart,
-  parseContentRangeTotal,
-  type ChunkDecision
+  parseContentRangeTotal
 } from './helpers'
 
 /** Minimal response shape (matches undici's `request` result). */
@@ -78,12 +77,29 @@ export interface BlockEngineOptions {
   interruptReason?: () => string | null
   /** Builds the error thrown when `interruptReason()` fires. */
   makeInterruptError?: (reason: string) => Error
-  initialChunkBytes?: number
+  /**
+   * Size of ONE block. This is the main throughput knob: every block opens a new
+   * connection, and the provider grants each new connection a burst allowance
+   * before its rate limiter engages, so smaller blocks collect that allowance
+   * more often. See BLOCK_SIZE_DEFAULT_BYTES for the measurements.
+   */
+  blockBytes?: number
   /** Block-size bounds (overridable so the engine is testable with KB payloads). */
   minChunkBytes?: number
   maxChunkBytes?: number
   /** Retries for ONE block before giving up (transient network hiccups). */
   maxBlockRetries?: number
+  /**
+   * Retries for a transient LOCAL file lock (antivirus/indexer holding the
+   * `.part` open). Separate from the network budget: a slow virus scan must not
+   * consume the retries meant for provider hiccups.
+   */
+  maxLockRetries?: number
+  /**
+   * Opens the `.part` file for append. Injectable so that a local file lock
+   * (EBUSY from an antivirus) can be reproduced deterministically in tests.
+   */
+  openAppend?: (path: string) => Writable
   /** Politeness delay between blocks (provider rate-limit protection). */
   interBlockDelayMs?: number
   sleep?: (ms: number) => Promise<void>
@@ -113,21 +129,12 @@ export type BlockEngineOutcome =
 
 /** Statuses that mean "stop hammering the provider" → hand over to continuous. */
 const RATE_LIMIT_STATUSES = new Set([429, 403, 503])
-/** Bytes ignored at the start of a block when measuring (TCP slow start). */
-const MEASURE_SKIP_BYTES = 1024 * 1024
-/** Throughput sampling window inside a block. */
-const SAMPLE_WINDOW_MS = 500
-
 async function fileSizeOrZero(p: string): Promise<number> {
   try {
     return (await stat(p)).size
   } catch {
     return 0
   }
-}
-
-function clampChunk(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, Math.floor(n)))
 }
 
 
@@ -369,6 +376,9 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
   const log = opts.log ?? ((): void => {})
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   const maxRetries = opts.maxBlockRetries ?? 4
+  const maxLockRetries = opts.maxLockRetries ?? 12
+  const openAppend =
+    opts.openAppend ?? ((path: string): Writable => createWriteStream(path, { flags: 'a' }))
   const interBlockDelayMs = opts.interBlockDelayMs ?? 100
   const maxBlocks = opts.maxBlocks ?? 4096
   const connections = Math.max(1, Math.min(8, Math.floor(opts.connections ?? 1)))
@@ -379,13 +389,16 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
   let offset = opts.startOffset
   /** Authoritative total, latched from the first 206 (never re-assigned). */
   let latchedTotal: number | null = null
-  const minChunk = opts.minChunkBytes ?? CHUNK_MIN_BYTES
-  const maxChunk = opts.maxChunkBytes ?? CHUNK_MAX_BYTES
-  let chunkSize = clampChunk(opts.initialChunkBytes ?? CHUNK_INITIAL_BYTES, minChunk, maxChunk)
+  const minChunk = opts.minChunkBytes ?? BLOCK_SIZE_MIN_BYTES
+  const maxChunk = opts.maxChunkBytes ?? BLOCK_SIZE_MAX_BYTES
+  // Fixed for the whole file: a flat rate limiter offers no signal to adapt on,
+  // and a controller that guesses drifts toward big blocks — exactly the wrong
+  // way, since the per-connection burst is what makes this mode faster.
+  const chunkSize = clampBlockSize(opts.blockBytes ?? BLOCK_SIZE_DEFAULT_BYTES, minChunk, maxChunk)
   let sawValid206 = false
   let blocks = 0
   let retries = 0
-  let lastDecision: ChunkDecision = 'keep'
+  let lockRetries = 0
 
   const total = (): number | null => latchedTotal ?? opts.knownTotal
 
@@ -413,7 +426,6 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
       known !== null ? Math.min(offset + chunkSize - 1, known - 1) : offset + chunkSize - 1
     const wantBytes = wantEnd - offset + 1
 
-    let decision: ChunkDecision = 'keep'
     let fellBack: string | null = null
 
     try {
@@ -508,44 +520,15 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
 
       sawValid206 = true
 
-      // ---------------- append the block, measuring throughput ----------------
-      // Measurement skips the first MiB (TCP slow start on a fresh connection
-      // would otherwise make every block look like it accelerates, biasing the
-      // size upward until it pegs at the maximum).
-      const out = createWriteStream(opts.partPath, { flags: 'a' })
+      // ---------------- append the block ----------------
+      const out = openAppend(opts.partPath)
       const overshootLimit = Math.floor(wantBytes * 1.5)
-      const skipUntil = offset + Math.min(MEASURE_SKIP_BYTES, Math.floor(wantBytes / 4))
-      const tailFrom = offset + Math.floor(wantBytes * 0.75)
       let received = offset
       let overshot = false
-      let measureTs = 0
-      let measureBytes = 0
-      let windowTs = 0
-      let windowBytes = 0
-      let peakBps = 0
-      let tailTs = 0
-      let tailBytes = 0
 
       const counter = new Transform({
         transform: (chunk: Buffer, _enc, cb) => {
           received += chunk.length
-          const now = Date.now()
-
-          if (measureTs === 0 && received >= skipUntil) {
-            measureTs = now
-            measureBytes = received
-            windowTs = now
-            windowBytes = received
-          } else if (measureTs !== 0 && now - windowTs >= SAMPLE_WINDOW_MS) {
-            const bps = (received - windowBytes) / ((now - windowTs) / 1000)
-            if (bps > peakBps) peakBps = bps
-            windowTs = now
-            windowBytes = received
-          }
-          if (tailTs === 0 && measureTs !== 0 && received >= tailFrom) {
-            tailTs = now
-            tailBytes = received
-          }
 
           // The end bound may also be ignored WITHOUT a Content-Length (chunked
           // transfer encoding): enforce it on the received bytes too, otherwise
@@ -570,21 +553,6 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
           throw e
         }
       }
-
-      if (!fellBack) {
-        const endTs = Date.now()
-        // Peak: also fold in the final partial window and the whole measured span.
-        if (measureTs !== 0) {
-          const spanSecs = (endTs - measureTs) / 1000
-          if (spanSecs > 0) {
-            const avg = (received - measureBytes) / spanSecs
-            if (avg > peakBps) peakBps = avg
-          }
-          const tailSecs = tailTs !== 0 ? (endTs - tailTs) / 1000 : 0
-          const tailBps = tailSecs > 0 ? (received - tailBytes) / tailSecs : 0
-          decision = chunkSizeDecision(peakBps, tailBps)
-        }
-      }
     } catch (e) {
       // Interrupts and integrity failures are terminal; transient network errors
       // retry THIS block (the offset is re-derived from disk, so a retry is safe).
@@ -599,10 +567,31 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
         name === 'TransferInterrupt' ||
         interruptReason() !== null
       if (terminal) throw e
-      if (retries >= maxRetries) throw e
-      retries++
-      const backoff = Math.min(8000, 500 * 2 ** (retries - 1))
-      log('warn', `bloc à ${offset} en échec (${(e as Error)?.message ?? e}) — nouvelle tentative ${retries}/${maxRetries} dans ${backoff} ms`)
+
+      // A local file lock (antivirus/indexer holding the `.part`) is not a
+      // transfer failure: it clears on its own within seconds. Give it its own,
+      // more patient budget so a virus scan cannot exhaust the network retries
+      // and fail an otherwise healthy download.
+      const locked = isTransientLockError(e)
+      const budget = locked ? maxLockRetries : maxRetries
+      const used = locked ? lockRetries : retries
+      if (used >= budget) throw e
+      let attempt: number
+      if (locked) {
+        lockRetries++
+        attempt = lockRetries
+      } else {
+        retries++
+        attempt = retries
+      }
+      const backoff = locked
+        ? Math.min(5000, 500 * attempt)
+        : Math.min(8000, 500 * 2 ** (attempt - 1))
+      log(
+        'warn',
+        `bloc à ${offset} ${locked ? 'bloqué par un verrou local' : 'en échec'} ` +
+          `(${(e as Error)?.message ?? e}) — nouvelle tentative ${attempt}/${budget} dans ${backoff} ms`
+      )
       // Re-derive the offset: a partially written block is already on disk.
       offset = await fileSizeOrZero(opts.partPath)
       await sleep(backoff)
@@ -627,23 +616,8 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
     }
     offset = onDisk
     retries = 0
+    lockRetries = 0
     opts.onBlockDone?.(offset, total())
-
-    // Adapt the block size, but only when the same signal repeats (hysteresis:
-    // one noisy sample must not move the size).
-    if (decision !== 'keep' && decision === lastDecision) {
-      const next = applyChunkDecision(chunkSize, decision, {
-        minBytes: minChunk,
-        maxBytes: maxChunk
-      })
-      if (next !== chunkSize) {
-        log('info', `bloc ${chunkSize} → ${next} octets`)
-        chunkSize = next
-      }
-      lastDecision = 'keep'
-    } else {
-      lastDecision = decision
-    }
 
     const knownAfter = total()
     if (knownAfter === null) {

@@ -79,51 +79,58 @@ export function buildLiveRecordingPath(downloadDir: string, baseName: string): s
   return assertPathWithin(join(downloadDir, downloadSubfolder('live'), file), downloadDir)
 }
 
-// ---------------------------------------------------------------- chunked mode
-
-/** Block-mode bounds: start at 8 MiB, adapt within [2, 64] MiB. */
-export const CHUNK_INITIAL_BYTES = 8 * 1024 * 1024
-export const CHUNK_MIN_BYTES = 2 * 1024 * 1024
-export const CHUNK_MAX_BYTES = 64 * 1024 * 1024
-
-/** What the measurement inside one block says about the block size. */
-export type ChunkDecision = 'grow' | 'shrink' | 'keep'
+// ---------------------------------------------------------------- block mode
 
 /**
- * Decide from a block's throughput whether the block outlived the provider's
- * burst.
+ * Block size for the block-download mode, and the choices offered in Réglages.
  *
- * `peakBps` is the best sustained rate observed inside the block AFTER the
- * slow-start region, `tailBps` the rate over its last quarter. Comparing tail to
- * PEAK (rather than first half to second half) matters: every block opens a new
- * connection, so TCP slow start sits in the first half and would make each block
- * look like it accelerates — biasing the size upward until it pegs at the
- * maximum, i.e. back to one big continuous request.
+ * Measured on the target provider: a long connection is rate-limited to a dead
+ * flat ~471 KiB/s, and 30 s windows containing a block boundary read ~510 KiB/s
+ * while windows entirely inside a block read ~471 KiB/s — identical to the
+ * continuous mode. In other words each NEW connection is granted roughly 1 MiB
+ * of un-throttled data before the limiter engages.
  *
- * Pure: same inputs → same output (unit-tested).
+ * So the block size is exactly the knob that matters: SMALL blocks reconnect
+ * more often and collect that allowance more often. A previous adaptive
+ * controller tried to infer the size from in-block throughput and made it grow
+ * to 36 MiB — one boundary every ~78 s, which dilutes the allowance to nothing.
+ * A flat rate limiter gives it no signal to work with, so it was replaced by an
+ * explicit, user-testable setting: simpler, and it cannot drift the wrong way.
  */
-export function chunkSizeDecision(peakBps: number, tailBps: number): ChunkDecision {
-  // No usable measurement (block too small / instant) → don't react to noise.
-  if (!(peakBps > 0) || !(tailBps >= 0)) return 'keep'
-  const ratio = tailBps / peakBps
-  // Wide dead zone on purpose: on a provider with a FLAT rate (no burst at all),
-  // narrow thresholds make the controller chase measurement jitter and the block
-  // size oscillates pointlessly. Only react to an unambiguous signal.
-  if (ratio < 0.5) return 'shrink' // clearly throttled before the block ended
-  if (ratio >= 0.9) return 'grow' // clearly rode the burst all the way
-  return 'keep' // flat or near the sweet spot → leave it alone
+export const BLOCK_SIZE_DEFAULT_BYTES = 2 * 1024 * 1024
+export const BLOCK_SIZE_MIN_BYTES = 1024 * 1024
+export const BLOCK_SIZE_MAX_BYTES = 64 * 1024 * 1024
+
+/** Sizes offered in Réglages → Téléchargements (bytes). */
+export const BLOCK_SIZE_CHOICES = [
+  1024 * 1024,
+  2 * 1024 * 1024,
+  4 * 1024 * 1024,
+  8 * 1024 * 1024,
+  16 * 1024 * 1024,
+  32 * 1024 * 1024
+] as const
+
+/** Clamp a requested block size into the allowed range. */
+export function clampBlockSize(bytes: number, min?: number, max?: number): number {
+  const lo = min ?? BLOCK_SIZE_MIN_BYTES
+  const hi = max ?? BLOCK_SIZE_MAX_BYTES
+  if (!Number.isFinite(bytes)) return BLOCK_SIZE_DEFAULT_BYTES
+  return Math.max(lo, Math.min(hi, Math.floor(bytes)))
 }
 
-/** Apply a decision to the current block size, clamped to the allowed range. */
-export function applyChunkDecision(
-  current: number,
-  decision: ChunkDecision,
-  bounds?: { minBytes?: number; maxBytes?: number }
-): number {
-  const min = bounds?.minBytes ?? CHUNK_MIN_BYTES
-  const max = bounds?.maxBytes ?? CHUNK_MAX_BYTES
-  const factor = decision === 'grow' ? 1.5 : decision === 'shrink' ? 0.7 : 1
-  return Math.max(min, Math.min(max, Math.floor(current * factor)))
+/**
+ * Windows file-lock error codes. An antivirus or the search indexer can hold the
+ * `.part` file open for a few seconds, which fails an append with EBUSY. That is
+ * a LOCAL, self-clearing condition — nothing to do with the provider — so it
+ * gets its own retry budget instead of consuming the network one.
+ */
+const TRANSIENT_LOCK_CODES = new Set(['EBUSY', 'EPERM', 'EACCES', 'EMFILE'])
+
+/** True when an error is a transient local file lock rather than a transfer failure. */
+export function isTransientLockError(e: unknown): boolean {
+  const code = (e as { code?: unknown } | null)?.code
+  return typeof code === 'string' && TRANSIENT_LOCK_CODES.has(code)
 }
 
 /** Read a single header value (undici may surface a header as string[]). */

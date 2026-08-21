@@ -37,7 +37,13 @@ import {
 import { reminderScheduler } from '../reminders/ReminderScheduler'
 import { recordingController } from '../player/RecordingController'
 import { downloadManager } from '../downloads/DownloadManager'
-import { downloadSubfolder, sanitizeFileName, buildLiveRecordingPath } from '../downloads/helpers'
+import {
+  BLOCK_SIZE_MAX_BYTES,
+  BLOCK_SIZE_MIN_BYTES,
+  buildLiveRecordingPath,
+  downloadSubfolder,
+  sanitizeFileName
+} from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
 import * as tmdbKey from '../secrets/tmdbKey'
@@ -204,6 +210,14 @@ export const handlers: IpcHandlers = {
       // Hard ceiling: more would hammer the provider and risk the account.
       assert(v >= 1 && v <= 8, 'downloadConnections out of range (1..8)')
       patch.downloadConnections = v
+    }
+    if ('downloadBlockBytes' in req) {
+      const v = requireInt(req, 'downloadBlockBytes')
+      assert(
+        v >= BLOCK_SIZE_MIN_BYTES && v <= BLOCK_SIZE_MAX_BYTES,
+        'downloadBlockBytes out of range'
+      )
+      patch.downloadBlockBytes = v
     }
     if ('downloadUserAgent' in req) {
       const v = requireString(req, 'downloadUserAgent', 16)
