@@ -402,3 +402,63 @@ describe('runBlockDownload — connexions parallèles', () => {
     expect(await readFile(part)).toEqual(content)
   })
 })
+
+describe('runBlockDownload — le fournisseur refuse le parallèle', () => {
+  it('falls back instead of FAILING when a surplus connection is cut mid-body', async () => {
+    // Exactly what the real provider does: it kills the extra connection, so the
+    // body ends short of its Content-Length. That must never fail the download.
+    const content = payload(40_000)
+    const { url } = await startServer(content, { cutAfterOn: { nth: 3, bytes: 500 } })
+    const part = await tempPart()
+
+    const res = await run(url, part, { connections: 3 })
+
+    expect(res.outcome).toBe('fallback')
+    if (res.outcome === 'fallback') {
+      expect(res.parallelRefused).toBe(true)
+      expect(res.reason).toMatch(/plusieurs connexions/)
+    }
+  })
+
+  it('salvages the blocks that DID arrive (no wasted re-download)', async () => {
+    const content = payload(40_000)
+    // Block 1 is sequential; in the first wave (requests 2,3,4) kill the 3rd, so
+    // the 2nd must still be kept.
+    const { url } = await startServer(content, { cutAfterOn: { nth: 3, bytes: 100 } })
+    const part = await tempPart()
+
+    const res = await run(url, part, { connections: 3 })
+
+    expect(res.outcome).toBe('fallback')
+    const written = await readFile(part)
+    // Whatever was written is a valid contiguous prefix, and more than just the
+    // first sequential block.
+    expect(written).toEqual(content.subarray(0, written.length))
+    expect(written.length).toBeGreaterThan(4096)
+  })
+
+  it('still honours an interrupt during a parallel wave', async () => {
+    const content = payload(40_000)
+    const { url } = await startServer(content)
+    const part = await tempPart()
+    let seen = 0
+
+    await expect(
+      run(url, part, {
+        connections: 3,
+        onBlockDone: () => {
+          seen++
+        },
+        interruptReason: () => (seen >= 1 ? 'canceled' : null),
+        makeInterruptError: (reason) => {
+          const e = new Error(reason)
+          e.name = 'TransferInterrupt'
+          return e
+        }
+      })
+    ).rejects.toMatchObject({ name: 'TransferInterrupt' })
+
+    const written = await readFile(part)
+    expect(written).toEqual(content.subarray(0, written.length))
+  })
+})

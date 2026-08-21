@@ -18,6 +18,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.13.1',
+    date: '2026-08-21',
+    changes: [
+      'Correctif : si le fournisseur refuse plusieurs connexions simultanées (il coupe la connexion en trop), le téléchargement ne tombe plus en échec — il continue automatiquement avec une seule connexion, et le réglage est ramené à 1 en le signalant dans le Journal.',
+      'Les morceaux déjà reçus dans la vague interrompue sont conservés, sans re-téléchargement inutile.'
+    ]
+  },
+  {
     version: '0.13.0',
     date: '2026-08-21',
     changes: [

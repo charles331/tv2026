@@ -99,7 +99,17 @@ export interface BlockEngineOptions {
 
 export type BlockEngineOutcome =
   | { outcome: 'done'; totalBytes: number | null }
-  | { outcome: 'fallback'; reason: string; totalBytes: number | null }
+  | {
+      outcome: 'fallback'
+      reason: string
+      totalBytes: number | null
+      /**
+       * Set when the provider actively refused parallel connections (it cut a
+       * surplus one). The caller should stop requesting parallelism for this
+       * account rather than retry it on every download.
+       */
+      parallelRefused?: boolean
+    }
 
 /** Statuses that mean "stop hammering the provider" → hand over to continuous. */
 const RATE_LIMIT_STATUSES = new Set([429, 403, 503])
@@ -262,8 +272,9 @@ async function runParallelWaves(opts: {
       plan.push({ start, end: Math.min(start + chunkSize - 1, total - 1) })
     }
 
-    // Fetch them concurrently. Each result is either a buffer or a fallback.
-    const results = await Promise.all(
+    // Fetch them concurrently. `allSettled`, not `all`: when the provider kills a
+    // surplus connection we still want to keep the blocks that DID arrive.
+    const settled = await Promise.allSettled(
       plan.map(async ({ start, end }) => {
         const wantBytes = end - start + 1
         const res = await base.request(base.url, {
@@ -286,27 +297,59 @@ async function runParallelWaves(opts: {
       })
     )
 
-    // Any unusable answer → stop the parallel path (bytes already written stay
-    // a valid contiguous prefix; the caller resumes from the file size).
-    const bad = results.find((r) => r.kind === 'fallback')
-    if (bad?.kind === 'fallback') {
-      log('warn', `${bad.reason} → arrêt du mode parallèle`)
-      return { outcome: 'fallback', reason: bad.reason, totalBytes: total }
+    // Interrupts and integrity failures are terminal wherever they happened.
+    for (const r of settled) {
+      if (r.status !== 'rejected') continue
+      const e = r.reason
+      const name = (e as Error)?.name
+      if (e instanceof IntegrityError || name === 'AbortError' || opts.interruptReason()) throw e
     }
 
-    // Append IN ORDER — this is what keeps the .part a contiguous prefix.
-    for (const r of results) {
-      if (r.kind !== 'block') continue
-      if (r.start !== offset) {
+    // Salvage the LEADING run of successful blocks: they are contiguous from the
+    // current offset, so appending them is always safe and avoids re-fetching.
+    let appended = 0
+    for (const r of settled) {
+      if (r.status !== 'fulfilled' || r.value.kind !== 'block') break
+      const block = r.value
+      if (block.start !== offset) {
         throw new IntegrityError(
-          `Ordre d’écriture incohérent (attendu ${offset}, bloc à ${r.start}).`
+          `Ordre d’écriture incohérent (attendu ${offset}, bloc à ${block.start}).`
         )
       }
-      await appendFile(base.partPath, r.buffer)
-      offset += r.buffer.length
+      await appendFile(base.partPath, block.buffer)
+      offset += block.buffer.length
+      appended++
       base.onProgress?.(offset, total)
     }
-    base.onBlockDone?.(offset, total)
+    if (appended > 0) base.onBlockDone?.(offset, total)
+
+    // A rejected block (typically a truncated body: the provider cut the surplus
+    // connection) means parallel downloading is NOT allowed on this account.
+    // Report it so the caller can stop asking for it, and finish sequentially —
+    // never fail the download over it.
+    const killed = settled.find((r) => r.status === 'rejected')
+    if (killed && killed.status === 'rejected') {
+      const detail = (killed.reason as Error)?.message ?? String(killed.reason)
+      log(
+        'warn',
+        `connexion parallèle interrompue par le fournisseur (${detail}) → retour à une seule connexion`
+      )
+      return {
+        outcome: 'fallback',
+        reason: 'le fournisseur n’autorise pas plusieurs connexions simultanées',
+        totalBytes: total,
+        parallelRefused: true
+      }
+    }
+
+    // A well-formed but unusable answer (rate limit, unbounded stream, ...).
+    const bad = settled.find(
+      (r) => r.status === 'fulfilled' && r.value.kind === 'fallback'
+    )
+    if (bad && bad.status === 'fulfilled' && bad.value.kind === 'fallback') {
+      log('warn', `${bad.value.reason} → arrêt du mode parallèle`)
+      return { outcome: 'fallback', reason: bad.value.reason, totalBytes: total }
+    }
 
     if (opts.sleep && base.interBlockDelayMs) await opts.sleep(base.interBlockDelayMs)
   }
