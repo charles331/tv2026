@@ -61,6 +61,17 @@ import {
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) tv2026/0.1 Safari/537.36'
+/**
+ * Player-style UA. Some panels shape "browser" traffic differently from player
+ * traffic, so this is selectable (Réglages → Téléchargements) for testing.
+ */
+const PLAYER_USER_AGENT = 'VLC/3.0.20 LibVLC/3.0.20'
+
+function transferUserAgent(): string {
+  return settingsRepo.getSettings().downloadUserAgent === 'player'
+    ? PLAYER_USER_AGENT
+    : USER_AGENT
+}
 
 /** ms between throttled progress events to the renderer. */
 const PROGRESS_THROTTLE_MS = 500
@@ -430,6 +441,8 @@ export class DownloadManager {
     part: string,
     startOffset: number
   ): Promise<BlockEngineOutcome> {
+    const settings = settingsRepo.getSettings()
+    const userAgent = transferUserAgent()
     const reporter = this.makeProgressReporter(item, startOffset, 'blocs')
     // ONE dispatcher for the whole run: `connection: close` on each request is
     // what forces a fresh socket per block (verified against undici), so a new
@@ -437,7 +450,11 @@ export class DownloadManager {
     const agent = makeDownloadDispatcher()
     const dispatcher: Dispatcher = agent.compose(interceptors.redirect({ maxRedirections: 5 }))
 
-    appLog.info('downloads', `#${item.id} mode blocs, reprise à ${formatBytes(startOffset)}`)
+    appLog.info(
+      'downloads',
+      `#${item.id} mode blocs, reprise à ${formatBytes(startOffset)}` +
+        `, ${settings.downloadConnections} connexion(s)`
+    )
     try {
       return await runBlockDownload({
         url,
@@ -445,11 +462,12 @@ export class DownloadManager {
         startOffset,
         knownTotal: item.totalBytes,
         signal: this.active!.controller.signal,
+        connections: settings.downloadConnections,
         request: async (target, init) => {
           const res = await request(target, {
             method: 'GET',
             dispatcher,
-            headers: { 'user-agent': USER_AGENT, accept: '*/*', ...init.headers },
+            headers: { 'user-agent': userAgent, accept: '*/*', ...init.headers },
             signal: init.signal
           })
           return {
@@ -486,7 +504,7 @@ export class DownloadManager {
 
     try {
       const headers: Record<string, string> = {
-        'user-agent': USER_AGENT,
+        'user-agent': transferUserAgent(),
         accept: '*/*'
       }
       if (resumeFrom > 0) headers['range'] = `bytes=${resumeFrom}-`

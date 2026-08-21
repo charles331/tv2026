@@ -106,9 +106,12 @@ export function chunkSizeDecision(peakBps: number, tailBps: number): ChunkDecisi
   // No usable measurement (block too small / instant) → don't react to noise.
   if (!(peakBps > 0) || !(tailBps >= 0)) return 'keep'
   const ratio = tailBps / peakBps
-  if (ratio < 0.6) return 'shrink' // throttled before the block ended
-  if (ratio >= 0.85) return 'grow' // rode the burst all the way
-  return 'keep' // near the sweet spot
+  // Wide dead zone on purpose: on a provider with a FLAT rate (no burst at all),
+  // narrow thresholds make the controller chase measurement jitter and the block
+  // size oscillates pointlessly. Only react to an unambiguous signal.
+  if (ratio < 0.5) return 'shrink' // clearly throttled before the block ended
+  if (ratio >= 0.9) return 'grow' // clearly rode the burst all the way
+  return 'keep' // flat or near the sweet spot → leave it alone
 }
 
 /** Apply a decision to the current block size, clamped to the allowed range. */

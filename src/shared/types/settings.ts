@@ -68,6 +68,22 @@ export interface AppSettings {
    * to the continuous mode automatically if the server ignores bounded ranges.
    */
   chunkedDownloads: boolean
+  /**
+   * How many provider connections ONE download may use in parallel (1 = the
+   * historical single-connection behaviour).
+   *
+   * The provider rate-limits each connection (~0.5 MiB/s observed), far below a
+   * typical line, so N parallel bounded-range requests can multiply throughput.
+   * MUST stay within the account's `max_connections` (visible in
+   * Réglages → Connexion → Tester) and leave room for playback — hence a
+   * conservative default and an explicit user choice.
+   */
+  downloadConnections: number
+  /**
+   * User-Agent used for media transfers. Some panels shape "browser" traffic
+   * differently from player traffic, so this is switchable for testing.
+   */
+  downloadUserAgent: 'browser' | 'player'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -81,7 +97,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reminderLeadSecs: 120, // 2 min before start
   recordPadBeforeSecs: 60, // +1 min before
   recordPadAfterSecs: 120, // +2 min after
-  chunkedDownloads: true // block mode by default (auto-falls back when unsupported)
+  chunkedDownloads: true, // block mode by default (auto-falls back when unsupported)
+  downloadConnections: 1, // opt-in: raising this uses several provider connections
+  downloadUserAgent: 'browser'
 }
 
 /** Whether a TMDB API key is stored (without revealing it). */

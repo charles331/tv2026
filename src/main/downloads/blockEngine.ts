@@ -28,7 +28,7 @@
  */
 
 import { createWriteStream } from 'fs'
-import { stat } from 'fs/promises'
+import { appendFile, stat } from 'fs/promises'
 import { pipeline } from 'stream/promises'
 import { Transform } from 'stream'
 import type { Readable } from 'stream'
@@ -89,6 +89,12 @@ export interface BlockEngineOptions {
   sleep?: (ms: number) => Promise<void>
   /** Hard cap on the number of requests for one file. */
   maxBlocks?: number
+  /**
+   * Provider connections used IN PARALLEL for this file (1 = sequential, the
+   * historical behaviour). Above 1, blocks are fetched concurrently but still
+   * appended in strict order. Must stay within the account's max_connections.
+   */
+  connections?: number
 }
 
 export type BlockEngineOutcome =
@@ -114,6 +120,200 @@ function clampChunk(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(n)))
 }
 
+
+/** Total bytes buffered in RAM across parallel workers is capped to this. */
+const MAX_PARALLEL_BUFFER_BYTES = 64 * 1024 * 1024
+
+/**
+ * Validate a ranged response against what we asked for. Returns the latched
+ * total, or a fallback reason. Throws IntegrityError / HttpStatusError when the
+ * answer is unusable and must NOT be appended.
+ *
+ * Shared by the sequential and parallel paths so the integrity rules can never
+ * drift apart between them.
+ */
+function validateRangeResponse(opts: {
+  res: BlockResponse
+  wantStart: number
+  wantBytes: number
+  latchedTotal: number | null
+  sawValid206: boolean
+}): { ok: true; total: number | null } | { ok: false; fallback: string } {
+  const { res, wantStart, wantBytes, latchedTotal, sawValid206 } = opts
+
+  if (res.statusCode !== 206) {
+    if (RATE_LIMIT_STATUSES.has(res.statusCode)) {
+      return { ok: false, fallback: `le serveur a répondu HTTP ${res.statusCode} (limitation)` }
+    }
+    if (res.statusCode === 200) {
+      // Ranges already proved to work ⇒ a 200 now is a server error (expired
+      // token / error page), never a capability signal.
+      if (sawValid206) throw new HttpStatusError(200)
+      return { ok: false, fallback: 'le serveur ignore les requêtes par bloc (HTTP 200)' }
+    }
+    throw new HttpStatusError(res.statusCode)
+  }
+
+  const contentRange = headerValue(res.headers['content-range'])
+  const rangeStart = parseContentRangeStart(contentRange)
+  if (rangeStart === null) {
+    // Unverifiable ⇒ unsafe: we cannot prove where these bytes belong.
+    return { ok: false, fallback: 'réponse 206 sans Content-Range exploitable' }
+  }
+  if (rangeStart !== wantStart) {
+    throw new IntegrityError(
+      `Bloc incohérent renvoyé par le serveur (attendu à ${wantStart}, reçu à ${rangeStart}).`
+    )
+  }
+
+  let total = latchedTotal
+  const parsedTotal = parseContentRangeTotal(contentRange)
+  if (parsedTotal !== null) {
+    if (total === null) {
+      total = parsedTotal
+    } else if (parsedTotal !== total) {
+      throw new IntegrityError(
+        `La taille du fichier a changé sur le serveur (${total} → ${parsedTotal}) : téléchargement interrompu pour ne pas mélanger deux versions.`
+      )
+    }
+  }
+
+  const declaredLen = Number(headerValue(res.headers['content-length']))
+  if (Number.isFinite(declaredLen) && declaredLen > wantBytes * 1.5) {
+    return { ok: false, fallback: 'borne de fin ignorée par le serveur' }
+  }
+
+  return { ok: true, total }
+}
+
+/** Read a whole (bounded) block into memory, enforcing the requested length. */
+async function readBlockToBuffer(
+  body: Readable,
+  wantBytes: number,
+  signal: AbortSignal
+): Promise<Buffer> {
+  const parts: Buffer[] = []
+  let size = 0
+  for await (const chunk of body) {
+    if (signal.aborted) throw new Error('aborted')
+    const buf = chunk as Buffer
+    size += buf.length
+    if (size > wantBytes * 1.5) {
+      throw new IntegrityError('Le serveur a renvoyé plus de données que le bloc demandé.')
+    }
+    parts.push(buf)
+  }
+  return Buffer.concat(parts, size)
+}
+
+/**
+ * PARALLEL block download — the accelerator for providers that rate-limit each
+ * connection well below the user's line (observed: ~0.5 MiB/s per connection on
+ * an 85 Mbit/s line).
+ *
+ * Fetches N bounded ranges CONCURRENTLY but appends them in STRICT OFFSET ORDER,
+ * so the `.part` file stays a contiguous prefix at all times. That preserves the
+ * entire existing model: resume is still "file size = bytes done", and a crash
+ * mid-wave simply re-fetches the unwritten blocks.
+ *
+ * Deliberately uses more than one provider connection — the caller must keep N
+ * within the account's `max_connections`.
+ */
+async function runParallelWaves(opts: {
+  base: BlockEngineOptions
+  startOffset: number
+  total: number
+  connections: number
+  chunkSize: number
+  minChunkBytes: number
+  log: (level: 'info' | 'warn' | 'error', message: string) => void
+  interruptReason: () => string | null
+  makeInterruptError: (reason: string) => Error
+  sleep: (ms: number) => Promise<void>
+}): Promise<BlockEngineOutcome> {
+  const { base, total, connections, log } = opts
+  // Bound memory: N buffers are held at once, so shrink the block if needed.
+  const chunkSize = Math.max(
+    opts.minChunkBytes,
+    Math.min(opts.chunkSize, Math.floor(MAX_PARALLEL_BUFFER_BYTES / connections))
+  )
+  let offset = opts.startOffset
+  const sawValid206 = true // we only get here after a validated sequential block
+  let waves = 0
+  const maxWaves = Math.ceil((total - offset) / (chunkSize * connections)) + 8
+
+  log(
+    'info',
+    `mode parallèle : ${connections} connexions × ${Math.round(chunkSize / 1024 / 1024)} Mio`
+  )
+
+  while (offset < total) {
+    const reason = opts.interruptReason()
+    if (reason) throw opts.makeInterruptError(reason)
+    if (++waves > maxWaves) {
+      return { outcome: 'fallback', reason: 'trop de vagues (sécurité)', totalBytes: total }
+    }
+
+    // Plan this wave: up to `connections` consecutive blocks.
+    const plan: { start: number; end: number }[] = []
+    for (let i = 0; i < connections; i++) {
+      const start = offset + i * chunkSize
+      if (start >= total) break
+      plan.push({ start, end: Math.min(start + chunkSize - 1, total - 1) })
+    }
+
+    // Fetch them concurrently. Each result is either a buffer or a fallback.
+    const results = await Promise.all(
+      plan.map(async ({ start, end }) => {
+        const wantBytes = end - start + 1
+        const res = await base.request(base.url, {
+          headers: { range: `bytes=${start}-${end}`, connection: 'close' },
+          signal: base.signal
+        })
+        const verdict = validateRangeResponse({
+          res,
+          wantStart: start,
+          wantBytes,
+          latchedTotal: total,
+          sawValid206
+        })
+        if (!verdict.ok) {
+          await res.body.dump?.().catch(() => undefined)
+          return { kind: 'fallback' as const, reason: verdict.fallback }
+        }
+        const buffer = await readBlockToBuffer(res.body, wantBytes, base.signal)
+        return { kind: 'block' as const, start, buffer }
+      })
+    )
+
+    // Any unusable answer → stop the parallel path (bytes already written stay
+    // a valid contiguous prefix; the caller resumes from the file size).
+    const bad = results.find((r) => r.kind === 'fallback')
+    if (bad?.kind === 'fallback') {
+      log('warn', `${bad.reason} → arrêt du mode parallèle`)
+      return { outcome: 'fallback', reason: bad.reason, totalBytes: total }
+    }
+
+    // Append IN ORDER — this is what keeps the .part a contiguous prefix.
+    for (const r of results) {
+      if (r.kind !== 'block') continue
+      if (r.start !== offset) {
+        throw new IntegrityError(
+          `Ordre d’écriture incohérent (attendu ${offset}, bloc à ${r.start}).`
+        )
+      }
+      await appendFile(base.partPath, r.buffer)
+      offset += r.buffer.length
+      base.onProgress?.(offset, total)
+    }
+    base.onBlockDone?.(offset, total)
+
+    if (opts.sleep && base.interBlockDelayMs) await opts.sleep(base.interBlockDelayMs)
+  }
+
+  return { outcome: 'done', totalBytes: total }
+}
+
 /**
  * Download `partPath` from `url` in bounded blocks. Returns 'done' when the file
  * is complete, or 'fallback' when the provider cannot be driven this way (the
@@ -128,6 +328,7 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
   const maxRetries = opts.maxBlockRetries ?? 4
   const interBlockDelayMs = opts.interBlockDelayMs ?? 100
   const maxBlocks = opts.maxBlocks ?? 4096
+  const connections = Math.max(1, Math.min(8, Math.floor(opts.connections ?? 1)))
   const interruptReason = opts.interruptReason ?? ((): string | null => null)
   const makeInterruptError =
     opts.makeInterruptError ?? ((reason: string): Error => new Error(`interrupted: ${reason}`))
@@ -413,6 +614,24 @@ export async function runBlockDownload(opts: BlockEngineOptions): Promise<BlockE
     }
     if (offset >= knownAfter) {
       return { outcome: 'done', totalBytes: latchedTotal }
+    }
+
+    // The first block has now PROVEN that bounded ranges work and has latched the
+    // authoritative total. That is exactly what the parallel path needs, so hand
+    // over to it (the accelerator for per-connection rate limits).
+    if (connections > 1) {
+      return await runParallelWaves({
+        base: opts,
+        startOffset: offset,
+        total: knownAfter,
+        connections,
+        chunkSize,
+        minChunkBytes: minChunk,
+        log,
+        interruptReason,
+        makeInterruptError,
+        sleep
+      })
     }
 
     if (interBlockDelayMs > 0) await sleep(interBlockDelayMs)

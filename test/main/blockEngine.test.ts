@@ -37,6 +37,8 @@ interface ServerBehaviour {
   unboundedOn?: number
   /** Body for a forced 200 (e.g. an HTML error page). */
   errorPageBody?: string
+  /** Delay (ms) before answering the Nth request — makes blocks finish out of order. */
+  delayMsFor?: (n: number) => number
 }
 
 const servers: Server[] = []
@@ -96,6 +98,8 @@ async function startServer(
       res.write(slice.subarray(0, behaviour.cutAfterOn.bytes))
       return res.destroy() // drop the connection mid-body
     }
+    const delay = behaviour.delayMsFor?.(n) ?? 0
+    if (delay > 0) return void setTimeout(() => res.end(slice), delay)
     res.end(slice)
   })
   servers.push(srv)
@@ -326,5 +330,75 @@ describe('runBlockDownload — robustesse réseau', () => {
     expect(res.outcome).toBe('fallback')
     expect(res.reason).toMatch(/plafond/)
     expect(requests()).toBeLessThanOrEqual(3)
+  })
+})
+
+describe('runBlockDownload — connexions parallèles', () => {
+  it('is byte-exact even when blocks come back OUT OF ORDER', async () => {
+    const content = payload(40_000)
+    // Make the FIRST block of each wave the slowest, so later blocks finish
+    // first: the engine must still append in offset order.
+    const { url, requests } = await startServer(content, {
+      delayMsFor: (n) => (n % 3 === 1 ? 120 : 5)
+    })
+    const part = await tempPart()
+
+    const res = await run(url, part, { connections: 3 })
+
+    expect(res.outcome).toBe('done')
+    expect(await readFile(part)).toEqual(content)
+    expect(requests()).toBeGreaterThan(3) // really went parallel
+  })
+
+  it('produces the same bytes with 1, 2 and 4 connections', async () => {
+    const content = payload(30_000)
+    for (const connections of [1, 2, 4]) {
+      const { url } = await startServer(content)
+      const part = await tempPart()
+      const res = await run(url, part, { connections })
+      expect(res.outcome, `connections=${connections}`).toBe('done')
+      expect(await readFile(part), `connections=${connections}`).toEqual(content)
+    }
+  })
+
+  it('resumes correctly in parallel mode from a partial .part', async () => {
+    const content = payload(40_000)
+    const { url } = await startServer(content)
+    const part = await tempPart()
+    await writeFile(part, content.subarray(0, 9000))
+
+    const res = await run(url, part, { connections: 3, startOffset: 9000 })
+
+    expect(res.outcome).toBe('done')
+    expect(await readFile(part)).toEqual(content)
+  })
+
+  it('stops the parallel path on an unusable answer, keeping a contiguous prefix', async () => {
+    const content = payload(40_000)
+    // Request 1 latches the total sequentially; a later one returns 429.
+    const { url } = await startServer(content, { statusForRequest: { 4: 429 } })
+    const part = await tempPart()
+
+    const res = await run(url, part, { connections: 3 })
+
+    expect(res.outcome).toBe('fallback')
+    const written = await readFile(part)
+    expect(written).toEqual(content.subarray(0, written.length))
+  })
+
+  it('never buffers more than the memory cap, whatever the block size', async () => {
+    // 8 connections x a huge requested block must be clamped so RAM stays bounded.
+    const content = payload(50_000)
+    const { url } = await startServer(content)
+    const part = await tempPart()
+
+    const res = await run(url, part, {
+      connections: 8,
+      initialChunkBytes: 8192,
+      maxChunkBytes: 64 * 1024 * 1024
+    })
+
+    expect(res.outcome).toBe('done')
+    expect(await readFile(part)).toEqual(content)
   })
 })

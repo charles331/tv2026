@@ -18,6 +18,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.13.0',
+    date: '2026-08-21',
+    changes: [
+      'Téléchargements : possibilité d’utiliser plusieurs connexions en parallèle (Réglages → Téléchargements). Le fournisseur limitant chaque connexion (~0,5 Mio/s) très en dessous d’une ligne courante, cela peut multiplier la vitesse d’autant.',
+      'Les morceaux sont récupérés en parallèle mais écrits strictement dans l’ordre : la reprise après pause ou coupure fonctionne exactement comme avant.',
+      'Nouveau choix d’« identité du client » (navigateur ou lecteur vidéo) : certains fournisseurs limitent différemment selon le logiciel.',
+      'Le Journal indique le nombre de connexions utilisées, pour comparer les réglages.'
+    ]
+  },
+  {
     version: '0.12.0',
     date: '2026-08-21',
     changes: [
