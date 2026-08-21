@@ -60,6 +60,14 @@ export interface AppSettings {
   recordPadBeforeSecs: number
   /** Scheduled recording: stop this many seconds AFTER the programme end. */
   recordPadAfterSecs: number
+  /**
+   * Download in bounded RANGE BLOCKS (a fresh connection per block) instead of
+   * one long connection. Providers pace a long streaming-style connection down
+   * to roughly the media bitrate after an initial burst; re-requesting bounded
+   * ranges keeps re-triggering that burst, which can be much faster. Falls back
+   * to the continuous mode automatically if the server ignores bounded ranges.
+   */
+  chunkedDownloads: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -72,7 +80,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lastSeenVersion: null,
   reminderLeadSecs: 120, // 2 min before start
   recordPadBeforeSecs: 60, // +1 min before
-  recordPadAfterSecs: 120 // +2 min after
+  recordPadAfterSecs: 120, // +2 min after
+  chunkedDownloads: true // block mode by default (auto-falls back when unsupported)
 }
 
 /** Whether a TMDB API key is stored (without revealing it). */

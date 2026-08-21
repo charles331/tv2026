@@ -79,6 +79,43 @@ export function buildLiveRecordingPath(downloadDir: string, baseName: string): s
   return assertPathWithin(join(downloadDir, downloadSubfolder('live'), file), downloadDir)
 }
 
+// ---------------------------------------------------------------- chunked mode
+
+/** Block-mode bounds: start at 8 MiB, adapt within [2, 64] MiB. */
+export const CHUNK_INITIAL_BYTES = 8 * 1024 * 1024
+export const CHUNK_MIN_BYTES = 2 * 1024 * 1024
+export const CHUNK_MAX_BYTES = 64 * 1024 * 1024
+
+/**
+ * Adapt the next block size from the throughput measured INSIDE the block.
+ *
+ * Providers serve an initial burst at full speed then pace the connection down
+ * to roughly the media bitrate. Comparing the first half of a block against its
+ * second half detects whether the burst ended mid-block:
+ *  - second half much slower  → the block outlived the burst → shrink;
+ *  - second half still fast   → the whole block rode the burst → grow;
+ *  - in between               → keep (we're near the sweet spot).
+ *
+ * Pure: same inputs → same output (unit-tested).
+ */
+export function nextChunkSize(opts: {
+  current: number
+  firstHalfBps: number
+  secondHalfBps: number
+  minBytes?: number
+  maxBytes?: number
+}): number {
+  const min = opts.minBytes ?? CHUNK_MIN_BYTES
+  const max = opts.maxBytes ?? CHUNK_MAX_BYTES
+  const clamp = (n: number): number => Math.max(min, Math.min(max, Math.floor(n)))
+  // No usable measurement (block too small / instant) → leave it alone.
+  if (!(opts.firstHalfBps > 0) || !(opts.secondHalfBps >= 0)) return clamp(opts.current)
+  const ratio = opts.secondHalfBps / opts.firstHalfBps
+  if (ratio < 0.6) return clamp(opts.current * 0.7)
+  if (ratio >= 0.85) return clamp(opts.current * 1.5)
+  return clamp(opts.current)
+}
+
 /** Read a single header value (undici may surface a header as string[]). */
 export function headerValue(h: string | string[] | undefined): string | undefined {
   if (Array.isArray(h)) return h[0]
@@ -92,6 +129,20 @@ export function parseContentRangeTotal(cr: string | undefined): number | null {
   if (!m) return null
   const n = Number(m[1])
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Parse the START offset out of `Content-Range: bytes 200-1023/1234`.
+ *
+ * The block engine MUST verify this: appending a block that does not actually
+ * start where our `.part` ends would silently corrupt the file.
+ */
+export function parseContentRangeStart(cr: string | undefined): number | null {
+  if (!cr) return null
+  const m = /bytes\s+(\d+)\s*-/i.exec(cr.trim())
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) && n >= 0 ? n : null
 }
 
 /** Map a transfer error to a human-readable, renderer-safe message. */

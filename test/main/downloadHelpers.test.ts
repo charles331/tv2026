@@ -4,10 +4,14 @@ import {
   partPath,
   headerValue,
   parseContentRangeTotal,
+  parseContentRangeStart,
   describeError,
   formatBytes,
   renameWithRetry,
-  downloadSubfolder
+  downloadSubfolder,
+  nextChunkSize,
+  CHUNK_MIN_BYTES,
+  CHUNK_MAX_BYTES
 } from '../../src/main/downloads/helpers'
 
 /** Build an errno-style error with a .code, like Node's fs throws. */
@@ -28,6 +32,77 @@ describe('downloadSubfolder', () => {
     expect(downloadSubfolder('movie')).toBe('Films')
     expect(downloadSubfolder('series')).toBe('Séries')
     expect(downloadSubfolder('live')).toBe('Live')
+  })
+})
+
+describe('parseContentRangeStart (garde-fou anti-corruption)', () => {
+  it('extracts the start offset', () => {
+    expect(parseContentRangeStart('bytes 200-1023/1234')).toBe(200)
+    expect(parseContentRangeStart('bytes 0-99/1000')).toBe(0)
+  })
+  it('tolerates an unknown total', () => {
+    expect(parseContentRangeStart('bytes 512-1023/*')).toBe(512)
+  })
+  it('returns null on malformed / missing input', () => {
+    expect(parseContentRangeStart(undefined)).toBeNull()
+    expect(parseContentRangeStart('')).toBeNull()
+    expect(parseContentRangeStart('garbage')).toBeNull()
+  })
+})
+
+describe('nextChunkSize (adaptation de la taille de bloc)', () => {
+  const MiB = 1024 * 1024
+
+  it('shrinks when the burst died inside the block (second half much slower)', () => {
+    // 10 MB/s then 1 MB/s → ratio 0.1 → shrink by 30 %
+    expect(
+      nextChunkSize({ current: 8 * MiB, firstHalfBps: 10e6, secondHalfBps: 1e6 })
+    ).toBe(Math.floor(8 * MiB * 0.7))
+  })
+
+  it('grows when the whole block rode the burst (sustained speed)', () => {
+    expect(
+      nextChunkSize({ current: 8 * MiB, firstHalfBps: 10e6, secondHalfBps: 10e6 })
+    ).toBe(Math.floor(8 * MiB * 1.5))
+  })
+
+  it('keeps the size in the in-between zone (near the sweet spot)', () => {
+    // ratio 0.7 → neither shrink nor grow
+    expect(nextChunkSize({ current: 8 * MiB, firstHalfBps: 10e6, secondHalfBps: 7e6 })).toBe(
+      8 * MiB
+    )
+  })
+
+  it('never goes below the minimum or above the maximum', () => {
+    expect(
+      nextChunkSize({ current: CHUNK_MIN_BYTES, firstHalfBps: 10e6, secondHalfBps: 0 })
+    ).toBe(CHUNK_MIN_BYTES)
+    expect(
+      nextChunkSize({ current: CHUNK_MAX_BYTES, firstHalfBps: 10e6, secondHalfBps: 10e6 })
+    ).toBe(CHUNK_MAX_BYTES)
+  })
+
+  it('keeps the current size when there is no usable measurement', () => {
+    // Block too small/instant to measure → don't react to noise.
+    expect(nextChunkSize({ current: 8 * MiB, firstHalfBps: 0, secondHalfBps: 0 })).toBe(8 * MiB)
+  })
+
+  it('converges towards the burst size over successive blocks', () => {
+    // Simulate a provider whose burst is ~5 MiB: any block bigger than that
+    // sees its second half throttled, so the size must come down and settle.
+    const burst = 5 * MiB
+    let size = 32 * MiB
+    for (let i = 0; i < 12; i++) {
+      const throttled = size > burst
+      size = nextChunkSize({
+        current: size,
+        firstHalfBps: 10e6,
+        secondHalfBps: throttled ? 1e6 : 10e6
+      })
+    }
+    // Settles in the neighbourhood of the burst, never pinned at the extremes.
+    expect(size).toBeGreaterThanOrEqual(CHUNK_MIN_BYTES)
+    expect(size).toBeLessThan(32 * MiB)
   })
 })
 

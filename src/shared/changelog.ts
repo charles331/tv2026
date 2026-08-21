@@ -18,6 +18,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.12.0',
+    date: '2026-07-09',
+    changes: [
+      'Téléchargements bien plus rapides : nouveau mode « par blocs » qui redemande le fichier morceau par morceau (comme un déplacement dans un film) pour rester dans la phase rapide du serveur, au lieu de subir le bridage d’une longue connexion continue.',
+      'Réglages → Téléchargements : interrupteur « Téléchargement par blocs » pour activer/désactiver et comparer. Repli automatique en mode continu si le fournisseur ne le gère pas.',
+      'Le débit est écrit dans le Journal toutes les 30 s avec le mode utilisé, pour mesurer le gain.'
+    ]
+  },
+  {
     version: '0.11.0',
     date: '2026-07-09',
     changes: [

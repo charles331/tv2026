@@ -106,6 +106,7 @@ export function SettingsScreen({
   const [refreshError, setRefreshError] = useState<string | null>(null)
 
   const [pickingDir, setPickingDir] = useState(false)
+  const [chunkedMessage, setChunkedMessage] = useState<string | null>(null)
 
   // Reminder lead / recording padding (in minutes, persisted as seconds).
   const [leadMin, setLeadMin] = useState('')
@@ -273,6 +274,20 @@ export function SettingsScreen({
       setCredsError(describeError(err))
     } finally {
       setPickingDir(false)
+    }
+  }, [])
+
+  const handleToggleChunked = useCallback(async (enabled: boolean) => {
+    setChunkedMessage(null)
+    try {
+      setSettings(unwrap(await api().settings.set({ chunkedDownloads: enabled })))
+      setChunkedMessage(
+        enabled
+          ? 'Mode par blocs activé. Il s’applique au prochain téléchargement démarré.'
+          : 'Mode continu rétabli. Il s’applique au prochain téléchargement démarré.'
+      )
+    } catch (err) {
+      setChunkedMessage(describeError(err))
     }
   }, [])
 
@@ -607,6 +622,39 @@ export function SettingsScreen({
             Choisir…
           </Button>
         </div>
+      </section>
+      )}
+
+      {/* Vitesse de téléchargement (moteur par blocs) */}
+      {tab === 'telechargements' && (
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Vitesse de téléchargement</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Les fournisseurs envoient une grosse rafale au début puis ralentissent fortement (le débit
+          est ramené à celui de la lecture). Le mode « par blocs » redemande le fichier morceau par
+          morceau — comme un déplacement dans un film — pour rester dans la phase rapide. Une seule
+          connexion à la fois est utilisée. Si le serveur ne le gère pas, l’application revient
+          automatiquement au mode continu.
+        </p>
+        <label className="mt-4 flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-accent"
+            checked={settings?.chunkedDownloads ?? true}
+            onChange={(e) => void handleToggleChunked(e.target.checked)}
+          />
+          <span className="text-sm text-gray-200">
+            Téléchargement par blocs
+            <span className="ml-2 text-xs text-gray-500">
+              (recommandé — désactivez pour comparer avec l’ancien comportement)
+            </span>
+          </span>
+        </label>
+        <p className="mt-3 text-xs text-gray-500">
+          Le débit mesuré est écrit dans l’onglet <strong>Journal</strong> toutes les 30 s, avec le
+          mode utilisé — de quoi comparer les deux chiffres en main.
+        </p>
+        {chunkedMessage && <p className="mt-2 text-sm text-emerald-300">{chunkedMessage}</p>}
       </section>
       )}
 
