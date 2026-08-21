@@ -45,16 +45,19 @@ import { getXtreamClient } from '../xtream'
 import { appLog } from '../log/logger'
 import {
   HttpStatusError,
+  IntegrityError,
   partPath,
   headerValue,
   parseContentRangeTotal,
-  parseContentRangeStart,
   describeError,
   formatBytes,
-  renameWithRetry,
-  nextChunkSize,
-  CHUNK_INITIAL_BYTES
+  renameWithRetry
 } from './helpers'
+import {
+  runBlockDownload,
+  type BlockEngineOutcome,
+  type BlockResponse
+} from './blockEngine'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) tv2026/0.1 Safari/537.36'
@@ -398,11 +401,14 @@ export class DownloadManager {
     // Block mode is a user setting; it self-falls-back when the provider does
     // not honour bounded ranges, so a failure here never blocks a download.
     if (settingsRepo.getSettings().chunkedDownloads) {
-      const outcome = await this.transferChunked(item, url, part, resumeFrom)
-      if (outcome === 'done') {
-        await this.finalizeCompleted(item, part, dest, null)
+      const result = await this.transferChunked(item, url, part, resumeFrom)
+      if (result.outcome === 'done') {
+        // The engine's latched total is authoritative; finalizeCompleted refuses
+        // to rename a file whose size does not match it.
+        await this.finalizeCompleted(item, part, dest, result.totalBytes)
         return
       }
+      appLog.warn('downloads', `#${item.id} ${result.reason} → mode continu`)
       // Fell back: continue from whatever the block engine already wrote.
       resumeFrom = await fileSizeOrZero(part)
     }
@@ -411,181 +417,56 @@ export class DownloadManager {
   }
 
   /**
-   * BLOCK engine — sequential BOUNDED range requests, one fresh connection per
-   * block, adaptive block size.
+   * BLOCK engine wrapper: wires the injectable `runBlockDownload` loop (which
+   * owns the range/integrity/adaptive logic and is integration-tested) to this
+   * manager's dispatcher, progress reporting, journal and interrupt handling.
    *
-   * Why: a provider paces a long streaming-style connection down to roughly the
-   * media bitrate after an initial burst (that's what makes a continuous
-   * download take about as long as the movie). Re-requesting bounded ranges
-   * keeps re-triggering that burst — the same thing that makes seeking in a
-   * player feel instant.
-   *
-   * STRICTLY sequential: exactly one request in flight, so the provider's
-   * single-connection limit is respected (the gain comes from restarting the
-   * burst, never from parallelism).
-   *
-   * Returns 'done' when the file is complete, or 'fallback' when the server does
-   * not honour bounded ranges (the caller then finishes in continuous mode).
+   * Returns the loop's outcome plus the AUTHORITATIVE total it latched, so the
+   * caller can validate the final file size before the atomic rename.
    */
   private async transferChunked(
     item: DownloadItem,
     url: string,
     part: string,
     startOffset: number
-  ): Promise<'done' | 'fallback'> {
-    let offset = startOffset
-    let totalBytes: number | null = item.totalBytes
-    let chunkSize = CHUNK_INITIAL_BYTES
+  ): Promise<BlockEngineOutcome> {
     const reporter = this.makeProgressReporter(item, startOffset, 'blocs')
-    appLog.info(
-      'downloads',
-      `#${item.id} mode blocs, reprise à ${formatBytes(offset)} (bloc ${formatBytes(chunkSize)})`
-    )
+    // ONE dispatcher for the whole run: `connection: close` on each request is
+    // what forces a fresh socket per block (verified against undici), so a new
+    // Agent per block would only add churn.
+    const agent = makeDownloadDispatcher()
+    const dispatcher: Dispatcher = agent.compose(interceptors.redirect({ maxRedirections: 5 }))
 
-    while (true) {
-      if (this.active?.interruptReason) {
-        throw new TransferInterrupt(this.active.interruptReason)
-      }
-      if (totalBytes !== null && offset >= totalBytes) return 'done'
-
-      const wantEnd =
-        totalBytes !== null
-          ? Math.min(offset + chunkSize - 1, totalBytes - 1)
-          : offset + chunkSize - 1
-      const wantBytes = wantEnd - offset + 1
-
-      // A dispatcher PER BLOCK plus `connection: close`: undici pools sockets by
-      // origin, so without this the next block would reuse the same TCP
-      // connection — and likely the provider's throttling state with it.
-      const agent = makeDownloadDispatcher()
-      const dispatcher: Dispatcher = agent.compose(interceptors.redirect({ maxRedirections: 5 }))
-      let firstHalfBps = 0
-      let secondHalfBps = 0
-      try {
-        const res = await request(url, {
-          method: 'GET',
-          dispatcher,
-          headers: {
-            'user-agent': USER_AGENT,
-            accept: '*/*',
-            range: `bytes=${offset}-${wantEnd}`,
-            connection: 'close'
-          },
-          signal: this.active!.controller.signal
-        })
-
-        if (res.statusCode !== 206) {
-          await res.body.dump().catch(() => undefined)
-          if (res.statusCode === 200) {
-            appLog.warn(
-              'downloads',
-              `#${item.id} le serveur ignore les requêtes par bloc (HTTP 200) → mode continu`
-            )
-            return 'fallback'
-          }
-          throw new HttpStatusError(res.statusCode)
-        }
-
-        const contentRange = headerValue(res.headers['content-range'])
-        const totalFromRange = parseContentRangeTotal(contentRange)
-        if (totalFromRange !== null) totalBytes = totalFromRange
-
-        // INTEGRITY GUARD: the block must start exactly where our .part ends.
-        // Appending a block that begins elsewhere would silently corrupt the
-        // file, so a mismatch aborts this attempt (the .part stays valid and the
-        // next try re-requests from the real end of file).
-        const rangeStart = parseContentRangeStart(contentRange)
-        if (rangeStart !== null && rangeStart !== offset) {
-          await res.body.dump().catch(() => undefined)
-          throw new Error(
-            `Bloc incohérent renvoyé par le serveur (attendu à ${offset}, reçu à ${rangeStart}).`
-          )
-        }
-
-        // 206 but our END bound was ignored (it would stream the whole tail):
-        // that's not block mode — hand over rather than fight it.
-        const len = Number(headerValue(res.headers['content-length']))
-        if (Number.isFinite(len) && len > wantBytes * 1.5) {
-          await res.body.dump().catch(() => undefined)
-          appLog.warn(
-            'downloads',
-            `#${item.id} borne de fin ignorée par le serveur → mode continu`
-          )
-          return 'fallback'
-        }
-
-        downloadsRepo.updateProgress(item.id, offset, totalBytes)
-
-        // Append the block, measuring first-half vs second-half throughput so
-        // the next block size can track the burst window.
-        const out = createWriteStream(part, { flags: 'a' })
-        let received = offset
-        const blockStartTs = Date.now()
-        const halfMark = offset + Math.floor(wantBytes / 2)
-        let halfTs = 0
-        let halfBytes = 0
-        const counter = new Transform({
-          transform: (chunk: Buffer, _enc, cb) => {
-            received += chunk.length
-            if (halfTs === 0 && received >= halfMark) {
-              halfTs = Date.now()
-              halfBytes = received
-            }
-            // Test-only short-range cap: stop cleanly, simulating a pause.
-            if (testByteCap !== null && received - startOffset >= testByteCap) {
-              this.interruptActive('paused')
-            }
-            reporter.tick(received, totalBytes)
-            cb(null, chunk)
-          }
-        })
-
-        try {
-          await pipeline(res.body as unknown as Readable, counter, out, {
-            signal: this.active!.controller.signal
+    appLog.info('downloads', `#${item.id} mode blocs, reprise à ${formatBytes(startOffset)}`)
+    try {
+      return await runBlockDownload({
+        url,
+        partPath: part,
+        startOffset,
+        knownTotal: item.totalBytes,
+        signal: this.active!.controller.signal,
+        request: async (target, init) => {
+          const res = await request(target, {
+            method: 'GET',
+            dispatcher,
+            headers: { 'user-agent': USER_AGENT, accept: '*/*', ...init.headers },
+            signal: init.signal
           })
-        } catch (e) {
-          // Persist whatever we wrote before re-throwing so resume is exact.
-          downloadsRepo.updateProgress(item.id, await fileSizeOrZero(part), totalBytes)
-          throw e
-        }
-
-        if (halfTs > 0) {
-          const t1 = (halfTs - blockStartTs) / 1000
-          const t2 = (Date.now() - halfTs) / 1000
-          firstHalfBps = t1 > 0 ? (halfBytes - offset) / t1 : 0
-          secondHalfBps = t2 > 0 ? (received - halfBytes) / t2 : 0
-        }
-      } finally {
-        await agent.close().catch(() => undefined)
-      }
-
-      // Re-derive the offset from the file itself: self-correcting when a block
-      // was cut short, since the next Range then picks up exactly where the
-      // bytes on disk end.
-      const onDisk = await fileSizeOrZero(part)
-      if (onDisk <= offset) {
-        throw new Error('Le serveur n’a envoyé aucune donnée pour ce bloc.')
-      }
-      offset = onDisk
-      downloadsRepo.updateProgress(item.id, offset, totalBytes)
-
-      const previous = chunkSize
-      chunkSize = nextChunkSize({ current: chunkSize, firstHalfBps, secondHalfBps })
-      if (chunkSize !== previous) {
-        appLog.info(
-          'downloads',
-          `#${item.id} bloc ${formatBytes(previous)} → ${formatBytes(chunkSize)}`
-        )
-      }
-
-      if (totalBytes === null) {
-        // No usable total (Content-Range: bytes x-y/*) → we can't know when to
-        // stop; let the continuous engine finish the tail.
-        appLog.warn('downloads', `#${item.id} taille totale inconnue → mode continu`)
-        return 'fallback'
-      }
-      if (offset >= totalBytes) return 'done'
+          return {
+            statusCode: res.statusCode,
+            headers: res.headers as Record<string, string | string[] | undefined>,
+            body: res.body as unknown as BlockResponse['body']
+          }
+        },
+        onProgress: (received, total) => reporter.tick(received, total),
+        onBlockDone: (offset, total) => downloadsRepo.updateProgress(item.id, offset, total),
+        log: (level, message) => appLog[level]('downloads', `#${item.id} ${message}`),
+        interruptReason: () => this.active?.interruptReason ?? null,
+        makeInterruptError: (reason) =>
+          new TransferInterrupt(reason as TransferInterrupt['reason'])
+      })
+    } finally {
+      await agent.close().catch(() => undefined)
     }
   }
 
@@ -631,7 +512,25 @@ export class DownloadManager {
           if (totalFromRange !== null) totalBytes = totalFromRange
           appendMode = true
         } else if (res.statusCode === 200) {
-          // Server refused the range (sent the whole file). Clean restart.
+          // A bare 200 on a RANGED request is ambiguous: either the server does
+          // not support ranges and genuinely sent the whole file, or this is an
+          // error page / expired token. Deleting a multi-GB `.part` on the wrong
+          // guess is catastrophic, so demand corroboration — a body that
+          // plausibly IS the whole file, and not an HTML/JSON page.
+          const declared = Number(headerValue(res.headers['content-length']))
+          const contentType = (headerValue(res.headers['content-type']) ?? '').toLowerCase()
+          const looksLikePage = contentType.includes('text/') || contentType.includes('json')
+          const plausibleWholeFile =
+            Number.isFinite(declared) &&
+            (item.totalBytes ? declared === item.totalBytes : declared > resumeFrom)
+          if (looksLikePage || !plausibleWholeFile) {
+            await res.body.dump().catch(() => undefined)
+            throw new IntegrityError(
+              'Réponse inattendue du serveur (HTTP 200) : les octets déjà téléchargés sont ' +
+                'conservés, la reprise réessaiera.'
+            )
+          }
+          // Server really refused the range → clean restart from zero.
           await res.body.dump().catch(() => undefined)
           await unlink(part).catch(() => undefined)
           downloadsRepo.updateProgress(item.id, 0, null)
@@ -705,7 +604,15 @@ export class DownloadManager {
     }
   }
 
-  /** Atomic rename + terminal bookkeeping, shared by both engines. */
+  /**
+   * Atomic rename + terminal bookkeeping, shared by both engines.
+   *
+   * INTEGRITY GATE: when the expected total is known, the file on disk MUST match
+   * it exactly. Without this a truncated `.part` (short block, error page, cut
+   * connection) would be renamed to the final name and archived as a complete
+   * movie — and, because the recorded total would be derived from the truncated
+   * size, it would look self-consistently "100 %" forever after.
+   */
   private async finalizeCompleted(
     item: DownloadItem,
     part: string,
@@ -713,6 +620,13 @@ export class DownloadManager {
     totalBytes: number | null
   ): Promise<void> {
     const size = await fileSizeOrZero(part)
+    if (totalBytes !== null && size !== totalBytes) {
+      // Keep the .part: a later resume repairs it via Range.
+      throw new IntegrityError(
+        `Fichier incomplet (${formatBytes(size)} sur ${formatBytes(totalBytes)}) : ` +
+          'le téléchargement n’a pas été finalisé, il reprendra là où il s’est arrêté.'
+      )
+    }
     downloadsRepo.updateProgress(item.id, size, totalBytes ?? size)
     // ---- complete: atomic rename .part -> final (retry transient Win locks) ----
     await renameWithRetry(part, dest)

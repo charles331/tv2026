@@ -9,7 +9,8 @@ import {
   formatBytes,
   renameWithRetry,
   downloadSubfolder,
-  nextChunkSize,
+  chunkSizeDecision,
+  applyChunkDecision,
   CHUNK_MIN_BYTES,
   CHUNK_MAX_BYTES
 } from '../../src/main/downloads/helpers'
@@ -50,59 +51,46 @@ describe('parseContentRangeStart (garde-fou anti-corruption)', () => {
   })
 })
 
-describe('nextChunkSize (adaptation de la taille de bloc)', () => {
+describe('chunkSizeDecision / applyChunkDecision', () => {
   const MiB = 1024 * 1024
 
-  it('shrinks when the burst died inside the block (second half much slower)', () => {
-    // 10 MB/s then 1 MB/s → ratio 0.1 → shrink by 30 %
-    expect(
-      nextChunkSize({ current: 8 * MiB, firstHalfBps: 10e6, secondHalfBps: 1e6 })
-    ).toBe(Math.floor(8 * MiB * 0.7))
+  it('shrinks when the tail collapsed against the block peak (burst ended)', () => {
+    expect(chunkSizeDecision(10e6, 1e6)).toBe('shrink')
+    expect(applyChunkDecision(8 * MiB, 'shrink')).toBe(Math.floor(8 * MiB * 0.7))
   })
 
-  it('grows when the whole block rode the burst (sustained speed)', () => {
-    expect(
-      nextChunkSize({ current: 8 * MiB, firstHalfBps: 10e6, secondHalfBps: 10e6 })
-    ).toBe(Math.floor(8 * MiB * 1.5))
+  it('grows when the tail held the peak rate (rode the burst throughout)', () => {
+    expect(chunkSizeDecision(10e6, 10e6)).toBe('grow')
+    expect(applyChunkDecision(8 * MiB, 'grow')).toBe(Math.floor(8 * MiB * 1.5))
   })
 
-  it('keeps the size in the in-between zone (near the sweet spot)', () => {
-    // ratio 0.7 → neither shrink nor grow
-    expect(nextChunkSize({ current: 8 * MiB, firstHalfBps: 10e6, secondHalfBps: 7e6 })).toBe(
-      8 * MiB
-    )
+  it('keeps the size in the in-between zone', () => {
+    expect(chunkSizeDecision(10e6, 7e6)).toBe('keep')
+    expect(applyChunkDecision(8 * MiB, 'keep')).toBe(8 * MiB)
   })
 
-  it('never goes below the minimum or above the maximum', () => {
-    expect(
-      nextChunkSize({ current: CHUNK_MIN_BYTES, firstHalfBps: 10e6, secondHalfBps: 0 })
-    ).toBe(CHUNK_MIN_BYTES)
-    expect(
-      nextChunkSize({ current: CHUNK_MAX_BYTES, firstHalfBps: 10e6, secondHalfBps: 10e6 })
-    ).toBe(CHUNK_MAX_BYTES)
+  it('keeps the size when there is no usable measurement', () => {
+    expect(chunkSizeDecision(0, 0)).toBe('keep')
+    expect(chunkSizeDecision(-1, 5)).toBe('keep')
   })
 
-  it('keeps the current size when there is no usable measurement', () => {
-    // Block too small/instant to measure → don't react to noise.
-    expect(nextChunkSize({ current: 8 * MiB, firstHalfBps: 0, secondHalfBps: 0 })).toBe(8 * MiB)
+  it('never leaves the allowed range', () => {
+    expect(applyChunkDecision(CHUNK_MIN_BYTES, 'shrink')).toBe(CHUNK_MIN_BYTES)
+    expect(applyChunkDecision(CHUNK_MAX_BYTES, 'grow')).toBe(CHUNK_MAX_BYTES)
   })
 
-  it('converges towards the burst size over successive blocks', () => {
-    // Simulate a provider whose burst is ~5 MiB: any block bigger than that
-    // sees its second half throttled, so the size must come down and settle.
+  it('converges towards the burst size instead of pegging at the maximum', () => {
+    // Provider whose burst is ~5 MiB: a block bigger than that sees its tail
+    // throttled. Compare tail-vs-peak (not first-vs-second half, which would be
+    // biased by TCP slow start and would grow forever).
     const burst = 5 * MiB
-    let size = 32 * MiB
-    for (let i = 0; i < 12; i++) {
-      const throttled = size > burst
-      size = nextChunkSize({
-        current: size,
-        firstHalfBps: 10e6,
-        secondHalfBps: throttled ? 1e6 : 10e6
-      })
+    let size = 8 * MiB
+    for (let i = 0; i < 10; i++) {
+      const tail = size > burst ? 1e6 : 10e6
+      size = applyChunkDecision(size, chunkSizeDecision(10e6, tail))
     }
-    // Settles in the neighbourhood of the burst, never pinned at the extremes.
+    expect(size).toBeLessThanOrEqual(8 * MiB)
     expect(size).toBeGreaterThanOrEqual(CHUNK_MIN_BYTES)
-    expect(size).toBeLessThan(32 * MiB)
   })
 })
 

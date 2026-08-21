@@ -1,7 +1,8 @@
 # Proposition — Accélérer les téléchargements (téléchargement par blocs)
 
-> Statut : **analyse / proposition** — aucune implémentation.
-> Branche : `analyse/download-throughput`.
+> Statut : **implémenté** sur la branche `analyse/download-throughput` (v0.12.0),
+> en attente de mesure réelle chez le fournisseur.
+> Réglage : `Réglages → Téléchargements → Téléchargement par blocs` (activé par défaut).
 > Domaine : moteur de téléchargement (`src/main/downloads/DownloadManager.ts`).
 
 ## 1. Symptôme observé
@@ -94,26 +95,35 @@ D'où une conception **prudente, mesurée et réversible** (§6).
 
 ## 6. Plan proposé
 
-### Étape 0 — Mesurer (petit, sans risque)
-Ajouter au **journal** (déjà en place depuis la v0.10.0) une trace du **débit par tranche de
-30 s** pendant un téléchargement continu. But : **voir la courbe** (taille de la rafale, débit
-plancher, moment du décrochage). C'est ce qui dira si le découpage peut payer, et quelle
-taille de bloc viser.
-→ Livrable : quelques lignes dans le journal, à me renvoyer par copier-coller.
+### Livré (v0.12.0)
 
-### Étape 1 — Moteur par blocs, avec repli automatique
-- Nouveau chemin « par blocs » dans le `DownloadManager`, **séquentiel**, bloc auto-ajusté,
-  connexion neuve par bloc.
-- **Détection + repli** : si le serveur ne respecte pas les `Range` bornés (réponse `200`,
-  `Content-Range` incohérent, corps plus gros que demandé), on **bascule automatiquement**
-  en mode continu actuel et on le note dans le journal.
-- **Réglage** (onglet Téléchargements) : `Auto` (défaut) / `Par blocs` / `Continu`, pour
-  pouvoir comparer et revenir en arrière sans rebuild.
-- Le journal note le débit moyen par mode → comparaison chiffrée.
+- **Mesure** : le journal écrit une ligne de **débit toutes les 30 s**, préfixée du mode
+  (`[blocs]` / `[continu]`) → comparaison chiffrée entre les deux moteurs.
+- **Moteur par blocs** (`src/main/downloads/blockEngine.ts`) : boucle séquentielle de `Range`
+  bornés, `connection: close` par bloc (une connexion neuve, vérifié contre undici), taille
+  de bloc auto-ajustée, retentatives par bloc, délai de politesse entre blocs et plafond de
+  requêtes par fichier.
+- **Réglage** : interrupteur **on/off** (et non 3 modes) — plus simple, et le repli
+  automatique couvre le cas « le serveur ne suit pas ».
+- **Garde-fous d'intégrité** (un moteur de téléchargement qui se trompe corrompt un film) :
+  - un bloc n'est ajouté que si le **début du `Content-Range` est confirmé** égal à la fin du
+    `.part` — « invérifiable » est traité comme **dangereux**, pas comme acceptable ;
+  - la **taille totale est verrouillée** au premier `206` ; tout désaccord ultérieur est fatal
+    (le fichier a changé sur le serveur) ;
+  - une fois qu'un `206` valide a prouvé que les plages fonctionnent, un `200` ultérieur est
+    une **erreur serveur** (jeton expiré, page d'erreur) — jamais un signal « plages non
+    supportées » ;
+  - le fichier n'est **finalisé que si sa taille correspond exactement** au total annoncé ;
+  - les octets déjà téléchargés ne sont **jamais supprimés** sur une réponse `200` ambiguë.
+- **Tests** : le moteur est testé en intégration contre un serveur HTTP local
+  (`test/main/blockEngine.test.ts`) — chemin nominal, reprise, décalage de `Content-Range`,
+  `Content-Range` absent, taille qui change, `200` en cours de route, coupure en pleine
+  réponse, flux non borné, limitation, interruption, plafond de blocs.
 
-### Étape 2 — Ajustement fin (seulement si l'étape 1 est concluante)
-Réglage automatique de la taille de bloc, et éventuellement essai d'un `User-Agent` neutre
-(certains panels limitent selon l'UA — actuellement un UA de navigateur est envoyé).
+### Reste à faire (après mesure réelle)
+Ajustement fin de la taille de bloc selon la courbe observée, et éventuellement essai d'un
+`User-Agent` neutre (certains panels limitent selon l'UA — actuellement un UA de navigateur
+est envoyé).
 
 ## 7. Ce qui ne change pas
 
@@ -122,10 +132,11 @@ Réglage automatique de la taille de bloc, et éventuellement essai d'un `User-A
 - **File d'attente séquentielle**, priorité à la lecture, renommage atomique : inchangés.
 - Aucune modification du choix de la source ni de l'UI de la file.
 
-## 8. Points à trancher
+## 8. À valider chez le fournisseur (Windows)
 
-1. **Étape 0 d'abord** (mesurer, ~10 min de mon côté, un test de ta part) ou **directement
-   l'étape 1** (moteur par blocs avec repli, testable en réel tout de suite) ?
-2. **Mode par défaut** après implémentation : `Auto` (essaie par blocs, se replie tout seul)
-   ou `Continu` (comportement actuel, tu actives le mode blocs manuellement) ?
-3. Taille de bloc initiale : **8 Mio** proposé (compromis rafale / nombre de requêtes).
+1. Le gain réel : comparer les lignes `[blocs]` et `[continu]` du Journal sur le même film.
+2. Ce que renvoie le panel **quand le jeton expire en cours de téléchargement** (`200` +
+   page d'erreur, ou `401/403`) — le moteur traite les deux sans risque pour le `.part`.
+3. Si ~100–2000 requêtes séquentielles par film déclenchent une limitation (le moteur se
+   replie tout seul sur `429/403/503`).
+4. La taille de bloc vers laquelle l'auto-ajustement converge (visible dans le Journal).

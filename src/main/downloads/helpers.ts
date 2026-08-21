@@ -86,34 +86,41 @@ export const CHUNK_INITIAL_BYTES = 8 * 1024 * 1024
 export const CHUNK_MIN_BYTES = 2 * 1024 * 1024
 export const CHUNK_MAX_BYTES = 64 * 1024 * 1024
 
+/** What the measurement inside one block says about the block size. */
+export type ChunkDecision = 'grow' | 'shrink' | 'keep'
+
 /**
- * Adapt the next block size from the throughput measured INSIDE the block.
+ * Decide from a block's throughput whether the block outlived the provider's
+ * burst.
  *
- * Providers serve an initial burst at full speed then pace the connection down
- * to roughly the media bitrate. Comparing the first half of a block against its
- * second half detects whether the burst ended mid-block:
- *  - second half much slower  → the block outlived the burst → shrink;
- *  - second half still fast   → the whole block rode the burst → grow;
- *  - in between               → keep (we're near the sweet spot).
+ * `peakBps` is the best sustained rate observed inside the block AFTER the
+ * slow-start region, `tailBps` the rate over its last quarter. Comparing tail to
+ * PEAK (rather than first half to second half) matters: every block opens a new
+ * connection, so TCP slow start sits in the first half and would make each block
+ * look like it accelerates — biasing the size upward until it pegs at the
+ * maximum, i.e. back to one big continuous request.
  *
  * Pure: same inputs → same output (unit-tested).
  */
-export function nextChunkSize(opts: {
-  current: number
-  firstHalfBps: number
-  secondHalfBps: number
-  minBytes?: number
-  maxBytes?: number
-}): number {
-  const min = opts.minBytes ?? CHUNK_MIN_BYTES
-  const max = opts.maxBytes ?? CHUNK_MAX_BYTES
-  const clamp = (n: number): number => Math.max(min, Math.min(max, Math.floor(n)))
-  // No usable measurement (block too small / instant) → leave it alone.
-  if (!(opts.firstHalfBps > 0) || !(opts.secondHalfBps >= 0)) return clamp(opts.current)
-  const ratio = opts.secondHalfBps / opts.firstHalfBps
-  if (ratio < 0.6) return clamp(opts.current * 0.7)
-  if (ratio >= 0.85) return clamp(opts.current * 1.5)
-  return clamp(opts.current)
+export function chunkSizeDecision(peakBps: number, tailBps: number): ChunkDecision {
+  // No usable measurement (block too small / instant) → don't react to noise.
+  if (!(peakBps > 0) || !(tailBps >= 0)) return 'keep'
+  const ratio = tailBps / peakBps
+  if (ratio < 0.6) return 'shrink' // throttled before the block ended
+  if (ratio >= 0.85) return 'grow' // rode the burst all the way
+  return 'keep' // near the sweet spot
+}
+
+/** Apply a decision to the current block size, clamped to the allowed range. */
+export function applyChunkDecision(
+  current: number,
+  decision: ChunkDecision,
+  bounds?: { minBytes?: number; maxBytes?: number }
+): number {
+  const min = bounds?.minBytes ?? CHUNK_MIN_BYTES
+  const max = bounds?.maxBytes ?? CHUNK_MAX_BYTES
+  const factor = decision === 'grow' ? 1.5 : decision === 'shrink' ? 0.7 : 1
+  return Math.max(min, Math.min(max, Math.floor(current * factor)))
 }
 
 /** Read a single header value (undici may surface a header as string[]). */
@@ -145,8 +152,22 @@ export function parseContentRangeStart(cr: string | undefined): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
+/**
+ * Raised when a transfer would (or did) compromise file integrity — a block that
+ * does not start where the `.part` ends, or a remote file whose size changed
+ * mid-download. Always terminal: never retried, never finalized.
+ */
+export class IntegrityError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'IntegrityError'
+  }
+}
+
 /** Map a transfer error to a human-readable, renderer-safe message. */
 export function describeError(e: unknown): string {
+  // Already a precise, user-facing French message.
+  if (e instanceof IntegrityError) return e.message
   if (e instanceof HttpStatusError) {
     if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 512) {
       return 'Authentication failed or the download token expired. Try again.'
