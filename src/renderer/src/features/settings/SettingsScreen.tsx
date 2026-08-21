@@ -291,6 +291,32 @@ export function SettingsScreen({
     }
   }, [])
 
+  const handleSetConnections = useCallback(async (n: number) => {
+    setChunkedMessage(null)
+    try {
+      setSettings(unwrap(await api().settings.set({ downloadConnections: n })))
+      setChunkedMessage(
+        n === 1
+          ? 'Une seule connexion (comportement d’origine).'
+          : `${n} connexions en parallèle. S’applique au prochain téléchargement démarré.`
+      )
+    } catch (err) {
+      setChunkedMessage(describeError(err))
+    }
+  }, [])
+
+  const handleSetUserAgent = useCallback(async (ua: 'browser' | 'player') => {
+    setChunkedMessage(null)
+    try {
+      setSettings(unwrap(await api().settings.set({ downloadUserAgent: ua })))
+      setChunkedMessage(
+        `Identité client : ${ua === 'player' ? 'lecteur vidéo (VLC)' : 'navigateur'}.`
+      )
+    } catch (err) {
+      setChunkedMessage(describeError(err))
+    }
+  }, [])
+
   const handleSaveReminderSettings = useCallback(
     async (e: FormEvent) => {
       e.preventDefault()
@@ -650,9 +676,65 @@ export function SettingsScreen({
             </span>
           </span>
         </label>
-        <p className="mt-3 text-xs text-gray-500">
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <h3 className="text-sm font-medium text-gray-200">Connexions en parallèle</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Le fournisseur limite <strong>chaque connexion</strong> (environ 0,5 Mio/s), très en
+            dessous de ce que votre ligne peut faire. Télécharger plusieurs morceaux en parallèle
+            peut donc multiplier la vitesse d’autant.
+          </p>
+          <p className="mt-2 text-xs text-amber-200/80">
+            À garder ≤ « Connexions max. » de votre compte (visible dans l’onglet{' '}
+            <strong>Connexion</strong> après « Tester la connexion »), et laissez-en une pour la
+            lecture si vous regardez en même temps. Trop de connexions peut faire bloquer le compte.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {[1, 2, 3, 4, 6, 8].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => void handleSetConnections(n)}
+                className={
+                  'rounded-lg px-3 py-1.5 text-sm transition-colors ' +
+                  ((settings?.downloadConnections ?? 1) === n
+                    ? 'bg-accent/20 font-medium text-accent-hover'
+                    : 'bg-white/[0.06] text-gray-300 hover:bg-white/[0.12]')
+                }
+              >
+                {n === 1 ? '1 (défaut)' : n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <h3 className="text-sm font-medium text-gray-200">Identité du client</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Certains fournisseurs appliquent des limitations différentes selon le logiciel qui
+            télécharge. À essayer si la vitesse reste faible.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {(['browser', 'player'] as const).map((ua) => (
+              <button
+                key={ua}
+                type="button"
+                onClick={() => void handleSetUserAgent(ua)}
+                className={
+                  'rounded-lg px-3 py-1.5 text-sm transition-colors ' +
+                  ((settings?.downloadUserAgent ?? 'browser') === ua
+                    ? 'bg-accent/20 font-medium text-accent-hover'
+                    : 'bg-white/[0.06] text-gray-300 hover:bg-white/[0.12]')
+                }
+              >
+                {ua === 'browser' ? 'Navigateur (défaut)' : 'Lecteur vidéo (VLC)'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs text-gray-500">
           Le débit mesuré est écrit dans l’onglet <strong>Journal</strong> toutes les 30 s, avec le
-          mode utilisé — de quoi comparer les deux chiffres en main.
+          mode et le nombre de connexions — de quoi comparer les réglages chiffres en main.
         </p>
         {chunkedMessage && <p className="mt-2 text-sm text-emerald-300">{chunkedMessage}</p>}
       </section>

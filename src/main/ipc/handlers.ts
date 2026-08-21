@@ -199,6 +199,17 @@ export const handlers: IpcHandlers = {
       assert(v !== undefined, 'chunkedDownloads must be a boolean')
       patch.chunkedDownloads = v
     }
+    if ('downloadConnections' in req) {
+      const v = requireInt(req, 'downloadConnections')
+      // Hard ceiling: more would hammer the provider and risk the account.
+      assert(v >= 1 && v <= 8, 'downloadConnections out of range (1..8)')
+      patch.downloadConnections = v
+    }
+    if ('downloadUserAgent' in req) {
+      const v = requireString(req, 'downloadUserAgent', 16)
+      assert(v === 'browser' || v === 'player', 'invalid downloadUserAgent')
+      patch.downloadUserAgent = v
+    }
     return ok(settingsRepo.setSettings(patch))
   },
 
