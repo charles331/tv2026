@@ -18,6 +18,7 @@ const STATUS_META: Record<
 > = {
   queued: { label: 'En attente', tone: 'neutral' },
   downloading: { label: 'En cours', tone: 'info' },
+  retrying: { label: 'Reprise auto.', tone: 'warning' },
   paused: { label: 'En pause', tone: 'warning' },
   completed: { label: 'Terminé', tone: 'success' },
   failed: { label: 'Échoué', tone: 'danger' },
@@ -51,6 +52,7 @@ export function DownloadRow({
   const isActive = item.status === 'downloading'
   const isQueued = item.status === 'queued'
   const isPaused = item.status === 'paused'
+  const isRetrying = item.status === 'retrying'
   const received = live?.receivedBytes ?? item.receivedBytes
   const total = live?.totalBytes ?? item.totalBytes
   const progress = live?.progress ?? item.progress
@@ -123,12 +125,15 @@ export function DownloadRow({
             {item.status === 'failed' && item.error && (
               <span className="text-red-300">{item.error}</span>
             )}
+            {isRetrying && item.error && (
+              <span className="text-amber-300">{item.error}</span>
+            )}
           </div>
         </div>
 
         {/* Controls */}
         <div className="flex shrink-0 items-center gap-1">
-          {isActive && (
+          {(isActive || isRetrying) && (
             <Button
               size="sm"
               variant="ghost"
@@ -136,6 +141,17 @@ export function DownloadRow({
               onClick={() => onPause(item.id)}
             >
               Pause
+            </Button>
+          )}
+          {isRetrying && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconRefresh size={14} />}
+              onClick={() => onResume(item.id)}
+              title="Ne pas attendre le délai — relancer tout de suite"
+            >
+              Réessayer maintenant
             </Button>
           )}
           {(isPaused || isQueued) && (

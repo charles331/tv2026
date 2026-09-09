@@ -18,6 +18,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.15.0',
+    date: '2026-09-09',
+    changes: [
+      'Les téléchargements ne s’arrêtent plus sur une erreur passagère : jeton expiré, coupure réseau, hoquet du fournisseur — l’application relance toute seule et reprend là où elle en était.',
+      'Règle importante : tant qu’un téléchargement progresse, il peut réessayer indéfiniment. Seules les tentatives qui ne transfèrent rien sont comptées, et après 8 d’affilée le téléchargement s’arrête en expliquant pourquoi.',
+      'Délais croissants entre les tentatives (3 s, 5 s, 10 s, 20 s, 45 s, 1 min 30, 3 min, 5 min). Le premier est court car un jeton expiré se répare instantanément.',
+      'La file ne se bloque plus : pendant qu’un film attend sa nouvelle tentative, le suivant se télécharge.',
+      'Nouveau statut « Reprise auto. » dans la file, avec la cause et le délai restant, plus un bouton « Réessayer maintenant » pour ne pas attendre.',
+      'Ne sont jamais relancés automatiquement : disque plein, écriture refusée, et les erreurs d’intégrité — dans ce dernier cas le fichier a changé chez le fournisseur et insister l’abîmerait.',
+      'Messages d’erreur des téléchargements traduits en français.'
+    ]
+  },
+  {
     version: '0.14.0',
     date: '2026-08-21',
     changes: [

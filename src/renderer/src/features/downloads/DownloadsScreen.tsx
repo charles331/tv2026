@@ -6,7 +6,12 @@ import { describeError } from '../../lib/ipc'
 import { Button, LoadingState, EmptyState, ErrorState, IconQueue } from '../../components/ui'
 import { DownloadRow } from './DownloadRow'
 
-const ACTIVE: ReadonlySet<DownloadItem['status']> = new Set(['queued', 'downloading', 'paused'])
+const ACTIVE: ReadonlySet<DownloadItem['status']> = new Set([
+  'queued',
+  'downloading',
+  'retrying',
+  'paused'
+])
 const DONE: ReadonlySet<DownloadItem['status']> = new Set(['completed', 'failed', 'canceled'])
 
 export function DownloadsScreen(): ReactElement {

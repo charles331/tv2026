@@ -145,28 +145,30 @@ describe('formatBytes (binary units)', () => {
 describe('describeError', () => {
   it('maps auth-ish HTTP statuses to a token/auth message', () => {
     for (const code of [401, 403, 512]) {
-      expect(describeError(new HttpStatusError(code))).toMatch(/Authentication failed/)
+      expect(describeError(new HttpStatusError(code))).toMatch(/jeton de téléchargement expiré/)
     }
   })
   it('maps 404 to a not-found message', () => {
-    expect(describeError(new HttpStatusError(404))).toMatch(/not found/i)
+    expect(describeError(new HttpStatusError(404))).toMatch(/introuvable/i)
   })
   it('reports other HTTP statuses verbatim', () => {
-    expect(describeError(new HttpStatusError(500))).toBe('Provider returned HTTP 500.')
+    expect(describeError(new HttpStatusError(500))).toBe('Le fournisseur a répondu HTTP 500')
   })
   it('maps filesystem errno codes', () => {
-    expect(describeError({ code: 'ENOSPC' })).toMatch(/Disk full/)
-    expect(describeError({ code: 'ENOENT' })).toMatch(/unavailable/)
-    expect(describeError({ code: 'EACCES' })).toMatch(/Permission denied/)
+    expect(describeError({ code: 'ENOSPC' })).toMatch(/Disque plein/)
+    expect(describeError({ code: 'ENOENT' })).toMatch(/introuvable/)
+    expect(describeError({ code: 'EACCES' })).toMatch(/Écriture refusée/)
   })
   it('maps undici timeout error names', () => {
-    expect(describeError({ name: 'ConnectTimeoutError' })).toMatch(/Network timeout/)
-    expect(describeError({ name: 'HeadersTimeoutError' })).toMatch(/Network timeout/)
+    expect(describeError({ name: 'ConnectTimeoutError' })).toMatch(/ne répond pas/)
+    expect(describeError({ name: 'HeadersTimeoutError' })).toMatch(/ne répond pas/)
   })
   it('falls back to the error message, then a generic message', () => {
-    expect(describeError(new Error('socket hang up'))).toBe('Download error: socket hang up')
-    expect(describeError(null)).toBe('Unknown download error.')
-    expect(describeError({})).toBe('Unknown download error.')
+    expect(describeError(new Error('socket hang up'))).toBe(
+      'Erreur de téléchargement : socket hang up'
+    )
+    expect(describeError(null)).toBe('Erreur de téléchargement inconnue')
+    expect(describeError({})).toBe('Erreur de téléchargement inconnue')
   })
 })
 
