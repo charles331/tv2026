@@ -609,6 +609,9 @@ export const handlers: IpcHandlers = {
     return ok(downloadManager.reorder(ids as number[]))
   },
 
+  [InvokeChannels.DOWNLOAD_RETRY_ALL]: () =>
+    ok({ restarted: downloadManager.retryAllFailed() }),
+
   [InvokeChannels.DOWNLOAD_CLEAR_COMPLETED]: () =>
     ok({ removed: downloadManager.clearCompleted() }),
 

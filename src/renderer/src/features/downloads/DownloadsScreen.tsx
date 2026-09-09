@@ -3,7 +3,14 @@ import type { DownloadItem } from '@shared/index'
 import { useDownloads } from '../../lib/downloads'
 import { useConnectionBusy } from '../../lib/connectionLock'
 import { describeError } from '../../lib/ipc'
-import { Button, LoadingState, EmptyState, ErrorState, IconQueue } from '../../components/ui'
+import {
+  Button,
+  LoadingState,
+  EmptyState,
+  ErrorState,
+  IconQueue,
+  IconRefresh
+} from '../../components/ui'
 import { DownloadRow } from './DownloadRow'
 
 const ACTIVE: ReadonlySet<DownloadItem['status']> = new Set([
@@ -28,6 +35,10 @@ export function DownloadsScreen(): ReactElement {
   )
   const history = useMemo(
     () => dl.items.filter((it) => DONE.has(it.status)).sort((a, b) => b.updatedAt - a.updatedAt),
+    [dl.items]
+  )
+  const failedCount = useMemo(
+    () => dl.items.filter((it) => it.status === 'failed').length,
     [dl.items]
   )
 
@@ -66,11 +77,24 @@ export function DownloadsScreen(): ReactElement {
             )}
           </p>
         </div>
-        {history.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => void run(dl.clearCompleted)}>
-            Vider l’historique
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {failedCount > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<IconRefresh size={14} />}
+              onClick={() => void run(async () => void (await dl.retryAllFailed()))}
+              title="Remettre tous les téléchargements en échec dans la file (chacun reprend là où il s’est arrêté)"
+            >
+              Tout relancer ({failedCount})
+            </Button>
+          )}
+          {history.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => void run(dl.clearCompleted)}>
+              Vider l’historique
+            </Button>
+          )}
+        </div>
       </header>
 
       {actionError && (

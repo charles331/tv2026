@@ -37,6 +37,7 @@ interface DownloadsContextValue {
   resume: (id: number) => Promise<void>
   cancel: (id: number) => Promise<void>
   reorder: (orderedIds: number[]) => Promise<void>
+  retryAllFailed: () => Promise<number>
   clearCompleted: () => Promise<void>
   reload: () => void
   /** Live speed/ETA for an item (not persisted on DownloadItem). */
@@ -165,6 +166,12 @@ export function DownloadsProvider({ children }: { children: ReactNode }): ReactE
     setItems(list)
   }, [])
 
+  const retryAllFailed = useCallback(async () => {
+    const { restarted } = unwrap(await api().downloads.retryAllFailed())
+    await refresh()
+    return restarted
+  }, [refresh])
+
   const clearCompleted = useCallback(async () => {
     unwrap(await api().downloads.clearCompleted())
     await refresh()
@@ -188,6 +195,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }): ReactE
     resume,
     cancel,
     reorder,
+    retryAllFailed,
     clearCompleted,
     reload: () => void refresh(),
     getLiveProgress: (id: number) => progressCache.current.get(id)

@@ -27,6 +27,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'La file ne se bloque plus : pendant qu’un film attend sa nouvelle tentative, le suivant se télécharge.',
       'Nouveau statut « Reprise auto. » dans la file, avec la cause et le délai restant, plus un bouton « Réessayer maintenant » pour ne pas attendre.',
       'Ne sont jamais relancés automatiquement : disque plein, écriture refusée, et les erreurs d’intégrité — dans ce dernier cas le fichier a changé chez le fournisseur et insister l’abîmerait.',
+      'Nouveau bouton « Tout relancer (N) » en haut de la file : remet d’un coup tous les téléchargements en échec dans la file, chacun reprenant là où il s’est arrêté.',
       'Messages d’erreur des téléchargements traduits en français.'
     ]
   },

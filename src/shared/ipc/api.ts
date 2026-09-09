@@ -190,6 +190,12 @@ export interface DownloadsApi {
   resume(id: number): Promise<Result<DownloadItem>>
   cancel(id: number): Promise<Result<DownloadItem>>
   reorder(req: ReorderQueueRequest): Promise<Result<DownloadItem[]>>
+  /**
+   * Re-queue EVERY failed download at once, resetting their retry budgets.
+   * Returns how many were restarted. Items resume from their `.part`, so
+   * nothing already transferred is downloaded again.
+   */
+  retryAllFailed(): Promise<Result<{ restarted: number }>>
   clearCompleted(): Promise<Result<{ removed: number }>>
   /**
    * Resolve the on-disk path of an already-downloaded movie for local playback.

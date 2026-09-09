@@ -314,6 +314,30 @@ export class DownloadManager {
     return out
   }
 
+  /**
+   * Re-queue EVERY failed download in one go, clearing their retry budgets.
+   *
+   * The automatic policy handles transient faults on its own; this is for the
+   * cases it deliberately does NOT retry (disk full, destination unavailable) or
+   * that exhausted their budget while the app was closed — once the cause is
+   * fixed, restarting them one row at a time is busywork. Each item resumes from
+   * its `.part`, so nothing already transferred is fetched again.
+   */
+  retryAllFailed(): number {
+    const failed = downloadsRepo.listDownloads().filter((i) => i.status === 'failed')
+    for (const item of failed) {
+      this.retries.delete(item.id)
+      downloadsRepo.updateStatus(item.id, 'queued', null)
+      this.emitState(item.id, item.streamId, 'queued')
+    }
+    if (failed.length > 0) {
+      appLog.info('downloads', `Relance de ${failed.length} téléchargement(s) en échec`)
+      this.armRetryTimer()
+      void this.kick()
+    }
+    return failed.length
+  }
+
   clearCompleted(): number {
     return downloadsRepo.clearFinished()
   }
