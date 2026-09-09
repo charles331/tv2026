@@ -58,16 +58,17 @@ export interface NewDownload {
 
 export function addDownload(d: NewDownload): DownloadItem {
   const db = getDb()
-  // Dedupe: if an active (queued/downloading/paused) or still-listed completed
-  // download for the same stream + kind already exists, return it instead of
-  // enqueuing a duplicate — avoids two queue rows / two .part files for one
-  // stream (e.g. a per-episode click racing a "download the whole season" run).
+  // Dedupe: if an active (queued/downloading/retrying/paused) or still-listed
+  // completed download for the same stream + kind already exists, return it
+  // instead of enqueuing a duplicate — avoids two queue rows / two .part files
+  // for one stream (e.g. a per-episode click racing a "download the whole
+  // season" run). 'retrying' counts as active: it is going to run on its own.
   // 'failed'/'canceled' rows are intentionally NOT matched, so they stay re-addable.
   const existing = db
     .prepare(
       `SELECT id FROM download_queue
        WHERE stream_id = ? AND kind = ?
-         AND status IN ('queued','downloading','paused','completed')
+         AND status IN ('queued','downloading','retrying','paused','completed')
        ORDER BY id ASC LIMIT 1`
     )
     .get(d.streamId, d.kind) as { id: number } | undefined
@@ -219,9 +220,18 @@ export function listCompletedStreamIds(): number[] {
 /**
  * On startup, downloads left in 'downloading' from a previous run can't still
  * be active — reset them to 'paused' so the engine can resume cleanly.
+ *
+ * 'retrying' rows go back to 'queued' instead: the retry schedule lives in
+ * memory, and launching the app is itself a deliberate "try again", so the item
+ * gets a fresh budget rather than staying stuck behind a timer that is gone.
  */
 export function reconcileOnStartup(): void {
-  getDb()
-    .prepare(`UPDATE download_queue SET status = 'paused', updated_at = ? WHERE status = 'downloading'`)
-    .run(Date.now())
+  const now = Date.now()
+  const db = getDb()
+  db.prepare(
+    `UPDATE download_queue SET status = 'paused', updated_at = ? WHERE status = 'downloading'`
+  ).run(now)
+  db.prepare(
+    `UPDATE download_queue SET status = 'queued', error = NULL, updated_at = ? WHERE status = 'retrying'`
+  ).run(now)
 }

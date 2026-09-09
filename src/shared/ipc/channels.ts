@@ -79,6 +79,7 @@ export const InvokeChannels = {
   DOWNLOAD_RESUME: 'download:resume',
   DOWNLOAD_CANCEL: 'download:cancel',
   DOWNLOAD_REORDER: 'download:reorder',
+  DOWNLOAD_RETRY_ALL: 'download:retryAll', // relance tous les échoués d'un coup
   DOWNLOAD_CLEAR_COMPLETED: 'download:clearCompleted',
   DOWNLOAD_LOCAL_PATH: 'download:localPath',
   DOWNLOAD_COMPLETED_IDS: 'download:completedIds', // persistent "already downloaded" set

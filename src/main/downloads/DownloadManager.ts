@@ -54,6 +54,13 @@ import {
   renameWithRetry
 } from './helpers'
 import {
+  MAX_NO_PROGRESS_ATTEMPTS,
+  classifyFailure,
+  formatDelay,
+  nextRetryState,
+  type RetryState
+} from './retryPolicy'
+import {
   runBlockDownload,
   type BlockEngineOutcome,
   type BlockResponse
@@ -132,6 +139,16 @@ export class DownloadManager {
   private active: ActiveTransfer | null = null
   /** True while the queue loop is draining; prevents concurrent loops. */
   private looping = false
+
+  /**
+   * Per-download retry bookkeeping, keyed by queue id. In memory on purpose: the
+   * bytes on disk are what must survive a restart, and launching the app is
+   * itself a deliberate "try again" that deserves a fresh budget.
+   */
+  private readonly retries = new Map<number, RetryState>()
+
+  /** Single timer that wakes the queue when the earliest retry becomes due. */
+  private retryTimer: NodeJS.Timeout | null = null
   private started = false
   /**
    * Set when playback is preempting / holds the connection. While true the queue
@@ -196,6 +213,13 @@ export class DownloadManager {
     this.unsubscribeBusy?.()
     this.unsubscribeBusy = null
     this.interruptActive('shutdown')
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+    // Pending retries are in-memory only; reconcileOnStartup() re-queues the
+    // 'retrying' rows on the next launch, so nothing is stranded.
+    this.retries.clear()
     this.started = false
   }
 
@@ -238,9 +262,16 @@ export class DownloadManager {
     if (this.active?.id === id) {
       // Active transfer: abort; the loop persists 'paused' and releases the lock.
       this.interruptActive('paused')
-    } else if (item.status === 'queued' || item.status === 'downloading') {
+    } else if (
+      item.status === 'queued' ||
+      item.status === 'downloading' ||
+      item.status === 'retrying'
+    ) {
+      // Pausing a pending retry must actually stop it, timer included.
+      this.retries.delete(id)
       downloadsRepo.updateStatus(id, 'paused')
       this.emitState(id, item.streamId, 'paused')
+      this.armRetryTimer()
     }
     return downloadsRepo.getDownload(id)
   }
@@ -248,9 +279,13 @@ export class DownloadManager {
   resume(id: number): DownloadItem | null {
     const item = downloadsRepo.getDownload(id)
     if (!item) return null
-    if (item.status === 'paused' || item.status === 'failed') {
+    if (item.status === 'paused' || item.status === 'failed' || item.status === 'retrying') {
+      // An explicit click is a fresh start: drop the backoff and the attempt
+      // budget so the user is never made to wait out a timer they overrode.
+      this.retries.delete(id)
       downloadsRepo.updateStatus(id, 'queued', null)
       this.emitState(id, item.streamId, 'queued')
+      this.armRetryTimer()
       void this.kick()
     }
     return downloadsRepo.getDownload(id)
@@ -263,10 +298,12 @@ export class DownloadManager {
       // Abort active transfer; the loop finalizes the cancel + cleans the .part.
       this.interruptActive('canceled')
     } else {
+      this.retries.delete(id)
       downloadsRepo.updateStatus(id, 'canceled')
       this.emitState(id, item.streamId, 'canceled')
       // Best-effort cleanup of any partial file for a non-active item.
       void unlink(partPath(item.destPath)).catch(() => undefined)
+      this.armRetryTimer()
     }
     return downloadsRepo.getDownload(id)
   }
@@ -275,6 +312,30 @@ export class DownloadManager {
     const out = downloadsRepo.reorder(orderedIds)
     void this.kick()
     return out
+  }
+
+  /**
+   * Re-queue EVERY failed download in one go, clearing their retry budgets.
+   *
+   * The automatic policy handles transient faults on its own; this is for the
+   * cases it deliberately does NOT retry (disk full, destination unavailable) or
+   * that exhausted their budget while the app was closed — once the cause is
+   * fixed, restarting them one row at a time is busywork. Each item resumes from
+   * its `.part`, so nothing already transferred is fetched again.
+   */
+  retryAllFailed(): number {
+    const failed = downloadsRepo.listDownloads().filter((i) => i.status === 'failed')
+    for (const item of failed) {
+      this.retries.delete(item.id)
+      downloadsRepo.updateStatus(item.id, 'queued', null)
+      this.emitState(item.id, item.streamId, 'queued')
+    }
+    if (failed.length > 0) {
+      appLog.info('downloads', `Relance de ${failed.length} téléchargement(s) en échec`)
+      this.armRetryTimer()
+      void this.kick()
+    }
+    return failed.length
   }
 
   clearCompleted(): number {
@@ -291,10 +352,100 @@ export class DownloadManager {
     }
   }
 
-  /** Pick the next queued item (lowest queue_position) ready to run. */
+  /**
+   * Pick the next item ready to run.
+   *
+   * Plain 'queued' items come first, then any 'retrying' item whose backoff has
+   * elapsed. Ordering it this way is what keeps ONE flaky title from holding up
+   * the queue: while it waits out its delay, the next film downloads.
+   */
   private nextQueued(): DownloadItem | null {
     const items = downloadsRepo.listDownloads()
-    return items.find((i) => i.status === 'queued') ?? null
+    const queued = items.find((i) => i.status === 'queued')
+    if (queued) return queued
+
+    const now = Date.now()
+    return (
+      items.find(
+        (i) => i.status === 'retrying' && (this.retries.get(i.id)?.retryAt ?? 0) <= now
+      ) ?? null
+    )
+  }
+
+  /**
+   * Wake the queue when the earliest pending retry becomes due. One timer for
+   * the whole queue (re-armed each time), so nothing polls.
+   */
+  private armRetryTimer(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+    const pending = downloadsRepo
+      .listDownloads()
+      .filter((i) => i.status === 'retrying')
+      .map((i) => this.retries.get(i.id)?.retryAt ?? 0)
+      .filter((t) => t > 0)
+    if (pending.length === 0) return
+
+    const delay = Math.min(...pending) - Date.now()
+    // Already due: the queue loop picks it up on its next iteration, and a
+    // playback release re-kicks the queue. Scheduling a timer here would just
+    // spin at the minimum interval for as long as the item cannot start.
+    if (delay <= 0) return
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null
+      void this.kick()
+    }, delay)
+    // Never hold the app open just for a pending retry.
+    this.retryTimer.unref?.()
+  }
+
+  /**
+   * Schedule an automatic restart after a transient failure, or give up.
+   *
+   * The bytes already on disk are the source of truth for "did we progress":
+   * read from the FILE, not the DB, so the decision holds even when a transfer
+   * died somewhere unexpected. Progress resets the budget (see retryPolicy).
+   */
+  private async scheduleRetry(item: DownloadItem, e: unknown): Promise<void> {
+    const msg = describeError(e)
+
+    if (classifyFailure(e) === 'fatal') {
+      appLog.error('downloads', `#${item.id} échec définitif : ${msg}`)
+      this.fail(item, msg)
+      return
+    }
+
+    const onDisk = await fileSizeOrZero(partPath(item.destPath))
+    const decision = nextRetryState(this.retries.get(item.id), onDisk, Date.now())
+
+    if (decision.action === 'give-up') {
+      this.retries.delete(item.id)
+      appLog.error(
+        'downloads',
+        `#${item.id} abandonné après ${MAX_NO_PROGRESS_ATTEMPTS} tentatives sans progression : ${msg}`
+      )
+      this.fail(
+        item,
+        `${msg} (abandonné après ${MAX_NO_PROGRESS_ATTEMPTS} tentatives sans progression)`
+      )
+      return
+    }
+
+    this.retries.set(item.id, decision.state)
+    const label = `Nouvelle tentative ${decision.state.attempts}/${MAX_NO_PROGRESS_ATTEMPTS} dans ${formatDelay(decision.delayMs)} — ${msg}`
+    downloadsRepo.updateStatus(item.id, 'retrying', label)
+    this.emitState(item.id, item.streamId, 'retrying', { error: label })
+    appLog.warn(
+      'downloads',
+      `#${item.id} ${msg} → reprise automatique dans ${formatDelay(decision.delayMs)} ` +
+        `(tentative ${decision.state.attempts}/${MAX_NO_PROGRESS_ATTEMPTS}` +
+        `${decision.progressed ? ', compteur remis à zéro : le fichier a progressé' : ''}, ` +
+        `${formatBytes(onDisk)} déjà sur le disque)`
+    )
+    this.armRetryTimer()
   }
 
   /**
@@ -313,6 +464,10 @@ export class DownloadManager {
       }
     } finally {
       this.looping = false
+      // A wake that arrived while the loop was already running is dropped by the
+      // re-entrancy guard, so re-arm on every exit: a pending retry must always
+      // have either a live timer or a loop about to pick it up.
+      this.armRetryTimer()
     }
   }
 
@@ -759,9 +914,11 @@ export class DownloadManager {
       }
     }
 
-    // Genuine failure (network drop, token expiry, disk full, etc.).
-    const msg = describeError(e)
-    this.fail(item, msg)
+    // Genuine failure (network drop, token expiry, disk full, etc.). Do NOT end
+    // the download here: most of these are transient, the bytes on disk are kept
+    // and the provider URL is re-resolved on every restart, so an automatic
+    // retry repairs them without the user noticing.
+    await this.scheduleRetry(item, e)
   }
 
   private fail(item: DownloadItem, message: string): void {
@@ -785,9 +942,9 @@ export class DownloadManager {
       const fsStat = await statfs(dirname(item.destPath))
       const free = fsStat.bavail * fsStat.bsize
       if (free < needed) {
-        return `Not enough free disk space: need ~${formatBytes(needed)}, only ${formatBytes(
+        return `Espace disque insuffisant : il faut ~${formatBytes(needed)}, il n’en reste que ${formatBytes(
           free
-        )} available.`
+        )}`
       }
     } catch {
       // statfs unavailable (e.g. odd FS) — don't block the download.

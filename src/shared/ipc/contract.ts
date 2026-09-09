@@ -162,6 +162,7 @@ export interface IpcContract {
   [InvokeChannels.DOWNLOAD_RESUME]: { request: { id: number }; response: DownloadItem }
   [InvokeChannels.DOWNLOAD_CANCEL]: { request: { id: number }; response: DownloadItem }
   [InvokeChannels.DOWNLOAD_REORDER]: { request: ReorderQueueRequest; response: DownloadItem[] }
+  [InvokeChannels.DOWNLOAD_RETRY_ALL]: { request: void; response: { restarted: number } }
   [InvokeChannels.DOWNLOAD_CLEAR_COMPLETED]: { request: void; response: { removed: number } }
   [InvokeChannels.DOWNLOAD_LOCAL_PATH]: {
     request: { streamId: number; kind?: DownloadKind }

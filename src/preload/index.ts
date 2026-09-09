@@ -264,6 +264,10 @@ const api: RendererApi = {
       invoke(InvokeChannels.DOWNLOAD_REORDER, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_REORDER>>
       >,
+    retryAllFailed: () =>
+      invoke(InvokeChannels.DOWNLOAD_RETRY_ALL) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_RETRY_ALL>>
+      >,
     clearCompleted: () =>
       invoke(InvokeChannels.DOWNLOAD_CLEAR_COMPLETED) as Promise<
         Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_CLEAR_COMPLETED>>

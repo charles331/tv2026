@@ -7,6 +7,13 @@
 export type DownloadStatus =
   | 'queued'
   | 'downloading'
+  /**
+   * A transfer failed on something transient (expired token, provider hiccup,
+   * connection reset) and an automatic restart is scheduled. The `.part` file is
+   * kept, so the retry resumes rather than starting over. Distinct from 'queued'
+   * so the UI can say why, and from 'failed' because no user action is needed.
+   */
+  | 'retrying'
   | 'paused'
   | 'completed'
   | 'failed'

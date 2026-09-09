@@ -180,20 +180,24 @@ export function describeError(e: unknown): string {
   if (e instanceof IntegrityError) return e.message
   if (e instanceof HttpStatusError) {
     if (e.statusCode === 401 || e.statusCode === 403 || e.statusCode === 512) {
-      return 'Authentication failed or the download token expired. Try again.'
+      return 'Identification refusée ou jeton de téléchargement expiré'
     }
-    if (e.statusCode === 404) return 'The movie file was not found on the provider.'
-    return `Provider returned HTTP ${e.statusCode}.`
+    if (e.statusCode === 404) return 'Fichier introuvable chez le fournisseur'
+    return `Le fournisseur a répondu HTTP ${e.statusCode}`
   }
   const err = e as NodeJS.ErrnoException
-  if (err?.code === 'ENOSPC') return 'Disk full — no space left to continue the download.'
-  if (err?.code === 'ENOENT') return 'Destination path is unavailable.'
-  if (err?.code === 'EACCES') return 'Permission denied writing to the destination.'
-  if (err?.name === 'ConnectTimeoutError' || err?.name === 'HeadersTimeoutError') {
-    return 'Network timeout reaching the provider.'
+  if (err?.code === 'ENOSPC') return 'Disque plein — plus de place pour continuer'
+  if (err?.code === 'ENOENT') return 'Le dossier de destination est introuvable'
+  if (err?.code === 'EACCES' || err?.code === 'EPERM') {
+    return 'Écriture refusée dans le dossier de destination'
   }
-  if (err?.message) return `Download error: ${err.message}`
-  return 'Unknown download error.'
+  if (err?.code === 'ECONNRESET') return 'Connexion coupée par le fournisseur'
+  if (err?.code === 'ETIMEDOUT') return 'Délai dépassé pendant le transfert'
+  if (err?.name === 'ConnectTimeoutError' || err?.name === 'HeadersTimeoutError') {
+    return 'Le fournisseur ne répond pas (délai dépassé)'
+  }
+  if (err?.message) return `Erreur de téléchargement : ${err.message}`
+  return 'Erreur de téléchargement inconnue'
 }
 
 /** Format a byte count with binary units, e.g. "64.0 MiB" (disk-space messages). */
