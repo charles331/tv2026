@@ -48,7 +48,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "conventional-changelog-conventionalcommits": "^9.3.1",
+    "conventional-changelog-conventionalcommits": "^10.2.0",
     "electron": "^41.7.1",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
