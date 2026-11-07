@@ -33,10 +33,14 @@ let unwireLock: (() => void) | null = null
 function installCsp(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // No remote code; allow self + inline styles (Tailwind injects a <style>).
-    // 'unsafe-inline' for styles only; scripts are strictly self.
+    // 'unsafe-inline' for styles only; scripts are strictly self — except on the
+    // `pnpm dev` server, where React Fast Refresh needs its inline preamble
+    // (otherwise React never mounts: empty dark window). The packaged app never
+    // has ELECTRON_RENDERER_URL, so it keeps the strict policy.
+    const devServer = is.dev && Boolean(process.env['ELECTRON_RENDERER_URL'])
     const csp = [
       "default-src 'self'",
-      "script-src 'self'",
+      devServer ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       // Posters come from the provider over http(s); allow remote images + data URIs.
       "img-src 'self' data: http: https:",
