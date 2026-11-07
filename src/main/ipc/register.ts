@@ -67,6 +67,12 @@ export function makeEmitter(getWindows: () => BrowserWindow[]) {
 export function wireConnectionLockEvents(getWindows: () => BrowserWindow[]): () => void {
   const emit = makeEmitter(getWindows)
   return connectionLock.onBusyChange((state) => {
+    // A sub-second file probe is invisible to the user: report it as idle so the
+    // UI doesn't flash a "connexion occupée" state on every movie page opened.
+    if (state.reason === 'probe') {
+      emit(EventChannels.CONNECTION_BUSY, { busy: false, reason: null })
+      return
+    }
     emit(EventChannels.CONNECTION_BUSY, { busy: state.busy, reason: state.reason })
   })
 }

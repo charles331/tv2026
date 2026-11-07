@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import type { VodInfo, VodStream } from '@shared/index'
+import type { FileCheckResult, VodInfo, VodStream } from '@shared/index'
+import { detectLowQualityTag, fileQuality } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useDownloads } from '../../lib/downloads'
 import {
@@ -15,8 +16,9 @@ import {
   IconX,
   IconCheck
 } from '../../components/ui'
-import { formatDuration, formatRating, trailerUrl } from '../../lib/format'
+import { formatBytes, formatDuration, formatRating, trailerUrl } from '../../lib/format'
 import { FavoriteButton } from '../favorites/FavoriteButton'
+import { FileQualityPill, LowQualityTag, formatMbps, type FilePillState } from './quality'
 
 /**
  * Movie detail overlay. Loads full info via `catalog.getInfo` and offers
@@ -48,6 +50,55 @@ export function MovieDetail({
     (it) => it.streamId === stream.streamId && it.status === 'completed'
   )
 
+  // --- file quality (real size via a 1-byte request, see main/quality) ---
+  const [fileState, setFileState] = useState<FilePillState>({ kind: 'checking' })
+  const [confirmLowQuality, setConfirmLowQuality] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+
+  const checkFile = useCallback(
+    (manual: boolean) => {
+      setFileState({ kind: 'checking' })
+      api()
+        .catalog.checkFile(stream.streamId, manual)
+        .then((r) => setFileState(toPillState(unwrap(r))))
+        .catch((e) => setFileState({ kind: 'error', message: describeError(e) }))
+    },
+    [stream.streamId]
+  )
+
+  // "Analyser": real resolution + codec (mpv reads the first frame, a few seconds).
+  const analyzeFile = useCallback(() => {
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    api()
+      .catalog.analyzeFile(stream.streamId)
+      .then((r) => {
+        const res = unwrap(r)
+        if (res.status === 'ok') setFileState(toPillState(res))
+        else if (res.status === 'busy')
+          setAnalyzeError('connexion occupée par un téléchargement ou une lecture')
+        else if (res.status === 'error') setAnalyzeError(res.message)
+      })
+      .catch((e) => setAnalyzeError(describeError(e)))
+      .finally(() => setAnalyzing(false))
+  }, [stream.streamId])
+
+  useEffect(() => {
+    checkFile(false)
+  }, [checkFile])
+
+  // The connection was busy: check again on the next RELEASE signal from the
+  // lock. (Not from useConnectionBusy: it starts at "idle" and only learns the
+  // real state on the next change, so a page opened during playback would
+  // believe the connection free and retry in a loop.)
+  useEffect(() => {
+    if (fileState.kind !== 'busy') return
+    return api().connectionLock.onBusyChange((e) => {
+      if (!e.busy) checkFile(false)
+    })
+  }, [fileState.kind, checkFile])
+
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
@@ -71,7 +122,15 @@ export function MovieDetail({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const lowQualityTag = detectLowQualityTag(stream.name) ?? detectLowQualityTag(info?.name)
+  const fileVerdict =
+    fileState.kind === 'ok'
+      ? fileQuality(fileState.sizeBytes, fileState.durationSecs ?? info?.durationSecs, fileState.video)
+      : null
+  const suspect = lowQualityTag !== null || fileVerdict?.level === 'low'
+
   const handleDownload = useCallback(async () => {
+    setConfirmLowQuality(false)
     setAdding(true)
     setActionError(null)
     setActionMessage(null)
@@ -181,11 +240,26 @@ export function MovieDetail({
                 {info?.durationSecs != null && info.durationSecs > 0 && (
                   <span>{formatDuration(info.durationSecs)}</span>
                 )}
+                <LowQualityTag name={`${stream.name} ${info?.name ?? ''}`} />
                 {alreadyQueued && (
                   <Badge tone="success">
                     <IconCheck size={11} /> Dans la file / téléchargé
                   </Badge>
                 )}
+              </div>
+
+              <div className="mt-2">
+                <FileQualityPill
+                  state={
+                    fileState.kind === 'ok' && fileState.durationSecs == null
+                      ? { ...fileState, durationSecs: info?.durationSecs ?? null }
+                      : fileState
+                  }
+                  onCheck={() => checkFile(true)}
+                  onAnalyze={analyzeFile}
+                  analyzing={analyzing}
+                  analyzeError={analyzeError}
+                />
               </div>
 
               {/* Actions */}
@@ -208,9 +282,16 @@ export function MovieDetail({
                   size="lg"
                   icon={<IconDownload size={18} />}
                   loading={adding}
-                  onClick={handleDownload}
+                  onClick={() => (suspect ? setConfirmLowQuality(true) : void handleDownload())}
+                  title={suspect ? 'Copie probablement de mauvaise qualité' : undefined}
+                  className={suspect ? 'ring-1 ring-red-400/40' : undefined}
                 >
                   Télécharger
+                  {suspect && (
+                    <span className="ml-1 rounded bg-red-500/80 px-1 text-[10px] font-bold text-white">
+                      !
+                    </span>
+                  )}
                 </Button>
                 <FavoriteButton
                   size="lg"
@@ -272,9 +353,66 @@ export function MovieDetail({
             )}
           </div>
         </div>
+
+        {confirmLowQuality && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setConfirmLowQuality(false)}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              className="w-full max-w-md rounded-xl bg-surface-overlay p-5 shadow-2xl ring-1 ring-white/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-lg font-bold text-red-300">
+                  !
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Copie probablement de mauvaise qualité</h3>
+                  <p className="mt-1 text-sm text-gray-400">
+                    « {title} »{' '}
+                    {lowQualityTag && (
+                      <>
+                        est marqué <b className="text-red-300">{lowQualityTag}</b>
+                        {fileVerdict ? ' et ' : '.'}
+                      </>
+                    )}
+                    {fileVerdict && fileState.kind === 'ok' && (
+                      <>
+                        ne pèse que{' '}
+                        <b className="text-gray-200">
+                          {formatBytes(fileState.sizeBytes)} pour{' '}
+                          {formatDuration(fileState.durationSecs ?? info?.durationSecs)}
+                        </b>{' '}
+                        (≈ {formatMbps(fileVerdict.mbps)}). Une copie normale en 1080p fait plutôt 2 à 5 Go.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setConfirmLowQuality(false)}>
+                  Annuler
+                </Button>
+                <Button variant="danger" onClick={() => void handleDownload()}>
+                  Télécharger quand même
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+function toPillState(res: FileCheckResult): FilePillState {
+  if (res.status === 'ok') {
+    return { kind: 'ok', sizeBytes: res.sizeBytes, durationSecs: res.durationSecs, video: res.video }
+  }
+  return res.status === 'error' ? { kind: 'error', message: res.message } : { kind: res.status }
 }
 
 function Detail({ label, value }: { label: string; value: string }): ReactElement {

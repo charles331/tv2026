@@ -36,6 +36,8 @@ export const InvokeChannels = {
   CATALOG_LIST_CATEGORIES: 'catalog:listCategories',
   CATALOG_LIST_STREAMS: 'catalog:listStreams',
   CATALOG_GET_INFO: 'catalog:getInfo',
+  CATALOG_CHECK_FILE: 'catalog:checkFile', // real file size via a 1-byte request (quality check)
+  CATALOG_ANALYZE_FILE: 'catalog:analyzeFile', // real resolution + codec (mpv reads the first frame)
   CATALOG_SEARCH: 'catalog:search',
   CATALOG_REFRESH: 'catalog:refresh',
 
@@ -53,6 +55,7 @@ export const InvokeChannels = {
   LIVE_REFRESH: 'live:refresh',
   LIVE_EPG: 'live:epg',
   LIVE_FULL_EPG: 'live:fullEpg',
+  LIVE_SEARCH_GUIDE: 'live:searchGuide', // search programme titles in all guides (xmltv)
 
   // --- favorites ---
   FAVORITES_LIST: 'favorites:list',

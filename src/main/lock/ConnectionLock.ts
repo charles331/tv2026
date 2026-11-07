@@ -46,7 +46,12 @@
  *   })
  */
 
-export type LockHolder = 'download' | 'playback'
+/**
+ * 'probe' = a sub-second metadata request on the media endpoint (file-size check
+ * before download). Lowest priority: it is only ever taken with tryAcquire()
+ * and must yield as soon as a download or playback queues behind it.
+ */
+export type LockHolder = 'download' | 'playback' | 'probe'
 
 export interface LockToken {
   readonly id: number
@@ -77,6 +82,7 @@ export type PreemptListener = (holderToYield: LockHolder) => void
 
 /** Numeric priority; higher wins. playback (2) preempts download (1). */
 const PRIORITY: Record<LockHolder, number> = {
+  probe: 0,
   download: 1,
   playback: 2
 }

@@ -11,6 +11,8 @@
  *  - vod_info_cache    cached get_vod_info detail blobs (JSON) per stream
  *  - download_queue    active/pending/paused/failed downloads (persistent)
  *  - download_history  completed/canceled downloads (audit + "downloaded?" flag)
+ *  - vod_file_check    real movie file size from a 1-byte request (quality check)
+ *  - epg_programmes    full programme guide (xmltv.php) + epg_fts full-text index
  *
  * NOTE: Xtream credentials are NEVER stored here — they live encrypted via
  * Electron safeStorage (see src/main/secrets).
@@ -204,6 +206,56 @@ export const MIGRATIONS: readonly Migration[] = [
         ON programme_reminders(stream_id, start_secs, title);
       CREATE INDEX IF NOT EXISTS idx_reminders_status ON programme_reminders(status);
       CREATE INDEX IF NOT EXISTS idx_reminders_start  ON programme_reminders(start_secs);
+    `
+  },
+  {
+    version: 6,
+    description: 'movie file checks (real size) + drop movie details cached with a wrong runtime',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS vod_file_check (
+        stream_id     INTEGER PRIMARY KEY,
+        size_bytes    INTEGER NOT NULL,   -- from Content-Range of a 1-byte request
+        duration_secs INTEGER,            -- runtime at check time (for the verdict)
+        checked_at    INTEGER NOT NULL    -- epoch ms
+      );
+      -- Runtimes were read from duration_secs, which this provider fills with
+      -- MINUTES; the parser now prefers "HH:MM:SS". The cache is refetched on demand.
+      DELETE FROM vod_info_cache;
+    `
+  },
+  {
+    version: 7,
+    description: 'full programme guide (xmltv.php) for searching inside live guides',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS epg_programmes (
+        id              INTEGER PRIMARY KEY,
+        epg_channel_id  TEXT NOT NULL,    -- matches live_streams.epg_channel_id
+        start_secs      INTEGER NOT NULL,
+        end_secs        INTEGER NOT NULL,
+        title           TEXT NOT NULL,
+        description     TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_epg_channel ON epg_programmes(epg_channel_id);
+      CREATE INDEX IF NOT EXISTS idx_epg_end     ON epg_programmes(end_secs);
+      -- Full-text index on title + description; accents/case-insensitive.
+      CREATE VIRTUAL TABLE IF NOT EXISTS epg_fts USING fts5(
+        title, description,
+        content='epg_programmes', content_rowid='id',
+        tokenize='unicode61 remove_diacritics 2'
+      );
+      CREATE TABLE IF NOT EXISTS epg_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `
+  },
+  {
+    version: 8,
+    description: 'movie file analysis: real resolution + codec (read by mpv)',
+    up: /* sql */ `
+      ALTER TABLE vod_file_check ADD COLUMN width INTEGER;
+      ALTER TABLE vod_file_check ADD COLUMN height INTEGER;
+      ALTER TABLE vod_file_check ADD COLUMN video_codec TEXT;
     `
   }
 ]

@@ -27,6 +27,7 @@ import type {
   SearchRequest,
   VodCategory,
   VodInfo,
+  FileCheckResult,
   VodStream
 } from '../types/catalog'
 import type {
@@ -39,6 +40,7 @@ import type {
 } from '../types/series'
 import type {
   EpgEntry,
+  GuideSearchResult,
   ListLiveRequest,
   LiveCategory,
   LiveStream,
@@ -121,6 +123,14 @@ export interface CatalogApi {
   listCategories(): Promise<Result<VodCategory[]>>
   listStreams(req: ListStreamsRequest): Promise<Result<Page<VodStream>>>
   getInfo(streamId: number): Promise<Result<VodInfo>>
+  /**
+   * Real file size + quality inputs. Served from the local cache when already
+   * known; otherwise probes the provider unless the setting is off and
+   * `manual` is false.
+   */
+  checkFile(streamId: number, manual?: boolean): Promise<Result<FileCheckResult>>
+  /** "Analyser": real resolution + codec read from the first frame (a few seconds). */
+  analyzeFile(streamId: number): Promise<Result<FileCheckResult>>
   search(req: SearchRequest): Promise<Result<Page<VodStream>>>
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshCatalogResult>>
 }
@@ -142,6 +152,11 @@ export interface LiveApi {
   epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
   /** Full programme guide for a channel, sorted by start (empty when no EPG). */
   fullEpg(streamId: number): Promise<Result<EpgEntry[]>>
+  /**
+   * Search programme titles/descriptions across all guides (on air + upcoming).
+   * Downloads the full guide first when it is missing or older than 6 h.
+   */
+  searchGuide(query: string): Promise<Result<GuideSearchResult>>
 }
 
 export interface FavoritesApi {

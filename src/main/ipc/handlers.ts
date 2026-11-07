@@ -48,9 +48,9 @@ import { playerController } from '../player/PlayerController'
 import * as credentials from '../secrets/credentials'
 import * as tmdbKey from '../secrets/tmdbKey'
 import { getXtreamClient, XtreamError, toErrorCode } from '../xtream'
-import { refreshCatalog, getVodInfo } from '../xtream/catalogService'
+import { refreshCatalog, getVodInfo, checkMovieFile, analyzeMovieFile } from '../xtream/catalogService'
 import { refreshSeries, getSeriesInfo } from '../xtream/seriesService'
-import { refreshLive, getShortEpg, getFullEpg } from '../xtream/liveService'
+import { refreshLive, getShortEpg, getFullEpg, searchGuide } from '../xtream/liveService'
 import type { AddReminderRequest, ReminderMode } from '@shared/index'
 import {
   checkForUpdatesNow,
@@ -200,6 +200,11 @@ export const handlers: IpcHandlers = {
       assert(v >= 0 && v <= 3600, 'recordPadAfterSecs out of range (0..3600)')
       patch.recordPadAfterSecs = v
     }
+    if ('qualityCheck' in req) {
+      const v = optionalBoolean(req, 'qualityCheck')
+      assert(v !== undefined, 'qualityCheck must be a boolean')
+      patch.qualityCheck = v
+    }
     if ('chunkedDownloads' in req) {
       const v = optionalBoolean(req, 'chunkedDownloads')
       assert(v !== undefined, 'chunkedDownloads must be a boolean')
@@ -276,6 +281,27 @@ export const handlers: IpcHandlers = {
     try {
       // Serves from vod_info_cache when fresh; otherwise fetches + caches.
       return ok(await getVodInfo(streamId))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
+  [InvokeChannels.CATALOG_ANALYZE_FILE]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const streamId = requireInt(req, 'streamId')
+    try {
+      return ok(await analyzeMovieFile(streamId))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
+  [InvokeChannels.CATALOG_CHECK_FILE]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const streamId = requireInt(req, 'streamId')
+    const manual = req.manual === true
+    try {
+      return ok(await checkMovieFile(streamId, manual))
     } catch (e) {
       return fromXtreamError(e)
     }
@@ -395,6 +421,16 @@ export const handlers: IpcHandlers = {
     const limit = optionalNumber(req, 'limit')
     try {
       return ok(await getShortEpg(streamId, limit && limit > 0 ? Math.trunc(limit) : 2))
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
+  [InvokeChannels.LIVE_SEARCH_GUIDE]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const query = requireString(req, 'query', 200)
+    try {
+      return ok(await searchGuide(query))
     } catch (e) {
       return fromXtreamError(e)
     }

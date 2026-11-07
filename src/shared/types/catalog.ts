@@ -4,6 +4,8 @@
  * normalized to camelCase. xtream-api-specialist maps raw API -> these types.
  */
 
+import type { VideoInfo } from '../quality'
+
 export interface VodCategory {
   categoryId: string
   categoryName: string
@@ -29,7 +31,32 @@ export interface VodStream {
   addedAt: number | null
   /** True if a completed local download exists for this stream. */
   downloaded?: boolean
+  /** Real file size from a previous file check (see FileCheckResult), if any. */
+  fileSizeBytes?: number | null
+  /** Runtime recorded with that file check, to derive the quality verdict. */
+  fileDurationSecs?: number | null
+  /** Real resolution/codec if the file was analysed ("Analyser"). */
+  fileVideo?: VideoInfo | null
 }
+
+/**
+ * Outcome of checking a movie file's real size before downloading
+ * (1-byte Range request on the media endpoint, see main/quality/fileProbe).
+ */
+export type FileCheckResult =
+  | {
+      status: 'ok'
+      sizeBytes: number
+      durationSecs: number | null
+      checkedAt: number
+      /** Real resolution/codec, once the file was analysed ("Analyser"). */
+      video: VideoInfo | null
+    }
+  /** The single provider connection is used by a download/playback right now. */
+  | { status: 'busy' }
+  /** Automatic check switched off in Réglages (a manual check is still possible). */
+  | { status: 'disabled' }
+  | { status: 'error'; message: string }
 
 /** Full detail for a movie (from get_vod_info). */
 export interface VodInfo {

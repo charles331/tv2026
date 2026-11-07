@@ -74,7 +74,7 @@ const USER_AGENT =
  */
 const PLAYER_USER_AGENT = 'VLC/3.0.20 LibVLC/3.0.20'
 
-function transferUserAgent(): string {
+export function transferUserAgent(): string {
   return settingsRepo.getSettings().downloadUserAgent === 'player'
     ? PLAYER_USER_AGENT
     : USER_AGENT

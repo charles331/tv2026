@@ -2,6 +2,7 @@ import { memo, type ReactElement } from 'react'
 import type { VodStream } from '@shared/index'
 import { Poster, Badge, IconStar, IconCheck } from '../../components/ui'
 import { formatRating } from '../../lib/format'
+import { LowQualityTag, PosterFileLabel } from '../movie/quality'
 
 function PosterCardImpl({
   stream,
@@ -30,12 +31,24 @@ function PosterCardImpl({
           ) : (
             <span />
           )}
-          {downloaded && (
-            <Badge tone="success" className="backdrop-blur">
-              <IconCheck size={11} /> Téléchargé
-            </Badge>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {downloaded && (
+              <Badge tone="success" className="backdrop-blur">
+                <IconCheck size={11} /> Téléchargé
+              </Badge>
+            )}
+            <LowQualityTag name={stream.name} />
+          </div>
         </div>
+        {stream.fileSizeBytes ? (
+          <div className="pointer-events-none absolute bottom-1.5 left-1.5">
+            <PosterFileLabel
+              sizeBytes={stream.fileSizeBytes}
+              durationSecs={stream.fileDurationSecs}
+              video={stream.fileVideo}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="mt-2 w-full min-w-0 px-0.5">
         <p className="truncate text-sm font-medium text-gray-100 group-hover:text-white">

@@ -10,8 +10,13 @@
  * handlers convert that into a Result envelope.
  */
 
-import type { RefreshCatalogResult, VodInfo } from '@shared/index'
-import { catalogRepo } from '../store'
+import type { FileCheckResult, RefreshCatalogResult, VodInfo } from '@shared/index'
+import { catalogRepo, settingsRepo } from '../store'
+import { probeFileSize } from '../quality/fileProbe'
+import { probeMedia } from '../quality/mediaProbe'
+import { resolveMpvBinary } from '../player/mpvBinary'
+import { transferUserAgent } from '../downloads/DownloadManager'
+import { appLog } from '../log/logger'
 import { getXtreamClient } from './index'
 import { fetchTmdbMovie } from '../tmdb/TmdbClient'
 import { getTmdbKey } from '../secrets/tmdbKey'
@@ -103,4 +108,66 @@ async function enrichFromTmdb(info: VodInfo): Promise<VodInfo> {
   }
   catalogRepo.cacheVodInfo(enriched)
   return enriched
+}
+
+/**
+ * Real file size of a movie, for the quality verdict shown BEFORE downloading.
+ * A known size is served from SQLite (a file doesn't change); otherwise one
+ * 1-byte request is made — automatically when the setting is on, or when the
+ * user explicitly asks (`manual`). Never waits for the single connection.
+ */
+export async function checkMovieFile(streamId: number, manual: boolean): Promise<FileCheckResult> {
+  const known = catalogRepo.getFileCheck(streamId)
+  if (known) return { status: 'ok', ...known }
+  if (!manual && !settingsRepo.getSettings().qualityCheck) return { status: 'disabled' }
+
+  const info = await getVodInfo(streamId)
+  const client = getXtreamClient()
+  try {
+    const url = client.buildMovieUrl(streamId, info.containerExtension)
+    const out = await probeFileSize(url, { userAgent: transferUserAgent() })
+    if (out.kind === 'busy') return { status: 'busy' }
+    if (out.kind === 'error') {
+      appLog.warn('catalog', `Vérification du fichier #${streamId} impossible : ${out.message}`)
+      return { status: 'error', message: out.message }
+    }
+    const row = { sizeBytes: out.sizeBytes, durationSecs: info.durationSecs, checkedAt: Date.now() }
+    catalogRepo.saveFileCheck(streamId, row)
+    return { status: 'ok', ...row, video: null }
+  } finally {
+    await client.close()
+  }
+}
+
+/**
+ * "Analyser": read the file's REAL resolution and codec (mpv decodes its first
+ * frame — a few seconds, a few MB, under the single connection when free).
+ * Ensures the size is known first, then stores the result next to it.
+ */
+export async function analyzeMovieFile(streamId: number): Promise<FileCheckResult> {
+  const check = await checkMovieFile(streamId, true)
+  if (check.status !== 'ok' || check.video) return check
+
+  const binary = resolveMpvBinary()
+  if (!binary) return { status: 'error', message: 'lecteur mpv introuvable' }
+  const info = await getVodInfo(streamId)
+  const client = getXtreamClient()
+  try {
+    const url = client.buildMovieUrl(streamId, info.containerExtension)
+    const t0 = Date.now()
+    const out = await probeMedia(url, { binary, userAgent: transferUserAgent() })
+    if (out.kind === 'busy') return { status: 'busy' }
+    if (out.kind === 'error') {
+      appLog.warn('catalog', `Analyse du fichier #${streamId} impossible : ${out.message}`)
+      return { status: 'error', message: out.message }
+    }
+    catalogRepo.saveFileVideo(streamId, out.video)
+    appLog.info(
+      'catalog',
+      `Analyse du fichier #${streamId} : ${out.video.width}×${out.video.height} ${out.video.codec} (${Date.now() - t0} ms)`
+    )
+    return { ...check, video: out.video }
+  } finally {
+    await client.close()
+  }
 }
