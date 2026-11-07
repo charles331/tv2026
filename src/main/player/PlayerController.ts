@@ -384,6 +384,21 @@ export class PlayerController {
       // Once a file is loaded (first play, soft reload, or respawn), re-apply the
       // per-file selections a (re)load resets: chosen audio/subtitle track + pause.
       if (msg.event === 'file-loaded') void this.restorePrefs(ipc)
+      // Once the first frames are up, the window has its initial size (--autofit):
+      // from then on keep whatever size the user gives it. Measured: without
+      // this, a live cut resets the window (unloading the video resizes the idle
+      // window — an "error" cut does it before the app can react), then the
+      // reload resizes it to the video again. Set at runtime, not as a launch
+      // arg, so an mpv build without this option still starts.
+      if (msg.event === 'playback-restart') {
+        void ipc.setProperty('auto-window-resize', false).catch(() => undefined)
+      }
+      // A live stream reloaded IN PLACE (same mpv) produces no fresh `pause`
+      // observation, so this is the signal that decoding really resumed.
+      if (msg.event === 'playback-restart' && this.status.state === 'reconnecting') {
+        this.retryAttempt = 0
+        this.setState(this.lastPaused ? 'paused' : 'playing')
+      }
     })
     ipc.on('error', () => {
       // Logged at the socket level; non-fatal. Genuine drops surface as 'close'.
@@ -547,18 +562,28 @@ export class PlayerController {
     }
   }
 
+  /** True while the current mpv process is alive and reachable over IPC. */
+  private canReloadInPlace(): boolean {
+    const proc = this.proc
+    return !!(this.ipc?.isConnected() && proc && proc.exitCode === null && !proc.killed)
+  }
+
   /**
-   * A live stream dropped unexpectedly. KILL mpv now (so its provider socket
-   * closes and the panel's single connection is freed during the backoff), then
-   * schedule a fresh re-open. Attempts are unlimited until the user stops
-   * (stop() clears currentReq + the timer and bumps the session).
+   * A live stream dropped unexpectedly: free the panel's single connection
+   * during the backoff, then re-open. Attempts are unlimited until the user
+   * stops (stop() clears currentReq + the timer and bumps the session).
    *
-   * Why kill instead of reloading in place: reusing the same mpv via
-   * `loadfile replace` keeps the old provider connection alive, so a
-   * single-connection panel refuses the new one and the stream stays stuck on
-   * "Reconnexion…" forever. Killing + respawning mirrors a manual Stop+Play
-   * (which recovers). We keep the internal connection lock so downloads aren't
-   * thrashed; only mpv + its socket close.
+   * Two paths:
+   *  - mpv still running (the usual case: the provider ends the stream, mpv
+   *    reports end-file eof/error) → `stop` the stream IN PLACE, then
+   *    `loadfile` it again after the backoff. `stop` closes the demuxer and its
+   *    provider socket; `--idle` + `--force-window` keep the video window open,
+   *    so it stays where the user put it (size, screen, fullscreen).
+   *    NOTE: a bare `loadfile replace` WITHOUT the prior `stop` + backoff kept
+   *    the old provider connection alive, so a single-connection panel refused
+   *    the new one ("Reconnexion…" forever) — hence the stop first.
+   *  - mpv process gone (crash, window closed) → respawn a fresh mpv.
+   * The internal connection lock is kept either way so downloads aren't thrashed.
    */
   private reconnectLive(): void {
     const req = this.currentReq
@@ -571,8 +596,12 @@ export class PlayerController {
       this.status.recording = false
       this.status.recordingPath = null
     }
-    this.killMpv()
-    this.sessionId++ // ignore the dead mpv's trailing exit/close events
+    if (this.canReloadInPlace()) {
+      void this.ipc!.command(['stop']).catch(() => undefined)
+    } else {
+      this.killMpv()
+      this.sessionId++ // ignore the dead mpv's trailing exit/close events
+    }
     this.retryAttempt++
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
     const delay = liveReconnectDelay(this.retryAttempt)
@@ -587,14 +616,27 @@ export class PlayerController {
   }
 
   /**
-   * Re-open the live stream in a FRESH mpv (the reliable recovery — it matches a
-   * manual Stop+Play, which frees the provider connection). Reuses the still-held
+   * Re-open the live stream: in the running mpv when it is still alive (keeps
+   * the window), otherwise in a FRESH mpv. Reuses the still-held
    * connection lock (no download thrash). Keeps retrying with growing backoff on
    * failure; the respawn restores volume/mute/fullscreen (launch args) and
    * audio/subtitle track + pause (on file-loaded).
    */
   private async attemptReconnect(req: PlayRequest): Promise<void> {
     if (this.currentReq !== req) return // superseded by stop()/new play()
+    if (this.canReloadInPlace()) {
+      const session = this.sessionId
+      try {
+        if (!this.lockToken) this.lockToken = await connectionLock.acquire('playback')
+        if (session !== this.sessionId || this.currentReq !== req) return
+        // Success shows up as `playback-restart`; a failed open as end-file
+        // error, which loops back into reconnectLive (same mpv, next backoff).
+        await this.ipc!.command(['loadfile', this.streamUrl(req), 'replace'])
+      } catch {
+        if (this.currentReq === req && session === this.sessionId) this.reconnectLive()
+      }
+      return
+    }
     const binary = resolveMpvBinary()
     if (!binary) {
       this.toError('Lecteur mpv introuvable.')
