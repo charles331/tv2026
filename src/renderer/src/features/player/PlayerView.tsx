@@ -17,6 +17,7 @@ import {
 } from '../../components/ui'
 import { formatClock } from '../../lib/format'
 import { SeekBar } from './SeekBar'
+import { VolumeSlider } from './VolumeSlider'
 import { useToast } from '../../lib/toast'
 import { usePlayer } from './usePlayer'
 
@@ -258,16 +259,11 @@ export function PlayerView({
               >
                 {status.muted ? <IconVolumeMute size={18} /> : <IconVolume size={18} />}
               </button>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={status.muted ? 0 : status.volume}
+              <VolumeSlider
+                volume={status.volume}
+                muted={status.muted}
                 disabled={controlsDisabled}
-                onChange={(e) => void player.setVolume(Number(e.target.value), false)}
-                title={`Volume : ${status.muted ? 0 : status.volume} %`}
-                className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/15 accent-accent disabled:opacity-40"
-                aria-label="Volume"
+                onChange={(v) => void player.setVolume(v, false)}
               />
             </div>
             <button
