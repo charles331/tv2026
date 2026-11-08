@@ -1,0 +1,45 @@
+name: Build Linux (manuel)
+
+# Build Linux de test, À LA DEMANDE, qui NE PUBLIE PAS de Release.
+# Le .deb et l'AppImage sont disponibles en artefact du run (onglet Actions).
+# Les Releases officielles sont gérées par `release.yml` (job release-linux).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # Le postinstall recompile better-sqlite3 pour l'ABI Electron (Linux).
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & package (sans publication)
+        run: pnpm run package:linux
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TV2026-linux
+          path: |
+            release/*.deb
+            release/*.AppImage
+            release/latest-linux.yml

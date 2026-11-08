@@ -146,8 +146,11 @@ export class PlayerController {
     const binary = resolveMpvBinary()
     if (!binary) {
       return this.toError(
-        'Lecteur mpv introuvable. Le binaire mpv (resources/bin/win/mpv.exe) est ' +
-          'absent et mpv n’est pas dans le PATH.'
+        process.platform === 'win32'
+          ? 'Lecteur mpv introuvable. Le binaire mpv (resources/bin/win/mpv.exe) est ' +
+              'absent et mpv n’est pas dans le PATH.'
+          : 'Lecteur mpv introuvable. Installez-le avec votre gestionnaire de paquets ' +
+              '(Ubuntu/Debian : sudo apt install mpv), puis relancez la lecture.'
       )
     }
 

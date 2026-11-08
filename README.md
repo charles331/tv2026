@@ -1,6 +1,6 @@
 # TV2026
 
-Application de bureau (**Windows**) pour parcourir, **télécharger** et lire les films
+Application de bureau (**Windows** et **Linux**) pour parcourir, **télécharger** et lire les films
 à la demande (VOD) d'un abonnement **IPTV de type Xtream Codes**.
 
 Conçue autour d'un besoin simple : pouvoir **télécharger un film** pour le regarder
@@ -76,6 +76,25 @@ consultez un professionnel du droit.*
 > Une version **portable** (`...-portable.exe`) est aussi fournie : elle se lance
 > sans installation, **mais ne bénéficie pas de la mise à jour automatique**.
 
+### Ubuntu / Debian
+
+Sur la même page **Releases**, téléchargez **`tv2026_<version>_amd64.deb`**, puis :
+
+```bash
+sudo apt install ./tv2026_<version>_amd64.deb   # installe aussi mpv (lecture vidéo)
+```
+
+L'application apparaît dans le menu sous **TV2026**. Désinstallation :
+`sudo apt remove tv2026`.
+
+Autre distribution : prenez l'**AppImage** (`TV2026-<version>-x86_64.AppImage`),
+installez **mpv** et **libfuse2** avec votre gestionnaire de paquets, puis
+`chmod +x TV2026-*.AppImage && ./TV2026-*.AppImage`.
+
+> Les identifiants sont chiffrés via le **trousseau du système** (GNOME Keyring /
+> KWallet), présent dans une session de bureau normale. Sans trousseau (ex. WSL),
+> l'application ne peut pas les enregistrer.
+
 **Premier lancement** : *Réglages* → saisir l'URL et les identifiants du fournisseur
 → *Tester la connexion* → *Rafraîchir le catalogue* (et *les séries* / *le direct*)
 → parcourir, lire et télécharger. Un bouton **« Tout mettre à jour »** (barre de
@@ -89,7 +108,7 @@ gauche) rafraîchit films + séries + direct en une fois.
 
 ### Mise à jour
 
-Avec l'installeur, l'app **vérifie** au démarrage (et périodiquement) s'il existe
+Avec l'installeur Windows, le `.deb` ou l'AppImage, l'app **vérifie** au démarrage (et périodiquement) s'il existe
 une version plus récente sur GitHub Releases et vous **en informe** — rien n'est
 téléchargé ni installé sans votre accord. Dans *Réglages*, cliquez sur
 **« Télécharger la mise à jour »** (progression affichée en direct), puis sur
@@ -100,8 +119,8 @@ téléchargé ni installé sans votre accord. Dans *Réglages*, cliquez sur
 
 ## Compilation depuis les sources
 
-> La cible est **Windows**. `better-sqlite3` est un module natif qui doit être
-> compilé pour Windows : **on ne peut pas produire le `.exe` depuis Linux/WSL2**.
+> `better-sqlite3` est un module natif compilé pour chaque système : le `.exe` se
+> construit **sous Windows**, le `.deb` / l'AppImage **sous Linux** (WSL2 compris).
 
 ### Option A — via GitHub Actions (recommandé, automatique)
 
@@ -110,7 +129,8 @@ Les Releases sont **entièrement automatisées** par
 À chaque **fusion sur `main`**, les messages de commit ([Conventional
 Commits](https://www.conventionalcommits.org/)) déterminent la prochaine version
 (semver), l'installeur Windows est construit, et une **Release GitHub publiée**
-automatiquement (avec notes de version + `latest.yml` pour l'auto-MAJ).
+automatiquement (avec notes de version + `latest.yml` pour l'auto-MAJ). Un second
+job (Ubuntu) y ajoute le `.deb`, l'AppImage et `latest-linux.yml`.
 
 | Préfixe de commit | Effet sur la version |
 |---|---|
@@ -129,7 +149,8 @@ automatiquement (avec notes de version + `latest.yml` pour l'auto-MAJ).
 
 Un build de test **sans publication** (artefact téléchargeable) reste possible via
 [`build-windows.yml`](.github/workflows/build-windows.yml) → onglet
-**Actions → Build Windows (manuel) → Run workflow**.
+**Actions → Build Windows (manuel) → Run workflow** (et
+[`build-linux.yml`](.github/workflows/build-linux.yml) pour Linux).
 
 ### Option B — sur une machine Windows
 
@@ -145,19 +166,33 @@ pnpm run package      # produit release/TV2026-<version>-x64.exe
 Pour la lecture vidéo, déposez un build **mpv Windows x64** (`mpv.exe` + DLL) dans
 `resources/bin/win/` avant `pnpm run package` (le CI le fait automatiquement).
 
+### Option C — sous Linux (ou WSL2)
+
+```bash
+pnpm install
+pnpm run package:linux   # produit release/*.deb et release/*.AppImage
+```
+
+mpv n'est pas embarqué sous Linux : il vient de la distribution (`sudo apt install mpv`).
+
 ---
 
 ## Développement (sous WSL2)
 
 ```bash
 pnpm install
-pnpm run dev        # lance l'app en mode dev (GUI via WSLg)
+DISPLAY=:0 pnpm run dev   # lance l'app en mode dev (GUI via WSLg)
 pnpm run typecheck  # vérification TypeScript
 pnpm run lint       # ESLint
 ```
 
 > Quirk WSL2 : les scripts neutralisent `ELECTRON_RUN_AS_NODE` (`env -u`) pour
-> qu'Electron démarre correctement.
+> qu'Electron démarre correctement. Si la fenêtre ne s'ouvre pas (« Missing X
+> server or $DISPLAY »), exportez `DISPLAY=:0`.
+>
+> En mode dev uniquement, les identifiants peuvent venir d'un fichier `.env` à la
+> racine (`XTREAM_URL`, `XTREAM_USER`, `XTREAM_PASS`), ignoré par git — utile sous
+> WSL où le trousseau du système manque.
 
 ---
 
