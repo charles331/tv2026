@@ -42,6 +42,16 @@ updates:
       # within 41.x are still taken.
       - dependency-name: "electron"
         update-types: ["version-update:semver-major"]
+      # @types/node must follow the Node version EMBEDDED in Electron (Electron
+      # 41 → Node 24), not the latest Node: newer types would allow APIs that do
+      # not exist at runtime. Bump the major together with Electron.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Preset 10 needs the new conventional-changelog generation: with the
+      # installed semantic-release plugins (writer 8 / parser 6) the release
+      # notes come out EMPTY (tested). Bump together with those plugins.
+      - dependency-name: "conventional-changelog-conventionalcommits"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
