@@ -123,6 +123,12 @@ export class PlayerController {
   private lastPaused = false
   /** Tail of the current mpv process's stderr (diagnosis of unexpected stops). */
   private lastStderrTail: string[] = []
+  /**
+   * mpv reported end-file "quit": the user closed the video window (or pressed
+   * q). Its IPC socket then closes and the process exits — that is a stop, NOT
+   * a drop to reconnect (a crash never sends "quit").
+   */
+  private userClosedWindow = false
 
   /**
    * Wire the typed event emitter (called once from main/index.ts). mpv renders
@@ -253,6 +259,7 @@ export class PlayerController {
   ): Promise<void> {
     const ipcPath = makeIpcPath()
     const args = this.buildMpvArgs(ipcPath, url, req)
+    this.userClosedWindow = false
 
     const child = spawn(binary, args, {
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -521,6 +528,11 @@ export class PlayerController {
   }
 
   private onEndFile(e: MpvEndFile): void {
+    if (e.reason === 'quit') {
+      // Window closed by the user: the exit/close that follows is a stop.
+      this.userClosedWindow = true
+      return
+    }
     // LIVE: an eof/error is almost always a provider/network drop, not a real
     // end. Reconnect instead of closing (the user stopping is handled by the
     // session guard, so we never get here for a user-initiated stop).
@@ -556,6 +568,12 @@ export class PlayerController {
   }
 
   private async handleExit(code: number | null): Promise<void> {
+    if (this.userClosedWindow) {
+      this.userClosedWindow = false
+      appLog.info('player', 'Fenêtre vidéo fermée par l’utilisateur : lecture arrêtée')
+      await this.stop()
+      return
+    }
     // LIVE: an unexpected mpv exit (crash, window closed by the OS, stream gone)
     // is a drop, not a user stop — reconnect rather than tear the bar down.
     if (this.isLiveSession()) {

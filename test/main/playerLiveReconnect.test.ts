@@ -196,5 +196,20 @@ describe('PlayerController — live reconnect', () => {
     ipc.emit('property-change', { name: 'current-tracks/audio', data: { id: 1, lang: 'eng' } })
     expect(player.getStatus().audioTrack).toBe('eng')
   })
+
+  it('closing the video window (mpv "quit") stops the live — no reconnect, no new window', async () => {
+    await player.play(LIVE)
+    const ipc = h.ipcs[0]!
+    // What mpv does when its window is closed: end-file "quit", then its IPC
+    // socket closes and the process exits with code 0.
+    ipc.emit('end-file', { reason: 'quit' })
+    ipc.emit('close')
+    h.procs[0]!.exitCode = 0
+    h.procs[0]!.emit('exit', 0)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(h.procs).toHaveLength(1) // nothing respawned
+    expect(player.getStatus().state).toBe('idle')
+    expect(connectionLock.isBusy()).toBe(false) // provider connection released
+  })
 })
 
