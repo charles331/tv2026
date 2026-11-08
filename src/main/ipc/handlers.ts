@@ -689,10 +689,20 @@ export const handlers: IpcHandlers = {
       // compromised renderer cannot ask mpv to open arbitrary local files.
       const downloadDir = settingsRepo.getSettings().downloadDir
       if (!downloadDir) {
-        return err('INVALID_INPUT', 'No download directory configured; cannot play a local file.')
+        return err(
+          'INVALID_INPUT',
+          'Aucun dossier de téléchargement n’est configuré : impossible de lire le fichier local (Réglages → Téléchargements).'
+        )
       }
-      // assertPathWithin throws ValidationError -> mapped to INVALID_INPUT.
-      playReq.filePath = assertPathWithin(playReq.filePath, downloadDir)
+      try {
+        playReq.filePath = assertPathWithin(playReq.filePath, downloadDir)
+      } catch {
+        // Typically: the download folder was changed after this film was downloaded.
+        return err(
+          'INVALID_INPUT',
+          'Ce fichier n’est pas dans le dossier de téléchargement actuel : lecture refusée. Vérifiez le dossier dans Réglages → Téléchargements.'
+        )
+      }
     } else {
       assert(playReq.streamId !== undefined, 'streamId is required for stream playback')
       if (!credentials.getCredentialsStatus().hasCredentials) {
