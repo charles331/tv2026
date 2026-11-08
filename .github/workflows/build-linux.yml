@@ -29,7 +29,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        # Le postinstall recompile better-sqlite3 pour l'ABI Electron (Linux).
+        # better-sqlite3 est fourni précompilé (N-API) : rien n'est compilé.
         run: pnpm install --frozen-lockfile
 
       - name: Build & package (sans publication)

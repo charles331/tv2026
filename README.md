@@ -154,11 +154,11 @@ Un build de test **sans publication** (artefact téléchargeable) reste possible
 
 ### Option B — sur une machine Windows
 
-Prérequis : **Node.js 22**, **Python 3**, **Visual Studio Build Tools** (workload
-« Développement Desktop en C++ »).
+Prérequis : **Node.js 22** et **pnpm 9** (aucun compilateur : better-sqlite3 est
+fourni précompilé).
 
 ```powershell
-pnpm install          # recompile better-sqlite3 pour l'ABI Electron
+pnpm install
 pnpm run build
 pnpm run package      # produit release/TV2026-<version>-x64.exe
 ```

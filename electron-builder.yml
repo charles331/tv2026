@@ -1,14 +1,12 @@
-# electron-builder configuration — Windows target (NSIS .exe + portable).
+# electron-builder configuration — Windows (NSIS .exe + portable) and Linux
+# (.deb + AppImage) targets.
 #
 # IMPORTANT — native module + mpv:
-#  * better-sqlite3 is a NATIVE module. It must be rebuilt for the TARGET
-#    (Windows / Electron ABI), not for the WSL2 dev host. The `postinstall`
-#    and `rebuild` npm scripts call `electron-builder install-app-deps`, which
-#    rebuilds native deps against the bundled Electron. When packaging FROM
-#    WSL2 FOR Windows you must build on Windows (or a Windows CI runner / wine
-#    + prebuilt binaries), because cross-compiling a Windows .node from Linux
-#    is not supported by node-gyp. Recommended: run `npm run package` on a
-#    Windows machine (or GitHub Actions windows-latest).
+#  * better-sqlite3 (13+) is the only native module. It ships N-API prebuilt
+#    binaries for every OS (node_modules/better-sqlite3/prebuilds/*.node) that
+#    load in any Electron version, so nothing is compiled (no postinstall
+#    rebuild, `npmRebuild: false`, pnpm `neverBuiltDependencies`). asarUnpack
+#    below keeps those .node files loadable from the packaged app.
 #  * Linux packages (.deb + AppImage) are built on Linux (`pnpm package:linux`,
 #    or the release-linux CI job); mpv comes from the distribution there.
 #  * The mpv binary (mpv.exe + any required DLLs) is bundled from
@@ -94,8 +92,11 @@ deb:
   recommends:
     - mpv
 
-# Native module rebuild against the Electron ABI before packaging.
-npmRebuild: true
+# No native rebuild: better-sqlite3 (13+, the only native module) ships N-API
+# prebuilt binaries for every OS (prebuilds/<os>-<arch>.node) that load in any
+# Electron version. Compiling it is unnecessary and fails on CI runners whose
+# Visual Studio is newer than node-gyp knows (VS 2026 on windows-latest).
+npmRebuild: false
 
 # Where updates are published / fetched from. electron-updater reads the
 # latest.yml of the GitHub Release to auto-update installed apps.
