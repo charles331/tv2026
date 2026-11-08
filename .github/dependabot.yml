@@ -1,6 +1,7 @@
 # Dependabot configuration.
 #
 # Goal: stay up to date without noisy, hard-to-test mega-PRs.
+#  - New versions are only proposed once they are 14 days old (cooldown).
 #  - Routine MINOR + PATCH bumps are batched into a single weekly PR.
 #  - MAJOR bumps come as SEPARATE, individual PRs (one ecosystem-shift at a
 #    time), because a major often needs companion bumps + a migration and must
@@ -20,6 +21,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # Supply-chain safety: never propose a version published less than 14 days
+    # ago (time for a malicious or broken release to be spotted and pulled).
+    # Applies to version updates only — SECURITY updates stay immediate.
+    cooldown:
+      default-days: 14
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
@@ -57,6 +63,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 14
     commit-message:
       prefix: "ci"
     groups:
