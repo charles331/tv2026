@@ -45,6 +45,10 @@ export interface PlayerStatus {
   reconnectAttempt?: number
   /** Set when state === 'error'. */
   error?: string
+  /** How far mpv has loaded (end of its demuxer cache), in media seconds. */
+  bufferedSecs?: number | null
+  /** Current audio track, e.g. "Français 5.1 (fre)", if known. */
+  audioTrack?: string | null
 }
 
 /** Request to start recording the current stream to disk. */
@@ -77,6 +81,10 @@ export interface PlayerPositionEvent {
   positionSecs: number
   durationSecs: number | null
   state: PlayerState
+  /** End of mpv's loaded cache (media seconds), for the progress bar. */
+  bufferedSecs?: number | null
+  /** Current audio track label, if known. */
+  audioTrack?: string | null
 }
 
 /** State-change event pushed main -> renderer. */

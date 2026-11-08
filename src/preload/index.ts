@@ -122,6 +122,14 @@ const api: RendererApi = {
       invoke(InvokeChannels.CATALOG_GET_INFO, { streamId }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.CATALOG_GET_INFO>>
       >,
+    analyzeFile: (streamId) =>
+      invoke(InvokeChannels.CATALOG_ANALYZE_FILE, { streamId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.CATALOG_ANALYZE_FILE>>
+      >,
+    checkFile: (streamId, manual) =>
+      invoke(InvokeChannels.CATALOG_CHECK_FILE, { streamId, manual: manual === true }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.CATALOG_CHECK_FILE>>
+      >,
     search: (req) =>
       invoke(InvokeChannels.CATALOG_SEARCH, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.CATALOG_SEARCH>>
@@ -179,6 +187,10 @@ const api: RendererApi = {
     fullEpg: (streamId) =>
       invoke(InvokeChannels.LIVE_FULL_EPG, { streamId }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.LIVE_FULL_EPG>>
+      >,
+    searchGuide: (query) =>
+      invoke(InvokeChannels.LIVE_SEARCH_GUIDE, { query }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_SEARCH_GUIDE>>
       >
   },
 

@@ -159,6 +159,14 @@ export const IconSubtitles = (p: IconProps): ReactElement => (
   </svg>
 )
 
+/** Audio track: a speech bubble with sound waves (language / dub selection). */
+export const IconAudioTrack = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+    <path d="M8 10v2M11 8.5v5M14 9.5v3M17 10.5v1" />
+  </svg>
+)
+
 export const IconExternal = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <path d="M14 5h5v5M19 5l-8 8M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5" />

@@ -173,6 +173,27 @@ describe('ConnectionLock', () => {
     })
   })
 
+  describe('probe holder (lowest priority)', () => {
+    it.each(['download', 'playback'] as const)(
+      'asks a probe to yield when %s queues behind it',
+      async (other) => {
+        const held = lock.tryAcquire('probe')!
+        const preempts: LockHolder[] = []
+        lock.onPreemptRequested((h) => preempts.push(h))
+        const next = lock.acquire(other)
+        expect(preempts).toEqual(['probe'])
+        lock.release(held)
+        expect((await next).holder).toBe(other)
+      }
+    )
+
+    it('cannot be taken while a download or playback holds the connection', async () => {
+      const held = await lock.acquire('download')
+      expect(lock.tryAcquire('probe')).toBeNull()
+      lock.release(held)
+    })
+  })
+
   describe('reset()', () => {
     it('rejects all pending waiters with LockResetError and clears state', async () => {
       const held = await lock.acquire('download')

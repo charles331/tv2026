@@ -18,6 +18,16 @@ import { CategorySidebar } from '../catalog/CategorySidebar'
 import { LiveChannelRow } from './LiveChannelRow'
 import { ChannelGuide } from './ChannelGuide'
 import { useLiveFeed } from './useLiveFeed'
+import { GuideSearchResults } from './GuideSearchResults'
+
+const GUIDE_SEARCH_KEY = 'tv2026.live.searchGuides'
+function readGuideSearchPref(): boolean {
+  try {
+    return localStorage.getItem(GUIDE_SEARCH_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 /** Adapt LiveCategory[] to the (structurally compatible) sidebar shape. */
 function toSidebarCategories(cats: LiveCategory[]): VodCategory[] {
@@ -52,7 +62,16 @@ export function LiveScreen({
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [rawQuery, setRawQuery] = useState('')
   const [guideChannel, setGuideChannel] = useState<LiveStream | null>(null)
+  const [searchGuides, setSearchGuides] = useState(readGuideSearchPref)
   const query = useDebounced(rawQuery, 300)
+  const toggleSearchGuides = (on: boolean): void => {
+    setSearchGuides(on)
+    try {
+      localStorage.setItem(GUIDE_SEARCH_KEY, on ? '1' : '0')
+    } catch {
+      // preference only; ignore storage failures
+    }
+  }
 
   const favorites = useFavorites()
   const isFavorites = categoryId === FAVORITES_CATEGORY_ID
@@ -66,6 +85,8 @@ export function LiveScreen({
   })
 
   const isSearching = query.trim().length > 0
+  // Programme search needs a couple of characters to stay meaningful.
+  const showGuideResults = searchGuides && !isFavorites && query.trim().length >= 2
   const selectedCategoryName =
     categoryId == null
       ? 'Toutes les chaînes'
@@ -107,12 +128,25 @@ export function LiveScreen({
             </span>
             <TextInput
               className="pl-9"
-              placeholder="Rechercher une chaîne…"
+              placeholder={searchGuides ? 'Rechercher une chaîne ou un programme…' : 'Rechercher une chaîne…'}
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
               disabled={isFavorites}
             />
           </div>
+          <label
+            className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-300"
+            title="Cherche aussi dans les titres et descriptions des programmes, du programme en cours au dernier jour du guide (≈ 5 jours). Seules les chaînes qui ont un guide sont couvertes."
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-accent"
+              checked={searchGuides}
+              onChange={(e) => toggleSearchGuides(e.target.checked)}
+              disabled={isFavorites}
+            />
+            Chercher aussi dans les guides
+          </label>
         </div>
 
         <div className="flex items-center justify-between px-5 pt-3 text-sm text-gray-400">
@@ -136,6 +170,10 @@ export function LiveScreen({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-2">
+          {showGuideResults && <GuideSearchResults query={query.trim()} onPlayChannel={onPlayChannel} />}
+          {showGuideResults && (
+            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Chaînes</h3>
+          )}
           {isFavorites ? (
             <FavoritesView
               kind="live"
@@ -147,7 +185,11 @@ export function LiveScreen({
           ) : feed.error ? (
             <ErrorState message={feed.error} onRetry={feed.reload} retryLabel="Réessayer" />
           ) : feed.items.length === 0 ? (
-            isSearching ? (
+            showGuideResults ? (
+              <p className="rounded-lg border border-white/10 bg-surface-sunken p-3 text-sm text-gray-500">
+                Aucune chaîne ne porte « {query.trim()} » dans son nom.
+              </p>
+            ) : isSearching ? (
               <EmptyState
                 icon={<IconSearch size={36} />}
                 title="Aucun résultat"

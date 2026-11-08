@@ -54,7 +54,9 @@ export function usePlayer(): PlayerController {
         ...s,
         positionSecs: e.positionSecs,
         durationSecs: e.durationSecs,
-        state: e.state
+        state: e.state,
+        bufferedSecs: e.bufferedSecs ?? null,
+        audioTrack: e.audioTrack ?? null
       }))
     })
     const offState = api().player.onState((e) => {
@@ -103,13 +105,30 @@ export function usePlayer(): PlayerController {
     [runAction]
   )
 
-  const play = useCallback(
-    (req: PlayRequest) => {
-      setStatus((s) => ({ ...s, state: 'loading', title: req.title ?? s.title }))
-      return apply(api().player.play(req))
-    },
-    [apply]
-  )
+  // A refused/failed play must leave "loading": otherwise the bar stays on
+  // "Préparation…" forever. Switch to the error state so the bar shows why
+  // (and its "Fermer" button).
+  const play = useCallback(async (req: PlayRequest): Promise<void> => {
+    setStatus((s) => ({ ...s, state: 'loading', title: req.title ?? s.title }))
+    setError(null)
+    const fail = (message: string): void => {
+      setError(message)
+      setStatus((s) => (s.state === 'loading' ? { ...s, state: 'error', error: message } : s))
+    }
+    try {
+      const r = await api().player.play(req)
+      if (r.ok) {
+        setStatus(r.data)
+        setUnavailable(false)
+      } else if (r.error.code === 'NOT_IMPLEMENTED') {
+        setUnavailable(true)
+      } else {
+        fail(r.error.message)
+      }
+    } catch (e) {
+      fail(describeError(e))
+    }
+  }, [])
 
   const togglePlay = useCallback(() => {
     const playing = statusRef.current.state === 'playing'

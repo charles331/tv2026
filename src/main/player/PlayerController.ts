@@ -58,6 +58,7 @@ import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
 import { appLog } from '../log/logger'
 import { resolveMpvBinary } from './mpvBinary'
+import { mpvPlatformArgs } from './mpvPlatform'
 import { MpvIpc, type MpvEndFile, type MpvPropertyChange } from './mpvIpc'
 
 /** Typed emitter (shared shape from the IPC contract). */
@@ -73,7 +74,9 @@ const OBS = {
   fullscreen: 6,
   eofReached: 7,
   aid: 8,
-  sid: 9
+  sid: 9,
+  cacheTime: 10,
+  audioTrack: 11
 } as const
 
 /** ms between throttled position events to the renderer. */
@@ -120,6 +123,12 @@ export class PlayerController {
   private lastPaused = false
   /** Tail of the current mpv process's stderr (diagnosis of unexpected stops). */
   private lastStderrTail: string[] = []
+  /**
+   * mpv reported end-file "quit": the user closed the video window (or pressed
+   * q). Its IPC socket then closes and the process exits — that is a stop, NOT
+   * a drop to reconnect (a crash never sends "quit").
+   */
+  private userClosedWindow = false
 
   /**
    * Wire the typed event emitter (called once from main/index.ts). mpv renders
@@ -146,8 +155,11 @@ export class PlayerController {
     const binary = resolveMpvBinary()
     if (!binary) {
       return this.toError(
-        'Lecteur mpv introuvable. Le binaire mpv (resources/bin/win/mpv.exe) est ' +
-          'absent et mpv n’est pas dans le PATH.'
+        process.platform === 'win32'
+          ? 'Lecteur mpv introuvable. Le binaire mpv (resources/bin/win/mpv.exe) est ' +
+              'absent et mpv n’est pas dans le PATH.'
+          : 'Lecteur mpv introuvable. Installez-le avec votre gestionnaire de paquets ' +
+              '(Ubuntu/Debian : sudo apt install mpv), puis relancez la lecture.'
       )
     }
 
@@ -167,7 +179,13 @@ export class PlayerController {
     this.currentAid = null
     this.currentSid = null
     this.lastPaused = false
-    this.setState('loading', { source: req.kind, title: req.title ?? null })
+    this.setState('loading', {
+      source: req.kind,
+      title: req.title ?? null,
+      // New media: forget the previous one's buffer and audio track.
+      bufferedSecs: null,
+      audioTrack: null
+    })
 
     let url: string
     try {
@@ -241,6 +259,7 @@ export class PlayerController {
   ): Promise<void> {
     const ipcPath = makeIpcPath()
     const args = this.buildMpvArgs(ipcPath, url, req)
+    this.userClosedWindow = false
 
     const child = spawn(binary, args, {
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -290,6 +309,9 @@ export class PlayerController {
     try {
       await ipc.connect(8000)
     } catch (e) {
+      // Superseded meanwhile (stop()/new play() killed this mpv before its IPC
+      // socket existed): not an error of the CURRENT playback — stay silent.
+      if (session !== this.sessionId) return
       throw new PlayerError(
         `Connexion au moteur mpv impossible: ${e instanceof Error ? e.message : String(e)}`
       )
@@ -335,7 +357,9 @@ export class PlayerController {
       '--network-timeout=30',
       '--user-agent=tv2026',
       // Subtitles: prefer embedded tracks, auto-select.
-      '--sub-auto=fuzzy'
+      '--sub-auto=fuzzy',
+      // e.g. X11 under WSL so the video window can be resized (see mpvPlatform).
+      ...mpvPlatformArgs()
     ]
 
     // Live: keep a generous demuxer cache + back-buffer (also lets a recording
@@ -384,6 +408,21 @@ export class PlayerController {
       // Once a file is loaded (first play, soft reload, or respawn), re-apply the
       // per-file selections a (re)load resets: chosen audio/subtitle track + pause.
       if (msg.event === 'file-loaded') void this.restorePrefs(ipc)
+      // Once the first frames are up, the window has its initial size (--autofit):
+      // from then on keep whatever size the user gives it. Measured: without
+      // this, a live cut resets the window (unloading the video resizes the idle
+      // window — an "error" cut does it before the app can react), then the
+      // reload resizes it to the video again. Set at runtime, not as a launch
+      // arg, so an mpv build without this option still starts.
+      if (msg.event === 'playback-restart') {
+        void ipc.setProperty('auto-window-resize', false).catch(() => undefined)
+      }
+      // A live stream reloaded IN PLACE (same mpv) produces no fresh `pause`
+      // observation, so this is the signal that decoding really resumed.
+      if (msg.event === 'playback-restart' && this.status.state === 'reconnecting') {
+        this.retryAttempt = 0
+        this.setState(this.lastPaused ? 'paused' : 'playing')
+      }
     })
     ipc.on('error', () => {
       // Logged at the socket level; non-fatal. Genuine drops surface as 'close'.
@@ -413,7 +452,9 @@ export class PlayerController {
       ipc.observeProperty(OBS.fullscreen, 'fullscreen'),
       ipc.observeProperty(OBS.eofReached, 'eof-reached'),
       ipc.observeProperty(OBS.aid, 'aid'),
-      ipc.observeProperty(OBS.sid, 'sid')
+      ipc.observeProperty(OBS.sid, 'sid'),
+      ipc.observeProperty(OBS.cacheTime, 'demuxer-cache-time'),
+      ipc.observeProperty(OBS.audioTrack, 'current-tracks/audio')
     ]).catch(() => undefined)
   }
 
@@ -471,6 +512,14 @@ export class PlayerController {
         this.status.fullscreen = change.data === true
         break
       }
+      case 'demuxer-cache-time': {
+        this.status.bufferedSecs = asNumber(change.data)
+        break
+      }
+      case 'current-tracks/audio': {
+        this.status.audioTrack = audioTrackLabel(change.data)
+        break
+      }
       case 'eof-reached': {
         if (change.data === true) this.onEndFile({ reason: 'eof' })
         break
@@ -479,6 +528,11 @@ export class PlayerController {
   }
 
   private onEndFile(e: MpvEndFile): void {
+    if (e.reason === 'quit') {
+      // Window closed by the user: the exit/close that follows is a stop.
+      this.userClosedWindow = true
+      return
+    }
     // LIVE: an eof/error is almost always a provider/network drop, not a real
     // end. Reconnect instead of closing (the user stopping is handled by the
     // session guard, so we never get here for a user-initiated stop).
@@ -514,6 +568,12 @@ export class PlayerController {
   }
 
   private async handleExit(code: number | null): Promise<void> {
+    if (this.userClosedWindow) {
+      this.userClosedWindow = false
+      appLog.info('player', 'Fenêtre vidéo fermée par l’utilisateur : lecture arrêtée')
+      await this.stop()
+      return
+    }
     // LIVE: an unexpected mpv exit (crash, window closed by the OS, stream gone)
     // is a drop, not a user stop — reconnect rather than tear the bar down.
     if (this.isLiveSession()) {
@@ -547,18 +607,28 @@ export class PlayerController {
     }
   }
 
+  /** True while the current mpv process is alive and reachable over IPC. */
+  private canReloadInPlace(): boolean {
+    const proc = this.proc
+    return !!(this.ipc?.isConnected() && proc && proc.exitCode === null && !proc.killed)
+  }
+
   /**
-   * A live stream dropped unexpectedly. KILL mpv now (so its provider socket
-   * closes and the panel's single connection is freed during the backoff), then
-   * schedule a fresh re-open. Attempts are unlimited until the user stops
-   * (stop() clears currentReq + the timer and bumps the session).
+   * A live stream dropped unexpectedly: free the panel's single connection
+   * during the backoff, then re-open. Attempts are unlimited until the user
+   * stops (stop() clears currentReq + the timer and bumps the session).
    *
-   * Why kill instead of reloading in place: reusing the same mpv via
-   * `loadfile replace` keeps the old provider connection alive, so a
-   * single-connection panel refuses the new one and the stream stays stuck on
-   * "Reconnexion…" forever. Killing + respawning mirrors a manual Stop+Play
-   * (which recovers). We keep the internal connection lock so downloads aren't
-   * thrashed; only mpv + its socket close.
+   * Two paths:
+   *  - mpv still running (the usual case: the provider ends the stream, mpv
+   *    reports end-file eof/error) → `stop` the stream IN PLACE, then
+   *    `loadfile` it again after the backoff. `stop` closes the demuxer and its
+   *    provider socket; `--idle` + `--force-window` keep the video window open,
+   *    so it stays where the user put it (size, screen, fullscreen).
+   *    NOTE: a bare `loadfile replace` WITHOUT the prior `stop` + backoff kept
+   *    the old provider connection alive, so a single-connection panel refused
+   *    the new one ("Reconnexion…" forever) — hence the stop first.
+   *  - mpv process gone (crash, window closed) → respawn a fresh mpv.
+   * The internal connection lock is kept either way so downloads aren't thrashed.
    */
   private reconnectLive(): void {
     const req = this.currentReq
@@ -571,8 +641,12 @@ export class PlayerController {
       this.status.recording = false
       this.status.recordingPath = null
     }
-    this.killMpv()
-    this.sessionId++ // ignore the dead mpv's trailing exit/close events
+    if (this.canReloadInPlace()) {
+      void this.ipc!.command(['stop']).catch(() => undefined)
+    } else {
+      this.killMpv()
+      this.sessionId++ // ignore the dead mpv's trailing exit/close events
+    }
     this.retryAttempt++
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
     const delay = liveReconnectDelay(this.retryAttempt)
@@ -587,14 +661,27 @@ export class PlayerController {
   }
 
   /**
-   * Re-open the live stream in a FRESH mpv (the reliable recovery — it matches a
-   * manual Stop+Play, which frees the provider connection). Reuses the still-held
+   * Re-open the live stream: in the running mpv when it is still alive (keeps
+   * the window), otherwise in a FRESH mpv. Reuses the still-held
    * connection lock (no download thrash). Keeps retrying with growing backoff on
    * failure; the respawn restores volume/mute/fullscreen (launch args) and
    * audio/subtitle track + pause (on file-loaded).
    */
   private async attemptReconnect(req: PlayRequest): Promise<void> {
     if (this.currentReq !== req) return // superseded by stop()/new play()
+    if (this.canReloadInPlace()) {
+      const session = this.sessionId
+      try {
+        if (!this.lockToken) this.lockToken = await connectionLock.acquire('playback')
+        if (session !== this.sessionId || this.currentReq !== req) return
+        // Success shows up as `playback-restart`; a failed open as end-file
+        // error, which loops back into reconnectLive (same mpv, next backoff).
+        await this.ipc!.command(['loadfile', this.streamUrl(req), 'replace'])
+      } catch {
+        if (this.currentReq === req && session === this.sessionId) this.reconnectLive()
+      }
+      return
+    }
     const binary = resolveMpvBinary()
     if (!binary) {
       this.toError('Lecteur mpv introuvable.')
@@ -867,7 +954,9 @@ export class PlayerController {
     this.emit(EventChannels.PLAYER_POSITION, {
       positionSecs: this.status.positionSecs,
       durationSecs: this.status.durationSecs,
-      state: this.status.state
+      state: this.status.state,
+      bufferedSecs: this.status.bufferedSecs ?? null,
+      audioTrack: this.status.audioTrack ?? null
     })
   }
 }
@@ -888,7 +977,9 @@ function idleStatus(): PlayerStatus {
     source: null,
     title: null,
     recording: false,
-    recordingPath: null
+    recordingPath: null,
+    bufferedSecs: null,
+    audioTrack: null
   }
 }
 
@@ -899,6 +990,16 @@ function makeIpcPath(): string {
     return `\\\\.\\pipe\\${name}`
   }
   return join(tmpdir(), `${name}.sock`)
+}
+
+/** "Français 5.1 (fre)" / "fre" / "Piste 2" from mpv's current-tracks/audio. */
+function audioTrackLabel(v: unknown): string | null {
+  if (!v || typeof v !== 'object') return null
+  const t = v as { id?: unknown; lang?: unknown; title?: unknown }
+  const title = typeof t.title === 'string' && t.title.trim() ? t.title.trim() : null
+  const lang = typeof t.lang === 'string' && t.lang.trim() ? t.lang.trim() : null
+  if (title && lang) return `${title} (${lang})`
+  return title ?? lang ?? (typeof t.id === 'number' ? `Piste ${t.id}` : null)
 }
 
 function asNumber(v: unknown): number | null {

@@ -12,9 +12,10 @@
  * If neither is found, callers surface a typed PLAYER_ERROR ("mpv introuvable")
  * so the UI shows a clear message instead of crashing.
  *
- * NOTE (WSL2 dev): mpv is not installed in this environment, so resolution will
- * usually fall through to "not found" here — that is expected. On the Windows
- * target the bundled binary is found at process.resourcesPath/bin/mpv.exe.
+ * NOTE (Linux / WSL2 dev): install the distro's mpv (`sudo apt-get install mpv`)
+ * and it is found on the PATH; under WSLg its video window opens on the Windows
+ * desktop. On the Windows target the bundled binary is found at
+ * process.resourcesPath/bin/mpv.exe.
  */
 
 import { existsSync } from 'fs'

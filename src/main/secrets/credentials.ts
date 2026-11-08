@@ -22,6 +22,37 @@ interface StoredCredsFile {
   passwordEnc: string
 }
 
+/**
+ * DEV ONLY: credentials from the repo's `.env` (XTREAM_URL / XTREAM_USER /
+ * XTREAM_PASS), so the app can be launched and driven end-to-end (Playwright)
+ * without typing them into the UI. Never active in a packaged build, never
+ * written anywhere, and only used when nothing is stored via safeStorage.
+ */
+let devEnvCache: XtreamCredentials | null | undefined
+function devEnvCredentials(): XtreamCredentials | null {
+  if (devEnvCache !== undefined) return devEnvCache
+  devEnvCache = null
+  if (app.isPackaged) return null
+  const env: Record<string, string | undefined> = { ...process.env }
+  // `electron-vite dev` runs with the repo as app path; `electron out/main/index.js`
+  // (Playwright) with out/main — look a couple of levels up for the repo's .env.
+  const appPath = app.getAppPath()
+  const file = [appPath, join(appPath, '..'), join(appPath, '..', '..')]
+    .map((d) => join(d, '.env'))
+    .find((f) => existsSync(f))
+  if (file) {
+    for (const line of readFileSync(file, 'utf-8').split(/\r?\n/)) {
+      const m = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line)
+      if (m && env[m[1]!] === undefined) env[m[1]!] = m[2]!.replace(/^(['"])(.*)\1$/, '$2')
+    }
+  }
+  const baseUrl = env['XTREAM_URL'], username = env['XTREAM_USER'], password = env['XTREAM_PASS']
+  if (baseUrl && username && password) {
+    devEnvCache = { baseUrl: normalizeBaseUrl(baseUrl), username: username.trim(), password }
+  }
+  return devEnvCache
+}
+
 function credsPath(): string {
   return join(app.getPath('userData'), 'credentials.json')
 }
@@ -69,7 +100,7 @@ export function setCredentials(creds: XtreamCredentials): void {
  */
 export function getCredentials(): XtreamCredentials | null {
   const file = readFile()
-  if (!file) return null
+  if (!file) return devEnvCredentials()
   try {
     const buf = Buffer.from(file.passwordEnc, 'base64')
     const password = safeStorage.decryptString(buf)
@@ -88,10 +119,11 @@ export function clearCredentials(): void {
 /** Non-secret status safe to expose to the renderer. */
 export function getCredentialsStatus(): CredentialsStatus {
   const file = readFile()
+  const dev = file ? null : devEnvCredentials()
   return {
-    hasCredentials: file !== null,
-    baseUrl: file?.baseUrl ?? null,
-    username: file?.username ?? null,
+    hasCredentials: file !== null || dev !== null,
+    baseUrl: file?.baseUrl ?? dev?.baseUrl ?? null,
+    username: file?.username ?? dev?.username ?? null,
     encryptionAvailable: isEncryptionAvailable()
   }
 }

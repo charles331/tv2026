@@ -56,7 +56,7 @@ const SETTINGS_TABS: Record<SettingsTab, { label: string; hint: string }> = {
   },
   catalogues: {
     label: 'Catalogues',
-    hint: 'Rafraîchissement des films, séries et du direct, et notes TMDB.'
+    hint: 'Rafraîchissement des films, séries et du direct, qualité des fichiers et notes TMDB.'
   },
   telechargements: {
     label: 'Téléchargements',
@@ -277,6 +277,16 @@ export function SettingsScreen({
       setCredsError(describeError(err))
     } finally {
       setPickingDir(false)
+    }
+  }, [])
+
+  const [qualityMessage, setQualityMessage] = useState<string | null>(null)
+  const handleToggleQuality = useCallback(async (enabled: boolean) => {
+    setQualityMessage(null)
+    try {
+      setSettings(unwrap(await api().settings.set({ qualityCheck: enabled })))
+    } catch (err) {
+      setQualityMessage(describeError(err))
     }
   }, [])
 
@@ -819,6 +829,35 @@ export function SettingsScreen({
       )}
 
       {/* Rafraîchir les séries */}
+      {tab === 'catalogues' && (
+      <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+        <h2 className="text-base font-medium text-gray-100">Qualité des films</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Le fournisseur n’indique ni la taille ni la résolution des films. À l’ouverture d’une fiche,
+          l’application peut demander au serveur la taille réelle du fichier (1 octet téléchargé,
+          moins d’une seconde) et en déduire le débit : une copie filmée en salle (« CAM ») descend
+          sous 1,2 Mbit/s. Cette vérification utilise la connexion unique ; elle n’a jamais lieu
+          pendant un téléchargement ou une lecture. Le badge « CAM » tiré du titre reste toujours
+          affiché.
+        </p>
+        <label className="mt-4 flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-accent"
+            checked={settings?.qualityCheck ?? true}
+            onChange={(e) => void handleToggleQuality(e.target.checked)}
+          />
+          <span className="text-sm text-gray-200">
+            Vérifier la qualité des fichiers à l’ouverture d’une fiche
+            <span className="ml-2 text-xs text-gray-500">
+              (désactivé : vérification seulement sur demande, via « vérifier »)
+            </span>
+          </span>
+        </label>
+        {qualityMessage && <p className="mt-2 text-sm text-red-300">{qualityMessage}</p>}
+      </section>
+      )}
+
       {tab === 'catalogues' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <h2 className="text-base font-medium text-gray-100">Séries</h2>

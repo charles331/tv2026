@@ -18,7 +18,7 @@ import {
 } from '../../components/ui'
 
 /** A French day header, e.g. "Aujourd'hui" / "Lundi 9 juin". */
-function dayLabel(secs: number): string {
+export function dayLabel(secs: number): string {
   const d = new Date(secs * 1000)
   const today = new Date()
   const tomorrow = new Date(today)

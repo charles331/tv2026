@@ -25,6 +25,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "package": "npm run build && electron-builder --win --config electron-builder.yml",
     "package:dir": "npm run build && electron-builder --win --dir --config electron-builder.yml",
+    "package:linux": "npm run build && electron-builder --linux --config electron-builder.yml --publish never",
     "rebuild": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps"
   },
@@ -59,6 +60,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
+    "playwright": "1.64.1",
     "postcss": "^8.5.31",
     "prettier": "^3.9.10",
     "react": "^19.3.1",

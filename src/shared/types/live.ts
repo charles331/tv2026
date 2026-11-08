@@ -75,6 +75,27 @@ export interface FullEpgRequest {
   streamId: number
 }
 
+/** One programme found by a search inside the live guides. */
+export interface GuideSearchHit {
+  title: string
+  description: string | null
+  /** Unix epoch seconds. */
+  startSecs: number
+  endSecs: number
+  /** Channels broadcasting it (HD/FHD/4K variants often share one guide id). */
+  channels: LiveStream[]
+}
+
+export interface GuideSearchResult {
+  hits: GuideSearchHit[]
+  /** True when more programmes matched than were returned. */
+  truncated: boolean
+  /** When the local guide was downloaded (epoch ms), null if never. */
+  guideFetchedAt: number | null
+  /** Upcoming programmes in the local guide (all channels). */
+  guideProgrammes: number
+}
+
 /** Result of refreshing the live cache from the provider. */
 export interface RefreshLiveResult {
   categories: number

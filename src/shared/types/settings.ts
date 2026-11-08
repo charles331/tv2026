@@ -95,6 +95,12 @@ export interface AppSettings {
    * differently from player traffic, so this is switchable for testing.
    */
   downloadUserAgent: 'browser' | 'player'
+  /**
+   * Check a movie file's real size (1-byte request on the provider, ~1 s, uses
+   * the single connection when it is free) as soon as its page is opened, to
+   * flag low-quality copies before downloading. Off → only on explicit request.
+   */
+  qualityCheck: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -111,7 +117,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   chunkedDownloads: true, // block mode by default (auto-falls back when unsupported)
   downloadConnections: 1, // opt-in: raising this uses several provider connections
   downloadBlockBytes: 2 * 1024 * 1024, // small on purpose: more per-connection bursts
-  downloadUserAgent: 'browser'
+  downloadUserAgent: 'browser',
+  qualityCheck: true
 }
 
 /** Whether a TMDB API key is stored (without revealing it). */

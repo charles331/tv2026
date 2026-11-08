@@ -10,6 +10,7 @@ import type {
   Page,
   SearchRequest,
   VodCategory,
+  VideoInfo,
   VodInfo,
   VodStream
 } from '@shared/index'
@@ -32,6 +33,11 @@ interface StreamRow {
   year: number | null
   added_at: number | null
   downloaded?: number
+  file_size?: number | null
+  file_duration?: number | null
+  file_width?: number | null
+  file_height?: number | null
+  file_codec?: string | null
 }
 
 function mapCategory(r: CategoryRow): VodCategory {
@@ -53,7 +59,13 @@ function mapStream(r: StreamRow): VodStream {
     categoryId: r.category_id ?? '',
     year: r.year,
     addedAt: r.added_at,
-    downloaded: r.downloaded ? Boolean(r.downloaded) : false
+    downloaded: r.downloaded ? Boolean(r.downloaded) : false,
+    fileSizeBytes: r.file_size ?? null,
+    fileDurationSecs: r.file_duration ?? null,
+    fileVideo:
+      r.file_width && r.file_height && r.file_codec
+        ? { width: r.file_width, height: r.file_height, codec: r.file_codec }
+        : null
   }
 }
 
@@ -143,11 +155,11 @@ export function listStreams(req: ListStreamsRequest): Page<VodStream> {
   const sortCol = SORT_COLUMNS[req.sortBy ?? 'name'] ?? 'name COLLATE NOCASE'
   const dir = req.sortDir === 'desc' ? 'DESC' : 'ASC'
 
-  const where = req.categoryId ? 'WHERE category_id = ?' : ''
+  const where = req.categoryId ? 'WHERE s.category_id = ?' : ''
   const params = req.categoryId ? [req.categoryId] : []
 
   const total = (
-    db.prepare(`SELECT COUNT(*) AS n FROM vod_streams ${where}`).get(...params) as { n: number }
+    db.prepare(`SELECT COUNT(*) AS n FROM vod_streams s ${where}`).get(...params) as { n: number }
   ).n
 
   const rows = db
@@ -155,8 +167,11 @@ export function listStreams(req: ListStreamsRequest): Page<VodStream> {
       `SELECT s.*,
               EXISTS(SELECT 1 FROM download_history h
                      WHERE h.stream_id = s.stream_id AND h.kind = 'movie'
-                       AND h.status = 'completed') AS downloaded
-       FROM vod_streams s ${where}
+                       AND h.status = 'completed') AS downloaded,
+              fc.size_bytes AS file_size, fc.duration_secs AS file_duration,
+              fc.width AS file_width, fc.height AS file_height, fc.video_codec AS file_codec
+       FROM vod_streams s
+       LEFT JOIN vod_file_check fc ON fc.stream_id = s.stream_id ${where}
        ORDER BY ${sortCol} ${dir}
        LIMIT ? OFFSET ?`
     )
@@ -172,13 +187,13 @@ export function searchStreams(req: SearchRequest): Page<VodStream> {
   const offset = (page - 1) * pageSize
   const like = `%${req.query.replace(/[%_]/g, (m) => '\\' + m)}%`
 
-  const catClause = req.categoryId ? 'AND category_id = ?' : ''
+  const catClause = req.categoryId ? 'AND s.category_id = ?' : ''
   const baseParams: (string | number)[] = [like]
   if (req.categoryId) baseParams.push(req.categoryId)
 
   const total = (
     db
-      .prepare(`SELECT COUNT(*) AS n FROM vod_streams WHERE name LIKE ? ESCAPE '\\' ${catClause}`)
+      .prepare(`SELECT COUNT(*) AS n FROM vod_streams s WHERE s.name LIKE ? ESCAPE '\\' ${catClause}`)
       .get(...baseParams) as { n: number }
   ).n
 
@@ -187,10 +202,13 @@ export function searchStreams(req: SearchRequest): Page<VodStream> {
       `SELECT s.*,
               EXISTS(SELECT 1 FROM download_history h
                      WHERE h.stream_id = s.stream_id AND h.kind = 'movie'
-                       AND h.status = 'completed') AS downloaded
+                       AND h.status = 'completed') AS downloaded,
+              fc.size_bytes AS file_size, fc.duration_secs AS file_duration,
+              fc.width AS file_width, fc.height AS file_height, fc.video_codec AS file_codec
        FROM vod_streams s
-       WHERE name LIKE ? ESCAPE '\\' ${catClause}
-       ORDER BY name COLLATE NOCASE ASC
+       LEFT JOIN vod_file_check fc ON fc.stream_id = s.stream_id
+       WHERE s.name LIKE ? ESCAPE '\\' ${catClause}
+       ORDER BY s.name COLLATE NOCASE ASC
        LIMIT ? OFFSET ?`
     )
     .all(...baseParams, pageSize, offset) as StreamRow[]
@@ -223,6 +241,59 @@ export function getCachedVodInfo(streamId: number, maxAgeMs?: number): VodInfo |
   } catch {
     return null
   }
+}
+
+// --- file checks (quality) ---
+
+export interface FileCheckRow {
+  sizeBytes: number
+  durationSecs: number | null
+  checkedAt: number
+  video: VideoInfo | null
+}
+
+export function getFileCheck(streamId: number): FileCheckRow | null {
+  const r = getDb()
+    .prepare(
+      `SELECT size_bytes, duration_secs, checked_at, width, height, video_codec
+       FROM vod_file_check WHERE stream_id = ?`
+    )
+    .get(streamId) as
+    | {
+        size_bytes: number
+        duration_secs: number | null
+        checked_at: number
+        width: number | null
+        height: number | null
+        video_codec: string | null
+      }
+    | undefined
+  if (!r) return null
+  return {
+    sizeBytes: r.size_bytes,
+    durationSecs: r.duration_secs,
+    checkedAt: r.checked_at,
+    video:
+      r.width && r.height && r.video_codec ? { width: r.width, height: r.height, codec: r.video_codec } : null
+  }
+}
+
+/** Store the real resolution/codec read from the file ("Analyser"). */
+export function saveFileVideo(streamId: number, video: VideoInfo): void {
+  getDb()
+    .prepare('UPDATE vod_file_check SET width = ?, height = ?, video_codec = ? WHERE stream_id = ?')
+    .run(video.width, video.height, video.codec, streamId)
+}
+
+export function saveFileCheck(streamId: number, row: Omit<FileCheckRow, 'video'>): void {
+  getDb()
+    .prepare(
+      `INSERT INTO vod_file_check (stream_id, size_bytes, duration_secs, checked_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(stream_id) DO UPDATE SET size_bytes = excluded.size_bytes,
+         duration_secs = excluded.duration_secs, checked_at = excluded.checked_at`
+    )
+    .run(streamId, row.sizeBytes, row.durationSecs, row.checkedAt)
 }
 
 /** Counts for refresh reporting. */

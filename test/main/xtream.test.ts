@@ -241,6 +241,21 @@ describe('getVodStreams', () => {
     expect(streams[1].containerExtension).toBe('mkv')
   })
 
+  it('accepts a numeric category_id (and null) as sent by the target provider', async () => {
+    requestMock.mockResolvedValueOnce(
+      fakeRes(
+        200,
+        JSON.stringify([
+          { stream_id: 2126360, name: 'FR - Moulin (2026) CAM', category_id: 2397, container_extension: 'ts' },
+          { stream_id: 7, name: 'Sans catégorie', category_id: null }
+        ])
+      )
+    )
+    const client = new XtreamClient(creds)
+    const streams = await client.getVodStreams()
+    expect(streams.map((s) => s.categoryId)).toEqual(['2397', ''])
+  })
+
   it('drops entries without a usable stream_id', async () => {
     requestMock.mockResolvedValueOnce(
       fakeRes(
@@ -290,6 +305,22 @@ describe('getVodInfo', () => {
     expect(info.durationSecs).toBe(6120)
     expect(info.sizeBytes).toBe(5368709120)
     expect(info.containerExtension).toBe('mkv')
+  })
+
+  it('prefers the HH:MM:SS `duration` over `duration_secs` (which some panels fill with minutes)', async () => {
+    requestMock.mockResolvedValueOnce(
+      fakeRes(
+        200,
+        JSON.stringify({
+          info: { name: 'Moulin', duration_secs: 130, duration: '02:10:00', movie_size: null },
+          movie_data: { name: 'FR - Moulin (2026) CAM', container_extension: 'ts' }
+        })
+      )
+    )
+    const client = new XtreamClient(creds)
+    const info = await client.getVodInfo(2126360)
+    expect(info.durationSecs).toBe(7800)
+    expect(info.sizeBytes).toBeNull()
   })
 
   it('throws NOT_FOUND for an unknown id (info:[] / movie_data:null)', async () => {

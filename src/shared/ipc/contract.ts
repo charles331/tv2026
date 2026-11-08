@@ -30,6 +30,7 @@ import type {
   SearchRequest,
   VodCategory,
   VodInfo,
+  FileCheckResult,
   VodStream
 } from '../types/catalog'
 import type {
@@ -43,6 +44,7 @@ import type {
 import type {
   EpgEntry,
   FullEpgRequest,
+  GuideSearchResult,
   ListLiveRequest,
   LiveCategory,
   LiveStream,
@@ -114,6 +116,11 @@ export interface IpcContract {
   [InvokeChannels.CATALOG_LIST_CATEGORIES]: { request: void; response: VodCategory[] }
   [InvokeChannels.CATALOG_LIST_STREAMS]: { request: ListStreamsRequest; response: Page<VodStream> }
   [InvokeChannels.CATALOG_GET_INFO]: { request: { streamId: number }; response: VodInfo }
+  [InvokeChannels.CATALOG_CHECK_FILE]: {
+    request: { streamId: number; manual?: boolean }
+    response: FileCheckResult
+  }
+  [InvokeChannels.CATALOG_ANALYZE_FILE]: { request: { streamId: number }; response: FileCheckResult }
   [InvokeChannels.CATALOG_SEARCH]: { request: SearchRequest; response: Page<VodStream> }
   [InvokeChannels.CATALOG_REFRESH]: {
     request: RefreshCatalogRequest
@@ -134,6 +141,7 @@ export interface IpcContract {
   [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
   [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
   [InvokeChannels.LIVE_FULL_EPG]: { request: FullEpgRequest; response: EpgEntry[] }
+  [InvokeChannels.LIVE_SEARCH_GUIDE]: { request: { query: string }; response: GuideSearchResult }
 
   // favorites
   [InvokeChannels.FAVORITES_LIST]: { request: { kind: FavoriteKind }; response: FavoriteItem[] }

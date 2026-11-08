@@ -3,6 +3,8 @@ name: Release
 # À chaque fusion sur `main`, semantic-release analyse les commits (Conventional
 # Commits), calcule la prochaine version (semver), construit l'installeur Windows
 # et publie une Release GitHub avec des notes générées automatiquement.
+# Le job `release-linux` (Ubuntu) ajoute ensuite à cette même Release le .deb,
+# l'AppImage et latest-linux.yml (mise à jour automatique sous Linux).
 # Aucun bump manuel de version : c'est entièrement piloté par les messages de commit.
 on:
   push:
@@ -25,6 +27,9 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
+    outputs:
+      # Tag publié par semantic-release sur ce commit ("" si pas de release).
+      tag: ${{ steps.published.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -81,4 +86,53 @@ jobs:
         run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag publié
+        id: published
+        shell: bash
+        run: echo "tag=$(git tag --points-at HEAD | grep '^v' | head -n 1)" >> "$GITHUB_OUTPUT"
+
+  release-linux:
+    # better-sqlite3 est natif : le paquet Linux doit être construit sous Linux.
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+
+    steps:
+      - name: Checkout (tag publié)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # Le postinstall recompile better-sqlite3 pour l'ABI Electron (Linux).
+        run: pnpm install --frozen-lockfile
+
+      - name: Version de la release
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+
+      - name: Build & package Linux (.deb + AppImage)
+        run: pnpm run package:linux
+
+      - name: Ajouter les paquets Linux à la Release
+        run: |
+          gh release upload "$TAG" --clobber \
+            "$(ls release/*.deb)#Ubuntu / Debian x64 (.deb)" \
+            "$(ls release/*.AppImage)#Linux x64 (AppImage)" \
+            release/latest-linux.yml
+        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

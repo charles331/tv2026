@@ -19,7 +19,7 @@ interface CategoryRow {
   channel_count?: number
 }
 
-interface ChannelRow {
+export interface ChannelRow {
   stream_id: number
   name: string
   icon: string | null
@@ -38,7 +38,7 @@ function mapCategory(r: CategoryRow): LiveCategory {
   }
 }
 
-function mapChannel(r: ChannelRow): LiveStream {
+export function mapChannel(r: ChannelRow): LiveStream {
   return {
     streamId: r.stream_id,
     name: r.name,

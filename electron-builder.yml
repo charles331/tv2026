@@ -9,6 +9,8 @@
 #    + prebuilt binaries), because cross-compiling a Windows .node from Linux
 #    is not supported by node-gyp. Recommended: run `npm run package` on a
 #    Windows machine (or GitHub Actions windows-latest).
+#  * Linux packages (.deb + AppImage) are built on Linux (`pnpm package:linux`,
+#    or the release-linux CI job); mpv comes from the distribution there.
 #  * The mpv binary (mpv.exe + any required DLLs) is bundled from
 #    resources/bin/win/ via extraResources below. mpv-player-integrator places
 #    the Windows mpv build there. At runtime it resolves to
@@ -32,14 +34,14 @@ asar: true
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 
-# Bundle the mpv Windows binary (placed by mpv-player-integrator).
-extraResources:
-  - from: resources/bin/win
-    to: bin
-    filter:
-      - '**/*'
-
 win:
+  # Bundle the mpv Windows binary (placed by the CI "Bundle mpv" step). Windows
+  # only: on Linux, mpv comes from the distribution (deb Recommends / PATH).
+  extraResources:
+    - from: resources/bin/win
+      to: bin
+      filter:
+        - '**/*'
   # Multi-resolution app icon (build/icon.ico, 16→256). Used for the .exe, the
   # installed app, and shortcuts. build/ is the buildResources dir above, so this
   # is also picked up by convention, but we set it explicitly for clarity.
@@ -65,6 +67,32 @@ nsis:
 
 portable:
   artifactName: ${productName}-${version}-portable.${ext}
+
+# Linux (Ubuntu/Debian .deb + universal AppImage). Built on ubuntu-latest in CI
+# (better-sqlite3 is native: it must be compiled on Linux). mpv is NOT bundled:
+# the .deb recommends the distribution's mpv (apt installs it by default), the
+# AppImage expects it on the PATH (`sudo apt install mpv`).
+linux:
+  icon: build/icon.png
+  category: AudioVideo
+  synopsis: Parcourir, télécharger et lire les films d'un fournisseur IPTV
+  maintainer: charles331
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+
+appImage:
+  artifactName: ${productName}-${version}-x86_64.${ext}
+
+deb:
+  artifactName: ${name}_${version}_amd64.${ext}
+  # Lecture vidéo : apt installe les « Recommends » par défaut.
+  recommends:
+    - mpv
 
 # Native module rebuild against the Electron ABI before packaging.
 npmRebuild: true

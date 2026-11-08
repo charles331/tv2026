@@ -41,6 +41,7 @@ import type {
   StrNum
 } from './rawTypes'
 import { XtreamError } from './errors'
+import { parseClockDuration } from '@shared/quality'
 
 /** Realistic desktop User-Agent — some panels reject default/unknown clients. */
 const USER_AGENT =
@@ -81,9 +82,12 @@ function toInt(v: StrNum): number | null {
   return n === null ? null : Math.trunc(n)
 }
 
-function nonEmpty(v: string | null | undefined): string | null {
+function nonEmpty(v: string | number | null | undefined): string | null {
   if (v === null || v === undefined) return null
-  const t = v.trim()
+  // Panels are inconsistent about types: e.g. `category_id` arrives as a number
+  // (2397) on the target provider while others send "2397".
+  if (typeof v !== 'string' && typeof v !== 'number') return null
+  const t = String(v).trim()
   return t.length ? t : null
 }
 
@@ -388,6 +392,17 @@ export class XtreamClient {
    * Default extension is `ts` (mpv also handles `m3u8`). Same redirect/lock
    * rules as the other stream URLs (playback acquires the ConnectionLock).
    */
+  /**
+   * URL of the provider's full programme guide (XMLTV, every channel, several
+   * days). Metadata only — it does not use the single media connection.
+   */
+  buildXmltvUrl(): string {
+    const u = new URL(`${this.baseUrl}/xmltv.php`)
+    u.searchParams.set('username', this.creds.username)
+    u.searchParams.set('password', this.creds.password)
+    return u.toString()
+  }
+
   buildLiveUrl(streamId: number, ext = 'ts'): string {
     const cleanExt = ext.replace(/^\.+/, '').trim() || 'ts'
     return `${this.baseUrl}/live/${encodeURIComponent(this.creds.username)}/${encodeURIComponent(
@@ -461,9 +476,10 @@ export class XtreamClient {
         : []
     const name = nonEmpty(movie.name) ?? nonEmpty(info.name) ?? ''
     const year = this.extractYear(name, info.releasedate ?? null)
-    // duration_secs is sometimes "minutes" mislabeled by panels, but this
-    // provider reports true seconds; keep as-is.
-    const durationSecs = toInt(info.duration_secs)
+    // Prefer the "HH:MM:SS" `duration`: some panels (incl. the target provider)
+    // fill `duration_secs` with MINUTES (130 for 2h10). Fall back to it only
+    // when no clock duration is given.
+    const durationSecs = parseClockDuration(info.duration) ?? toInt(info.duration_secs)
     const trailer = nonEmpty(info.youtube_trailer)
     return {
       streamId,
