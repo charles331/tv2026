@@ -58,6 +58,7 @@ import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
 import { appLog } from '../log/logger'
 import { resolveMpvBinary } from './mpvBinary'
+import { mpvPlatformArgs } from './mpvPlatform'
 import { MpvIpc, type MpvEndFile, type MpvPropertyChange } from './mpvIpc'
 
 /** Typed emitter (shared shape from the IPC contract). */
@@ -349,7 +350,9 @@ export class PlayerController {
       '--network-timeout=30',
       '--user-agent=tv2026',
       // Subtitles: prefer embedded tracks, auto-select.
-      '--sub-auto=fuzzy'
+      '--sub-auto=fuzzy',
+      // e.g. X11 under WSL so the video window can be resized (see mpvPlatform).
+      ...mpvPlatformArgs()
     ]
 
     // Live: keep a generous demuxer cache + back-buffer (also lets a recording
