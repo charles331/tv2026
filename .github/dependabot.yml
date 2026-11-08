@@ -9,7 +9,9 @@
 #
 # NOTE: tightly-coupled packages must move together (CI won't catch a partial
 # bump's build break unless the build job runs — see .github/workflows/ci.yml):
-#   - electron  <-> electron-builder <-> electron-vite
+#   - electron  <-> electron-builder <-> electron-vite <-> better-sqlite3
+#     (Electron only supports its 3 latest majors: take Electron majors as they
+#     come, testing the Windows build — see the build-windows workflow.)
 #   - vite      <-> @vitejs/plugin-react <-> vitest <-> @vitest/coverage-v8
 #   - eslint    <-> typescript-eslint <-> eslint-plugin-react(-hooks)
 #   - tailwindcss <-> @tailwindcss/postcss
@@ -38,18 +40,8 @@ updates:
           - "minor"
           - "patch"
     ignore:
-      # Electron is capped at 41 — established empirically with better-sqlite3
-      # 12.10.0, which failed to compile against Electron 42's V8
-      # (v8::External::New/Value + SetNativeDataProperty API changes). Newer
-      # better-sqlite3 releases may lift that limitation: when bumping
-      # better-sqlite3, re-test the Electron major (electron-rebuild against 42)
-      # before removing this ignore, bumping electron + electron-builder +
-      # electron-vite together and validating the Windows build. Minor/patch
-      # within 41.x are still taken.
-      - dependency-name: "electron"
-        update-types: ["version-update:semver-major"]
       # @types/node must follow the Node version EMBEDDED in Electron (Electron
-      # 41 → Node 24), not the latest Node: newer types would allow APIs that do
+      # 44 → Node 24), not the latest Node: newer types would allow APIs that do
       # not exist at runtime. Bump the major together with Electron.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]

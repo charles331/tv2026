@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         # --frozen-lockfile = respecte pnpm-lock.yaml à l'identique.
-        # Le postinstall recompile better-sqlite3 pour l'ABI Electron.
+        # better-sqlite3 est fourni précompilé (N-API) : rien n'est compilé.
         run: pnpm install --frozen-lockfile
 
       - name: Bundle mpv (best-effort)

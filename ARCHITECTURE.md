@@ -278,12 +278,13 @@ const off = connectionLock.onPreemptRequested(async (yield_) => {
 `electron-builder.yml` → cibles **NSIS** (.exe) + **portable**, x64. Scripts :
 `npm run package` (build + electron-builder --win).
 
-- **better-sqlite3 (module natif)** : doit être recompilé pour l'ABI Electron de
-  la **cible**, pas pour le Node de WSL2. `postinstall`/`rebuild` lancent
-  `electron-builder install-app-deps`. La **construction cross Linux→Windows d'un
-  `.node` n'est pas supportée par node-gyp** : lancez `npm run package` sur une
-  machine **Windows** (ou un runner CI windows-latest). `asarUnpack` garde le
-  `.node` chargeable.
+- **better-sqlite3 (module natif)** : depuis la version 13, il embarque des
+  binaires **précompilés N-API** pour Windows, Linux et macOS
+  (`prebuilds/<os>-<arch>.node`), compatibles avec toutes les versions d'Electron :
+  plus aucune compilation (pas de `postinstall`, `npmRebuild: false`, pnpm
+  `neverBuiltDependencies`). `asarUnpack` garde ces `.node` chargeables. Les
+  installeurs Windows restent construits sous Windows (runner CI windows-latest)
+  à cause de NSIS et du mpv Windows embarqué.
 - **mpv** : déposez le build Windows (`mpv.exe` + DLLs) dans `resources/bin/win/`.
   Il est embarqué via `extraResources` sous `resources/bin/` et résolu au runtime
   via `process.resourcesPath + '/bin/mpv.exe'` (`src/main/player/mpvBinary.ts`).
