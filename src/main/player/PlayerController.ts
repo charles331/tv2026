@@ -73,7 +73,9 @@ const OBS = {
   fullscreen: 6,
   eofReached: 7,
   aid: 8,
-  sid: 9
+  sid: 9,
+  cacheTime: 10,
+  audioTrack: 11
 } as const
 
 /** ms between throttled position events to the renderer. */
@@ -170,7 +172,13 @@ export class PlayerController {
     this.currentAid = null
     this.currentSid = null
     this.lastPaused = false
-    this.setState('loading', { source: req.kind, title: req.title ?? null })
+    this.setState('loading', {
+      source: req.kind,
+      title: req.title ?? null,
+      // New media: forget the previous one's buffer and audio track.
+      bufferedSecs: null,
+      audioTrack: null
+    })
 
     let url: string
     try {
@@ -434,7 +442,9 @@ export class PlayerController {
       ipc.observeProperty(OBS.fullscreen, 'fullscreen'),
       ipc.observeProperty(OBS.eofReached, 'eof-reached'),
       ipc.observeProperty(OBS.aid, 'aid'),
-      ipc.observeProperty(OBS.sid, 'sid')
+      ipc.observeProperty(OBS.sid, 'sid'),
+      ipc.observeProperty(OBS.cacheTime, 'demuxer-cache-time'),
+      ipc.observeProperty(OBS.audioTrack, 'current-tracks/audio')
     ]).catch(() => undefined)
   }
 
@@ -490,6 +500,14 @@ export class PlayerController {
       }
       case 'fullscreen': {
         this.status.fullscreen = change.data === true
+        break
+      }
+      case 'demuxer-cache-time': {
+        this.status.bufferedSecs = asNumber(change.data)
+        break
+      }
+      case 'current-tracks/audio': {
+        this.status.audioTrack = audioTrackLabel(change.data)
         break
       }
       case 'eof-reached': {
@@ -915,7 +933,9 @@ export class PlayerController {
     this.emit(EventChannels.PLAYER_POSITION, {
       positionSecs: this.status.positionSecs,
       durationSecs: this.status.durationSecs,
-      state: this.status.state
+      state: this.status.state,
+      bufferedSecs: this.status.bufferedSecs ?? null,
+      audioTrack: this.status.audioTrack ?? null
     })
   }
 }
@@ -936,7 +956,9 @@ function idleStatus(): PlayerStatus {
     source: null,
     title: null,
     recording: false,
-    recordingPath: null
+    recordingPath: null,
+    bufferedSecs: null,
+    audioTrack: null
   }
 }
 
@@ -947,6 +969,16 @@ function makeIpcPath(): string {
     return `\\\\.\\pipe\\${name}`
   }
   return join(tmpdir(), `${name}.sock`)
+}
+
+/** "Français 5.1 (fre)" / "fre" / "Piste 2" from mpv's current-tracks/audio. */
+function audioTrackLabel(v: unknown): string | null {
+  if (!v || typeof v !== 'object') return null
+  const t = v as { id?: unknown; lang?: unknown; title?: unknown }
+  const title = typeof t.title === 'string' && t.title.trim() ? t.title.trim() : null
+  const lang = typeof t.lang === 'string' && t.lang.trim() ? t.lang.trim() : null
+  if (title && lang) return `${title} (${lang})`
+  return title ?? lang ?? (typeof t.id === 'number' ? `Piste ${t.id}` : null)
 }
 
 function asNumber(v: unknown): number | null {

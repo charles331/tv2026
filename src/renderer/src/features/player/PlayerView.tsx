@@ -11,10 +11,12 @@ import {
   IconVolumeMute,
   IconFullscreen,
   IconSubtitles,
+  IconAudioTrack,
   IconFilm,
   IconRecord
 } from '../../components/ui'
-import { formatDuration } from '../../lib/format'
+import { formatClock } from '../../lib/format'
+import { SeekBar } from './SeekBar'
 import { useToast } from '../../lib/toast'
 import { usePlayer } from './usePlayer'
 
@@ -38,7 +40,24 @@ export function PlayerView({
   const player = usePlayer()
   const toast = useToast()
   const { status, unavailable } = player
-  const [seekPreview, setSeekPreview] = useState<number | null>(null)
+  // Right-hand time: total duration, or remaining time (click to toggle; remembered).
+  const [showRemaining, setShowRemaining] = useState(() => {
+    try {
+      return localStorage.getItem('tv2026.player.showRemaining') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleRemaining = (): void => {
+    setShowRemaining((v) => {
+      try {
+        localStorage.setItem('tv2026.player.showRemaining', v ? '0' : '1')
+      } catch {
+        // preference only
+      }
+      return !v
+    })
+  }
 
   // Recording is offered only for live streams (mpv `stream-record`).
   const isLive = request.mediaKind === 'live'
@@ -111,7 +130,6 @@ export function PlayerView({
   }, [status.recording, status.state, toast])
 
   const duration = status.durationSecs ?? 0
-  const position = seekPreview ?? status.positionSecs
   const isPlaying = status.state === 'playing'
   const isReconnecting = status.state === 'reconnecting'
   // Treat reconnecting like loading for the transport control (spinner).
@@ -199,35 +217,33 @@ export function PlayerView({
             >
               {isLoading ? <Spinner size={16} /> : isPlaying ? <IconPause size={18} /> : <IconPlay size={18} />}
             </button>
-            <span className="w-12 text-right text-xs tabular-nums text-gray-400">
-              {formatDuration(position)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(duration, 1)}
-              step={1}
-              value={Math.min(position, duration || position)}
-              disabled={duration <= 0}
-              onChange={(e) => setSeekPreview(Number(e.target.value))}
-              onMouseUp={() => {
-                if (seekPreview != null) {
-                  void player.seek(seekPreview)
-                  setSeekPreview(null)
-                }
-              }}
-              onTouchEnd={() => {
-                if (seekPreview != null) {
-                  void player.seek(seekPreview)
-                  setSeekPreview(null)
-                }
-              }}
-              className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/15 accent-accent disabled:opacity-40"
-              aria-label="Position"
+            {!isLive && (
+              <span className="shrink-0 text-right text-xs tabular-nums text-gray-300">
+                {formatClock(status.positionSecs, duration)}
+              </span>
+            )}
+            <SeekBar
+              positionSecs={status.positionSecs}
+              bufferedSecs={status.bufferedSecs}
+              durationSecs={duration}
+              live={isLive}
+              disabled={controlsDisabled || isLoading}
+              onSeek={(secs) => void player.seek(secs)}
             />
-            <span className="w-12 text-xs tabular-nums text-gray-400">
-              {duration > 0 ? formatDuration(duration) : '—'}
-            </span>
+            {!isLive && (
+              <button
+                type="button"
+                onClick={() => toggleRemaining()}
+                title={showRemaining ? 'Afficher la durée totale' : 'Afficher le temps restant'}
+                className="shrink-0 text-xs tabular-nums text-gray-500 transition-colors hover:text-gray-200"
+              >
+                {duration > 0
+                  ? showRemaining
+                    ? formatClock(-(duration - status.positionSecs), duration)
+                    : formatClock(duration, duration)
+                  : '—'}
+              </button>
+            )}
           </div>
 
           {/* Right controls */}
@@ -249,7 +265,8 @@ export function PlayerView({
                 value={status.muted ? 0 : status.volume}
                 disabled={controlsDisabled}
                 onChange={(e) => void player.setVolume(Number(e.target.value), false)}
-                className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-white/15 accent-accent disabled:opacity-40"
+                title={`Volume : ${status.muted ? 0 : status.volume} %`}
+                className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-white/15 accent-accent disabled:opacity-40"
                 aria-label="Volume"
               />
             </div>
@@ -267,11 +284,11 @@ export function PlayerView({
               type="button"
               disabled={controlsDisabled}
               onClick={() => void player.cycleAudio()}
-              title="Piste audio suivante"
-              className="text-xs font-semibold text-gray-300 transition-colors hover:text-white disabled:opacity-40"
+              title={`Piste audio${status.audioTrack ? ` : ${status.audioTrack}` : ''} — cliquer pour la suivante`}
+              className="text-gray-300 transition-colors hover:text-white disabled:opacity-40"
               aria-label="Changer de piste audio"
             >
-              AUD
+              <IconAudioTrack size={18} />
             </button>
             {isLive && (
               <button

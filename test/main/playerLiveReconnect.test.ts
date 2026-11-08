@@ -176,4 +176,25 @@ describe('PlayerController — live reconnect', () => {
     expect(status.state).not.toBe('error')
     expect(player.getStatus().state).toBe('idle')
   })
+
+  it('reports how far mpv has loaded (buffer) and the current audio track', async () => {
+    const emitted: unknown[] = []
+    player.attach(((_ch: string, payload: unknown) => emitted.push(payload)) as never)
+    await player.play({ ...LIVE, mediaKind: 'movie' as const })
+    const ipc = h.ipcs[0]!
+    ipc.emit('property-change', { name: 'time-pos', data: 394 })
+    ipc.emit('property-change', { name: 'demuxer-cache-time', data: 1000.4 })
+    ipc.emit('property-change', {
+      name: 'current-tracks/audio',
+      data: { id: 2, lang: 'fre', title: 'Français 5.1', codec: 'eac3' }
+    })
+    expect(player.getStatus().bufferedSecs).toBeCloseTo(1000.4)
+    expect(player.getStatus().audioTrack).toBe('Français 5.1 (fre)')
+    await vi.advanceTimersByTimeAsync(600)
+    ipc.emit('property-change', { name: 'time-pos', data: 395 })
+    expect(emitted).toContainEqual(expect.objectContaining({ positionSecs: 395, bufferedSecs: 1000.4 }))
+    ipc.emit('property-change', { name: 'current-tracks/audio', data: { id: 1, lang: 'eng' } })
+    expect(player.getStatus().audioTrack).toBe('eng')
+  })
 })
+

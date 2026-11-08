@@ -32,6 +32,22 @@ export function formatDuration(secs: number | null | undefined): string {
   return `${s} s`
 }
 
+/**
+ * Player clock: "1:50:12" / "6:34", "-1:43:38" for remaining time. `reference`
+ * (usually the media duration) forces h:mm:ss when it has hours, so the
+ * position and the total keep the same width while playing.
+ */
+export function formatClock(secs: number | null | undefined, reference?: number | null): string {
+  if (secs == null || !Number.isFinite(secs)) return '—'
+  const sign = secs < 0 ? '-' : ''
+  const total = Math.round(Math.abs(secs))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = (total % 60).toString().padStart(2, '0')
+  const withHours = h > 0 || (reference ?? 0) >= 3600
+  return withHours ? `${sign}${h}:${m.toString().padStart(2, '0')}:${s}` : `${sign}${m}:${s}`
+}
+
 /** Format an ETA in seconds as a short "restant" string. */
 export function formatEta(secs: number | null | undefined): string {
   if (secs == null || !Number.isFinite(secs) || secs < 0) return '—'

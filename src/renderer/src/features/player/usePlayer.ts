@@ -54,7 +54,9 @@ export function usePlayer(): PlayerController {
         ...s,
         positionSecs: e.positionSecs,
         durationSecs: e.durationSecs,
-        state: e.state
+        state: e.state,
+        bufferedSecs: e.bufferedSecs ?? null,
+        audioTrack: e.audioTrack ?? null
       }))
     })
     const offState = api().player.onState((e) => {
