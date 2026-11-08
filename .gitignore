@@ -11,3 +11,8 @@ resources/bin/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# identifiants locaux (jamais committés)
+.env
+.env.*
+!.env.example
