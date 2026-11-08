@@ -59,4 +59,22 @@ describe('probeFileSize', () => {
     ).toEqual({ kind: 'error', message: 'ECONNRESET' })
     expect(lock.isBusy()).toBe(false)
   })
+
+  it('never leaves an unhandled error when it cuts the response body (undici emits "Request aborted")', async () => {
+    const { EventEmitter } = await import('events')
+    const body = Object.assign(new EventEmitter(), {
+      // Like undici's BodyReadable: destroying an unfinished body emits an error.
+      destroy() {
+        queueMicrotask(() => body.emit('error', new Error('Request aborted')))
+        return body
+      }
+    })
+    const r = { statusCode: 206, headers: { 'content-range': 'bytes 0-0/853924635' }, body }
+    const out = await probeFileSize(URL_, { userAgent: 'UA', lock, requestImpl: vi.fn().mockResolvedValue(r) })
+    await new Promise((res) => setTimeout(res, 0))
+    expect(out).toEqual({ kind: 'ok', sizeBytes: 853924635 })
+    // An EventEmitter "error" without a listener throws → would be an uncaughtException.
+    expect(body.listenerCount('error')).toBeGreaterThan(0)
+  })
 })
+

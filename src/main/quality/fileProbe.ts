@@ -27,7 +27,7 @@ type RequestFn = (
 ) => Promise<{
   statusCode: number
   headers: Record<string, string | string[] | undefined>
-  body: { destroy(): unknown }
+  body: { destroy(): unknown; on?(event: 'error', cb: (err: unknown) => void): unknown }
 }>
 
 export interface ProbeOptions {
@@ -61,7 +61,10 @@ export async function probeFileSize(url: string, opts: ProbeOptions): Promise<Pr
       headers: { range: 'bytes=0-0', 'user-agent': opts.userAgent, accept: '*/*' },
       signal: ctl.signal
     })
-    // Never read the body: one byte on 206, the WHOLE file on a 200.
+    // Never read the body: one byte on 206, the WHOLE file on a 200. Destroying
+    // an unfinished undici body emits "Request aborted": swallow it, otherwise
+    // the 'error' event has no listener and becomes an uncaughtException.
+    res.body.on?.('error', () => undefined)
     res.body.destroy()
     if (res.statusCode === 206) {
       const total = parseContentRangeTotal(headerValue(res.headers['content-range']))
