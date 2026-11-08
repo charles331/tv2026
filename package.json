@@ -53,7 +53,7 @@
     "electron": "^41.10.7",
     "electron-builder": "^26.18.0",
     "electron-builder-squirrel-windows": "26.18.0",
-    "electron-vite": "^5.0.0",
+    "electron-vite": "^6.0.0",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
