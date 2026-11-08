@@ -14,7 +14,12 @@ type FakeProc = EventEmitter & {
   stderr: EventEmitter & { setEncoding: () => void }
 }
 type FakeIpcT = EventEmitter & { commands: unknown[][] }
-const h = vi.hoisted(() => ({ procs: [] as FakeProc[], ipcs: [] as FakeIpcT[] }))
+const h = vi.hoisted(() => ({
+  procs: [] as FakeProc[],
+  ipcs: [] as FakeIpcT[],
+  /** When set, IPC connect waits for this promise (mpv socket not up yet). */
+  connectGate: null as Promise<void> | null
+}))
 
 vi.mock('electron', () => ({ app: { getAppPath: () => '/app' } }))
 vi.mock('../../src/main/player/mpvBinary', () => ({ resolveMpvBinary: () => 'mpv' }))
@@ -52,7 +57,9 @@ vi.mock('../../src/main/player/mpvIpc', async () => {
       super()
       h.ipcs.push(this)
     }
-    connect = async (): Promise<void> => undefined
+    connect = async (): Promise<void> => {
+      if (h.connectGate) await h.connectGate
+    }
     command = async (args: unknown[]): Promise<unknown> => {
       this.commands.push(args)
       return null
@@ -152,6 +159,21 @@ describe('PlayerController — live reconnect', () => {
     await player.stop()
     await vi.advanceTimersByTimeAsync(20_000)
     expect(ipc.commands.some((c: unknown[]) => c[0] === 'loadfile')).toBe(false)
+    expect(player.getStatus().state).toBe('idle')
+  })
+
+  it('a playback cancelled while mpv is still starting ends silently (no error 8 s later)', async () => {
+    let failConnect: (e: Error) => void = () => undefined
+    h.connectGate = new Promise<void>((_res, rej) => {
+      failConnect = rej
+    })
+    const first = player.play({ ...LIVE, mediaKind: 'movie' as const })
+    await vi.advanceTimersByTimeAsync(0)
+    await player.stop() // e.g. the player bar unmounting right away
+    failConnect(new Error('connect ENOENT /tmp/tv2026-mpv.sock')) // the killed mpv never opened its socket
+    h.connectGate = null
+    const status = await first
+    expect(status.state).not.toBe('error')
     expect(player.getStatus().state).toBe('idle')
   })
 })

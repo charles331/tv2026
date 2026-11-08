@@ -290,6 +290,9 @@ export class PlayerController {
     try {
       await ipc.connect(8000)
     } catch (e) {
+      // Superseded meanwhile (stop()/new play() killed this mpv before its IPC
+      // socket existed): not an error of the CURRENT playback — stay silent.
+      if (session !== this.sessionId) return
       throw new PlayerError(
         `Connexion au moteur mpv impossible: ${e instanceof Error ? e.message : String(e)}`
       )

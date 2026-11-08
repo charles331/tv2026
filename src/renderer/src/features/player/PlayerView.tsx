@@ -56,13 +56,35 @@ export function PlayerView({
   }
 
   // Kick off playback when the requested source changes; stop on unmount.
+  //
+  // The stop is deferred by one tick and cancelled if the SAME source is
+  // started again right away. React StrictMode (dev only) runs this effect
+  // twice — play, cleanup, play — and an immediate stop killed the mpv that
+  // was starting; the resulting "idle" then closed this bar, whose unmount
+  // stopped the second mpv too: nothing ever played under `pnpm dev`.
+  // A real unmount, or a change of source, still stops (on the next tick).
+  const sourceKey = `${request.kind}|${request.streamId ?? ''}|${request.filePath ?? ''}`
+  const pendingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playingKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    void player.play(request)
+    const resumedSameSource = pendingStopRef.current !== null && playingKeyRef.current === sourceKey
+    if (pendingStopRef.current !== null) {
+      clearTimeout(pendingStopRef.current)
+      pendingStopRef.current = null
+    }
+    if (!resumedSameSource) {
+      playingKeyRef.current = sourceKey
+      void player.play(request)
+    }
     return () => {
-      void player.stop()
+      pendingStopRef.current = setTimeout(() => {
+        pendingStopRef.current = null
+        playingKeyRef.current = null
+        void player.stop()
+      }, 0)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request.kind, request.streamId, request.filePath])
+  }, [sourceKey])
 
   // Close the transport bar when the mpv window is closed (or playback ends):
   // once playback has actually started, a transition back to idle/ended means
