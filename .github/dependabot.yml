@@ -32,6 +32,13 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
     groups:
+      # vitest and its plugins must move in lockstep (@vitest/coverage-v8 pins
+      # the exact vitest version): one PR for all of them, majors included.
+      # Listed first so these packages never land in the generic group.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       npm-minor-patch:
         applies-to: version-updates
         patterns:
