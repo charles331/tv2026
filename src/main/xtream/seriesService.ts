@@ -7,6 +7,7 @@
 import type { RefreshSeriesResult, SeriesInfo } from '@shared/index'
 import { seriesRepo } from '../store'
 import { getXtreamClient } from './index'
+import { withRefreshLog } from './refreshLog'
 
 /** A populated series cache exists if it has at least one series. */
 export function isSeriesPopulated(): boolean {
@@ -23,19 +24,26 @@ export async function refreshSeries(force: boolean): Promise<RefreshSeriesResult
     return { categories: counts.categories, series: counts.series, refreshedAt: Date.now() }
   }
 
-  const client = getXtreamClient()
-  try {
-    const categories = await client.getSeriesCategories()
-    seriesRepo.upsertCategories(categories)
+  return withRefreshLog(
+    'series',
+    'Catalogue des séries',
+    async () => {
+      const client = getXtreamClient()
+      try {
+        const categories = await client.getSeriesCategories()
+        seriesRepo.upsertCategories(categories)
 
-    const series = await client.getSeries()
-    seriesRepo.upsertSeries(series)
+        const series = await client.getSeries()
+        seriesRepo.upsertSeries(series)
 
-    const counts = seriesRepo.seriesCounts()
-    return { categories: counts.categories, series: counts.series, refreshedAt: Date.now() }
-  } finally {
-    await client.close()
-  }
+        const counts = seriesRepo.seriesCounts()
+        return { categories: counts.categories, series: counts.series, refreshedAt: Date.now() }
+      } finally {
+        await client.close()
+      }
+    },
+    (r) => `${r.series} séries, ${r.categories} catégories`
+  )
 }
 
 /** TTL for cached get_series_info (7 days — episodes can change as a show airs). */

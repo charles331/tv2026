@@ -17,6 +17,7 @@ import { probeMedia } from '../quality/mediaProbe'
 import { resolveMpvBinary } from '../player/mpvBinary'
 import { transferUserAgent } from '../downloads/DownloadManager'
 import { appLog } from '../log/logger'
+import { withRefreshLog } from './refreshLog'
 import { getXtreamClient } from './index'
 import { fetchTmdbMovie } from '../tmdb/TmdbClient'
 import { getTmdbKey } from '../secrets/tmdbKey'
@@ -42,25 +43,32 @@ export async function refreshCatalog(force: boolean): Promise<RefreshCatalogResu
     return { categories: counts.categories, streams: counts.streams, refreshedAt: Date.now() }
   }
 
-  const client = getXtreamClient()
-  try {
-    // Sequential: categories first, then the full stream list.
-    const categories = await client.getVodCategories()
-    catalogRepo.upsertCategories(categories)
+  return withRefreshLog(
+    'catalog',
+    'Catalogue des films',
+    async () => {
+      const client = getXtreamClient()
+      try {
+        // Sequential: categories first, then the full stream list.
+        const categories = await client.getVodCategories()
+        catalogRepo.upsertCategories(categories)
 
-    const streams = await client.getVodStreams()
-    // Bulk upsert happens in a single DB transaction inside the repo.
-    catalogRepo.upsertStreams(streams)
+        const streams = await client.getVodStreams()
+        // Bulk upsert happens in a single DB transaction inside the repo.
+        catalogRepo.upsertStreams(streams)
 
-    const counts = catalogRepo.catalogCounts()
-    return {
-      categories: counts.categories,
-      streams: counts.streams,
-      refreshedAt: Date.now()
-    }
-  } finally {
-    await client.close()
-  }
+        const counts = catalogRepo.catalogCounts()
+        return {
+          categories: counts.categories,
+          streams: counts.streams,
+          refreshedAt: Date.now()
+        }
+      } finally {
+        await client.close()
+      }
+    },
+    (r) => `${r.streams} films, ${r.categories} catégories`
+  )
 }
 
 /** TTL for cached get_vod_info (30 days — movie detail is essentially static). */
