@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { FileCheckResult, VodInfo, VodStream } from '@shared/index'
 import { detectLowQualityTag, fileQuality } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
+import { publishFileCheck } from '../../lib/fileChecks'
 import { useDownloads } from '../../lib/downloads'
 import {
   Button,
@@ -61,7 +62,11 @@ export function MovieDetail({
       setFileState({ kind: 'checking' })
       api()
         .catalog.checkFile(stream.streamId, manual)
-        .then((r) => setFileState(toPillState(unwrap(r))))
+        .then((r) => {
+          const res = unwrap(r)
+          if (res.status === 'ok') publishFileCheck(stream.streamId, res)
+          setFileState(toPillState(res))
+        })
         .catch((e) => setFileState({ kind: 'error', message: describeError(e) }))
     },
     [stream.streamId]
@@ -75,8 +80,10 @@ export function MovieDetail({
       .catalog.analyzeFile(stream.streamId)
       .then((r) => {
         const res = unwrap(r)
-        if (res.status === 'ok') setFileState(toPillState(res))
-        else if (res.status === 'busy')
+        if (res.status === 'ok') {
+          publishFileCheck(stream.streamId, res)
+          setFileState(toPillState(res))
+        } else if (res.status === 'busy')
           setAnalyzeError('connexion occupée par un téléchargement ou une lecture')
         else if (res.status === 'error') setAnalyzeError(res.message)
       })
