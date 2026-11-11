@@ -35,7 +35,8 @@ export function DownloadRow({
   onResume,
   onCancel,
   onMoveUp,
-  onMoveDown
+  onMoveDown,
+  onOpen
 }: {
   item: DownloadItem
   live?: DownloadProgressEvent
@@ -47,6 +48,8 @@ export function DownloadRow({
   onCancel: (id: number) => void
   onMoveUp: (id: number) => void
   onMoveDown: (id: number) => void
+  /** Open the movie / series page this download comes from. */
+  onOpen: (item: DownloadItem) => void
 }): ReactElement {
   const meta = STATUS_META[item.status]
   const isActive = item.status === 'downloading'
@@ -91,9 +94,14 @@ export function DownloadRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <p className="truncate text-sm font-medium text-gray-100" title={item.fileName}>
+            <button
+              type="button"
+              onClick={() => onOpen(item)}
+              className="min-w-0 truncate text-left text-sm font-medium text-gray-100 hover:text-accent-hover hover:underline focus-visible:underline focus-visible:outline-none"
+              title={`${item.fileName}\nOuvrir la fiche ${item.kind === 'series' ? 'de la série' : 'du film'}`}
+            >
               {item.name}
-            </p>
+            </button>
             <Badge tone={meta.tone}>
               {pausedForPlayback ? 'En pause pour lecture' : meta.label}
             </Badge>

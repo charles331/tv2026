@@ -286,7 +286,9 @@ function AppShell(): ReactElement {
             />
           )}
           {route === 'scheduled' && <ScheduledScreen />}
-          {route === 'downloads' && <DownloadsScreen />}
+          {route === 'downloads' && (
+            <DownloadsScreen onOpenMovie={setSelected} onOpenSeries={setSelectedSeries} />
+          )}
           {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
         </main>
       </div>

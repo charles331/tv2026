@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react'
-import type { DownloadItem } from '@shared/index'
+import type { DownloadItem, SeriesStream, VodStream } from '@shared/index'
 import { useDownloads } from '../../lib/downloads'
 import { useConnectionBusy } from '../../lib/connectionLock'
-import { describeError } from '../../lib/ipc'
+import { api, describeError, unwrap } from '../../lib/ipc'
+import { useToast } from '../../lib/toast'
 import {
   Button,
   LoadingState,
@@ -21,10 +22,38 @@ const ACTIVE: ReadonlySet<DownloadItem['status']> = new Set([
 ])
 const DONE: ReadonlySet<DownloadItem['status']> = new Set(['completed', 'failed', 'canceled'])
 
-export function DownloadsScreen(): ReactElement {
+export function DownloadsScreen({
+  onOpenMovie,
+  onOpenSeries
+}: {
+  onOpenMovie: (stream: VodStream) => void
+  onOpenSeries: (series: SeriesStream) => void
+}): ReactElement {
   const dl = useDownloads()
   const busy = useConnectionBusy()
+  const toast = useToast()
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // Click on a title: open the movie page, or the series page for an episode.
+  const openSource = useCallback(
+    async (item: DownloadItem) => {
+      try {
+        const source = unwrap(await api().downloads.findSource(item.streamId, item.kind))
+        if (source?.kind === 'movie') onOpenMovie(source.stream)
+        else if (source?.kind === 'series') onOpenSeries(source.series)
+        else
+          toast.show(
+            item.kind === 'series'
+              ? 'Série introuvable dans le catalogue local : ouvrez-la une fois depuis l’onglet Séries.'
+              : 'Ce film n’est plus dans le catalogue du fournisseur.',
+            'info'
+          )
+      } catch (e) {
+        toast.show(describeError(e), 'error')
+      }
+    },
+    [onOpenMovie, onOpenSeries, toast]
+  )
 
   const active = useMemo(
     () =>
@@ -134,6 +163,7 @@ export function DownloadsScreen(): ReactElement {
                     onCancel={(id) => void run(() => dl.cancel(id))}
                     onMoveUp={(id) => move(id, -1)}
                     onMoveDown={(id) => move(id, 1)}
+                    onOpen={(it) => void openSource(it)}
                   />
                 ))}
               </section>
@@ -156,6 +186,7 @@ export function DownloadsScreen(): ReactElement {
                     onCancel={(id) => void run(() => dl.cancel(id))}
                     onMoveUp={() => undefined}
                     onMoveDown={() => undefined}
+                    onOpen={(it) => void openSource(it)}
                   />
                 ))}
               </section>

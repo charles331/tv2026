@@ -22,7 +22,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "npm version ${nextRelease.version} --no-git-tag-version --allow-same-version && pnpm run build && pnpm exec electron-builder --win --config electron-builder.yml --publish never"
+        "prepareCmd": "npm version ${nextRelease.version} --no-git-tag-version --allow-same-version && node scripts/generate-changelog.mjs ${nextRelease.version} && pnpm run build && pnpm exec electron-builder --win --config electron-builder.yml --publish never"
       }
     ],
     [

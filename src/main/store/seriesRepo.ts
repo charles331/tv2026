@@ -219,6 +219,32 @@ export function getCachedSeriesInfo(seriesId: number, maxAgeMs?: number): Series
   }
 }
 
+/**
+ * The series an episode belongs to, found through the cached series info (the
+ * provider has no episode → series lookup). Null when that series page was never
+ * opened on this machine, or the series left the catalogue.
+ */
+export function findSeriesByEpisode(episodeId: number): SeriesStream | null {
+  const rows = getDb()
+    .prepare(
+      `SELECT c.series_id, c.info_json FROM series_info_cache c
+       JOIN series s ON s.series_id = c.series_id
+       WHERE c.info_json LIKE ?`
+    )
+    .all(`%"episodeId":${Math.trunc(episodeId)}%`) as { series_id: number; info_json: string }[]
+  for (const row of rows) {
+    try {
+      const info = JSON.parse(row.info_json) as SeriesInfo
+      if (info.seasons.some((season) => season.episodes.some((e) => e.episodeId === episodeId))) {
+        return getSeries(row.series_id)
+      }
+    } catch {
+      // Corrupt cache row: ignore it.
+    }
+  }
+  return null
+}
+
 export function seriesCounts(): { categories: number; series: number } {
   const db = getDb()
   return {

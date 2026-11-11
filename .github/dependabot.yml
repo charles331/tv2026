@@ -1,7 +1,8 @@
 # Dependabot configuration.
 #
 # Goal: stay up to date without noisy, hard-to-test mega-PRs.
-#  - New versions are only proposed once they are 14 days old (cooldown).
+#  - New versions are only proposed once they are 14 days old, majors 60
+#    days (cooldown).
 #  - Routine MINOR + PATCH bumps are batched into a single weekly PR.
 #  - MAJOR bumps come as SEPARATE, individual PRs (one ecosystem-shift at a
 #    time), because a major often needs companion bumps + a migration and must
@@ -26,8 +27,11 @@ updates:
     # Supply-chain safety: never propose a version published less than 14 days
     # ago (time for a malicious or broken release to be spotted and pulled).
     # Applies to version updates only — SECURITY updates stay immediate.
+    # MAJOR versions wait 60 days: their first patches have shipped by then
+    # (fewer PRs that get superseded within days, e.g. Electron 45.0.0 → 45.1.0).
     cooldown:
       default-days: 14
+      semver-major-days: 60
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
@@ -64,6 +68,7 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 14
+      semver-major-days: 60
     commit-message:
       prefix: "ci"
     groups:

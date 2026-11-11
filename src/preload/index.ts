@@ -292,6 +292,10 @@ const api: RendererApi = {
       invoke(InvokeChannels.DOWNLOAD_COMPLETED_IDS) as Promise<
         Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_COMPLETED_IDS>>
       >,
+    findSource: (streamId, kind) =>
+      invoke(InvokeChannels.DOWNLOAD_FIND_SOURCE, { streamId, kind }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.DOWNLOAD_FIND_SOURCE>>
+      >,
     onProgress: (cb) => subscribe(EventChannels.DOWNLOAD_PROGRESS, cb),
     onState: (cb) => subscribe(EventChannels.DOWNLOAD_STATE, cb)
   },
