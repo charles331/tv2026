@@ -28,7 +28,17 @@ pnpm test:coverage  # avec couverture v8
 | `main/schedulerLogic.test.ts` | `src/main/reminders/schedulerLogic.ts` | logique pure du scheduler rappels/enregistrements : modes notify/record, fenêtres (lead/padding), échéances notify/record/stop, détection `missed`, `computeDueActions` |
 | `main/downloadHelpers.test.ts` | `src/main/downloads/helpers.ts` | `parseContentRangeTotal` (reprise), `describeError`, `formatBytes`, `partPath`, `downloadSubfolder`, `headerValue`, `renameWithRetry` |
 | `renderer/format.test.ts` | `src/renderer/src/lib/format.ts` | formatage octets/vitesse/durée/ETA/%/note/date/trailer (locale fr) |
-| `shared/changelog.test.ts` | `src/shared/changelog.ts` | intégrité du changelog : entrées bien formées, dates ISO, versions uniques, version courante de `package.json` documentée |
+| `shared/changelog.test.ts` | `src/shared/changelog.ts` | intégrité du changelog : entrées bien formées, dates ISO, versions uniques, ordre, fusion avec les entrées générées |
+
+## Test de bout en bout (`pnpm test:e2e`)
+
+`test/e2e/smoke.mjs` construit puis lance **l'app réelle** (Electron, `out/`) avec
+Playwright, sur un profil jetable et un **faux fournisseur** local
+(`test/e2e/fakeProvider.mjs`) : aucun appel au vrai fournisseur, on peut donc le
+lancer pendant qu'un téléchargement tourne. Il couvre « Tout mettre à jour » avec
+une panne simulée, le Journal, la taille sur la fiche et l'affiche, l'ouverture
+des fiches depuis les Téléchargements et les Nouveautés. Il faut un affichage
+(sous WSL : WSLg, `DISPLAY=:0`). Pas lancé par la CI.
 
 ## Hors périmètre (tests d'intégration, à part)
 
@@ -40,6 +50,6 @@ vrai environnement) plutôt que des tests unitaires purs :
   ses **helpers purs** ont été extraits dans `helpers.ts` et sont testés ici ; la
   boucle de file + l'I/O réseau/disque restent à couvrir en intégration (le hook
   `__setTestByteCap` est prévu pour ça).
-- **`store/*`** (repos SQLite) — nécessite `better-sqlite3`.
+- **`store/*`** (repos SQLite) — en partie couverts (`main/downloadSource.test.ts` ouvre une vraie base dans un dossier temporaire).
 - **`PlayerController` / `mpvIpc`** — nécessite un binaire mpv (validation Windows).
 - **`secrets/credentials`** — nécessite `electron.safeStorage`.
