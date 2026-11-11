@@ -4,6 +4,9 @@
  * The 1-connection constraint => the queue is processed sequentially.
  */
 
+import type { VodStream } from './catalog'
+import type { SeriesStream } from './series'
+
 export type DownloadStatus =
   | 'queued'
   | 'downloading'
@@ -21,6 +24,17 @@ export type DownloadStatus =
 
 /** What kind of stream a download targets (different provider URL per kind). */
 export type DownloadKind = 'movie' | 'series'
+
+/**
+ * The catalogue entry a download comes from, to open its page from the
+ * Téléchargements screen: the movie itself, or the series an episode belongs to.
+ * `null` when it is no longer in the local catalogue (removed by the provider,
+ * or an episode whose series page was never opened on this machine).
+ */
+export type DownloadSource =
+  | { kind: 'movie'; stream: VodStream }
+  | { kind: 'series'; series: SeriesStream }
+  | null
 
 export interface DownloadItem {
   /** Internal queue id (DB primary key). */

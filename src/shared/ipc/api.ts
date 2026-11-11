@@ -62,6 +62,7 @@ import type {
   AddDownloadRequest,
   DownloadItem,
   DownloadKind,
+  DownloadSource,
   DownloadProgressEvent,
   DownloadStateEvent,
   LocalPathResult,
@@ -222,6 +223,8 @@ export interface DownloadsApi {
    * persistently flag "already downloaded" items, even after a restart.
    */
   completedIds(): Promise<Result<{ ids: number[] }>>
+  /** The movie / series a download comes from, to open its page (null if unknown). */
+  findSource(streamId: number, kind: DownloadKind): Promise<Result<DownloadSource>>
   /** Subscribe to per-item byte/speed/ETA progress ticks. */
   onProgress(cb: (e: DownloadProgressEvent) => void): Unsubscribe
   /** Subscribe to status transitions (completed/failed/etc.). */

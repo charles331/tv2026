@@ -69,6 +69,7 @@ import type {
   DownloadKind,
   DownloadProgressEvent,
   DownloadStateEvent,
+  DownloadSource,
   LocalPathResult,
   ReorderQueueRequest
 } from '../types/downloads'
@@ -177,6 +178,10 @@ export interface IpcContract {
     response: LocalPathResult
   }
   [InvokeChannels.DOWNLOAD_COMPLETED_IDS]: { request: void; response: { ids: number[] } }
+  [InvokeChannels.DOWNLOAD_FIND_SOURCE]: {
+    request: { streamId: number; kind: DownloadKind }
+    response: DownloadSource
+  }
 
   // player
   [InvokeChannels.PLAYER_PLAY]: { request: PlayRequest; response: PlayerStatus }

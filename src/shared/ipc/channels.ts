@@ -86,6 +86,7 @@ export const InvokeChannels = {
   DOWNLOAD_CLEAR_COMPLETED: 'download:clearCompleted',
   DOWNLOAD_LOCAL_PATH: 'download:localPath',
   DOWNLOAD_COMPLETED_IDS: 'download:completedIds', // persistent "already downloaded" set
+  DOWNLOAD_FIND_SOURCE: 'download:findSource', // movie / series page of a download
 
   // --- player ---
   PLAYER_PLAY: 'player:play',

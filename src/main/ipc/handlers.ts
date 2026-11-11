@@ -665,6 +665,17 @@ export const handlers: IpcHandlers = {
   [InvokeChannels.DOWNLOAD_COMPLETED_IDS]: () =>
     ok({ ids: downloadsRepo.listCompletedStreamIds() }),
 
+  [InvokeChannels.DOWNLOAD_FIND_SOURCE]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const streamId = requireInt(req, 'streamId')
+    if (optionalString(req, 'kind') === 'series') {
+      const series = seriesRepo.findSeriesByEpisode(streamId)
+      return ok(series ? { kind: 'series' as const, series } : null)
+    }
+    const stream = catalogRepo.getStream(streamId)
+    return ok(stream ? { kind: 'movie' as const, stream } : null)
+  },
+
   // ---------------- player (real: drives mpv via PlayerController) ----------------
   [InvokeChannels.PLAYER_PLAY]: async (req) => {
     assert(isObject(req), 'request must be an object')

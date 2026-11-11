@@ -180,6 +180,24 @@ export function listStreams(req: ListStreamsRequest): Page<VodStream> {
   return { items: rows.map(mapStream), page, pageSize, total }
 }
 
+/** One catalogue movie by id (with its file-check data), or null if not cached. */
+export function getStream(streamId: number): VodStream | null {
+  const row = getDb()
+    .prepare(
+      `SELECT s.*,
+              EXISTS(SELECT 1 FROM download_history h
+                     WHERE h.stream_id = s.stream_id AND h.kind = 'movie'
+                       AND h.status = 'completed') AS downloaded,
+              fc.size_bytes AS file_size, fc.duration_secs AS file_duration,
+              fc.width AS file_width, fc.height AS file_height, fc.video_codec AS file_codec
+       FROM vod_streams s
+       LEFT JOIN vod_file_check fc ON fc.stream_id = s.stream_id
+       WHERE s.stream_id = ?`
+    )
+    .get(streamId) as StreamRow | undefined
+  return row ? mapStream(row) : null
+}
+
 export function searchStreams(req: SearchRequest): Page<VodStream> {
   const db = getDb()
   const page = Math.max(1, req.page)
