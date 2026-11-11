@@ -10,6 +10,17 @@ Types : feat | fix | perf | refactor | docs | style | test | build | ci | chore 
 
 <!-- Que fait cette PR et pourquoi ? -->
 
+## Nouveautés
+
+<!--
+Ce que l'utilisateur verra, en français simple : une puce par changement.
+Ces puces s'affichent telles quelles dans Réglages → Application → Nouveautés
+de la version publiée (pour une PR feat / fix / perf). Sans cette section, le
+titre de la PR sert de puce. Supprimer la section si rien n'est visible.
+-->
+
+-
+
 ## Type de changement
 
 - [ ] `fix` — correctif (patch)
@@ -21,5 +32,5 @@ Types : feat | fix | perf | refactor | docs | style | test | build | ci | chore 
 
 - [ ] `pnpm typecheck`, `pnpm lint` et `pnpm test` passent
 - [ ] Aucun identifiant, URL de fournisseur réel ou contenu sous droits ajouté
-- [ ] (si pertinent) entrée ajoutée à `src/shared/changelog.ts`
+- [ ] (si visible pour l'utilisateur) section « Nouveautés » remplie
 - [ ] Titre de PR au format Conventional Commits

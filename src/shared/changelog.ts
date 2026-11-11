@@ -1,11 +1,18 @@
 /**
- * Application changelog — SOURCE OF TRUTH for the "Nouveautés" section in
- * Réglages and the "what's new" badge after an update.
+ * Application changelog — the "Nouveautés" section in Réglages.
  *
- * Keep this list newest-first. When you bump `version` in package.json, add a
- * matching entry here (a unit test asserts the current version is documented).
+ * Two sources, merged newest-first into `CHANGELOG`:
+ *  - `changelog.generated.json`, written by scripts/generate-changelog.mjs at
+ *    RELEASE time (CI): one entry per version published after the history
+ *    below, built from the "## Nouveautés" section of each merged PR (or the
+ *    commit title). Committed as `[]`; nothing to edit by hand.
+ *  - `HISTORY` below: versions up to 0.16.1, written by hand. Do not add new
+ *    versions here: describe them in the PR instead (section "## Nouveautés").
+ *
  * Dates are ISO `YYYY-MM-DD`. `changes` are short, user-facing French bullets.
  */
+
+import generated from './changelog.generated.json'
 
 export interface ChangelogEntry {
   /** Semantic version, matching a published release (e.g. "0.1.1"). */
@@ -16,7 +23,29 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
-export const CHANGELOG: ChangelogEntry[] = [
+const HISTORY: ChangelogEntry[] = [
+  {
+    version: '0.16.1',
+    date: '2026-11-08',
+    changes: [
+      'Sécurité : passage à Electron 44, une version encore corrigée par ses auteurs (la 41 ne recevait plus de correctifs).',
+      'La base de données locale utilise désormais un module précompilé : installation et mises à jour plus fiables, sous Windows comme sous Linux.'
+    ]
+  },
+  {
+    version: '0.16.0',
+    date: '2026-11-08',
+    changes: [
+      'Qualité des films avant de télécharger : badge « CAM » sur les copies filmées en salle (CAM, TS, TELESYNC…), taille réelle du fichier et verdict de qualité sur la fiche et les affiches.',
+      'Bouton « Analyser » sur la fiche : la vraie résolution et le codec en quelques secondes (1080p · HEVC…). Une copie suspecte demande confirmation avant le téléchargement. Option dans Réglages → Catalogues.',
+      'Direct : case « Chercher aussi dans les guides » pour trouver un programme (un match, une émission) parmi les guides des 5 prochains jours, avec Regarder, Rappel ou Enregistrer.',
+      'Direct : quand le fournisseur coupe le flux, la reconnexion garde la fenêtre vidéo à sa place et à sa taille. Fermer la fenêtre arrête la lecture au lieu de la relancer.',
+      'Nouvelle barre de lecture : partie déjà chargée visible, temps au format horloge (durée totale ou temps restant au clic), piste audio, volume.',
+      'Nouvelle version Linux : paquet .deb (Ubuntu, Debian) et AppImage, ajoutés à chaque version publiée.',
+      'Correctif : le catalogue ne se mettait plus à jour depuis le 5 novembre (changement de format chez le fournisseur).',
+      'Correctif : la durée des films est de nouveau correcte.'
+    ]
+  },
   {
     version: '0.15.0',
     date: '2026-09-09',
@@ -231,3 +260,23 @@ export const CHANGELOG: ChangelogEntry[] = [
     ]
   }
 ]
+
+/** Every documented version, newest first (generated entries win on duplicates). */
+export const CHANGELOG: ChangelogEntry[] = mergeChangelog(generated as ChangelogEntry[], HISTORY)
+
+export function mergeChangelog(
+  generatedEntries: ChangelogEntry[],
+  history: ChangelogEntry[]
+): ChangelogEntry[] {
+  const seen = new Set<string>()
+  return [...generatedEntries, ...history]
+    .filter((e) => (seen.has(e.version) ? false : (seen.add(e.version), true)))
+    .sort((a, b) => compareSemver(b.version, a.version))
+}
+
+function compareSemver(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0)
+  return 0
+}

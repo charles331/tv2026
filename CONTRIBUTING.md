@@ -37,6 +37,15 @@ Effet sur la version : `feat` → mineure, `fix`/autres → patch, `feat!:` ou
 
 Un workflow (**« Valider le titre de la PR »**) bloque les titres non conformes.
 
+### Nouveautés affichées dans l'application
+
+La page Réglages → Application → **Nouveautés** se remplit **toute seule** à
+chaque release : `scripts/generate-changelog.mjs` (lancé par la CI juste avant
+le build) reprend, pour chaque PR `feat` / `fix` / `perf` de la version, les
+puces de la section **`## Nouveautés`** de sa description (voir le modèle de
+PR). Sans cette section, le titre de la PR sert de puce. Il n'y a plus rien à
+écrire dans `src/shared/changelog.ts` (historique figé jusqu'à la v0.16.1).
+
 ## Processus
 
 1. Créez une branche (`feat/...`, `fix/...`).

@@ -47,6 +47,9 @@ function foldUpdateEvent(
 /** Settings tabs: label shown in the tab bar + the header hint for that page. */
 type SettingsTab = 'connexion' | 'catalogues' | 'telechargements' | 'application' | 'journal'
 /** Block sizes offered, in MiB (mirrors BLOCK_SIZE_CHOICES in the main process). */
+/** Nouveautés: versions shown before « Afficher les versions précédentes ». */
+const RECENT_VERSIONS = 3
+
 const BLOCK_SIZE_CHOICES_MIB = [1, 2, 4, 8, 16, 32] as const
 
 const SETTINGS_TABS: Record<SettingsTab, { label: string; hint: string }> = {
@@ -89,6 +92,7 @@ export function SettingsScreen({
   onCatalogRefreshed?: (result: RefreshCatalogResult) => void
 }): ReactElement {
   const [tab, setTab] = useState<SettingsTab>('connexion')
+  const [showAllVersions, setShowAllVersions] = useState(false)
   const [creds, setCreds] = useState<CredentialsStatus | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
 
@@ -1113,7 +1117,7 @@ export function SettingsScreen({
         )}
 
         <ol className="mt-4 space-y-4">
-          {CHANGELOG.map((entry) => {
+          {(showAllVersions ? CHANGELOG : CHANGELOG.slice(0, RECENT_VERSIONS)).map((entry) => {
             const isCurrent = entry.version === appVersion
             return (
               <li
@@ -1134,6 +1138,18 @@ export function SettingsScreen({
             )
           })}
         </ol>
+        {CHANGELOG.length > RECENT_VERSIONS && (
+          <Button
+            className="mt-3"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAllVersions((v) => !v)}
+          >
+            {showAllVersions
+              ? 'Masquer les versions précédentes'
+              : `Afficher les versions précédentes (${CHANGELOG.length - RECENT_VERSIONS})`}
+          </Button>
+        )}
       </section>
       )}
 

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHANGELOG } from '../../src/shared/changelog'
-import pkg from '../../package.json'
+import { CHANGELOG, mergeChangelog } from '../../src/shared/changelog'
 
 describe('CHANGELOG', () => {
   it('is non-empty', () => {
@@ -25,8 +24,29 @@ describe('CHANGELOG', () => {
     expect(new Set(versions).size).toBe(versions.length)
   })
 
-  it('documents the current package.json version', () => {
+  it('is sorted newest first', () => {
     const versions = CHANGELOG.map((e) => e.version)
-    expect(versions, `add a CHANGELOG entry for v${pkg.version}`).toContain(pkg.version)
+    const sorted = [...versions].sort((a, b) => {
+      const pa = a.split('.').map(Number)
+      const pb = b.split('.').map(Number)
+      return pb[0]! - pa[0]! || pb[1]! - pa[1]! || pb[2]! - pa[2]!
+    })
+    expect(versions).toEqual(sorted)
+  })
+
+  it('merges generated entries before the history, generated winning on duplicates', () => {
+    const merged = mergeChangelog(
+      [
+        { version: '0.17.0', date: '2026-11-12', changes: ['b'] },
+        { version: '0.16.1', date: '2026-11-08', changes: ['generated'] }
+      ],
+      [
+        { version: '0.16.1', date: '2026-11-08', changes: ['history'] },
+        { version: '0.9.0', date: '2026-07-01', changes: ['a'] },
+        { version: '0.10.0', date: '2026-07-02', changes: ['c'] }
+      ]
+    )
+    expect(merged.map((e) => e.version)).toEqual(['0.17.0', '0.16.1', '0.10.0', '0.9.0'])
+    expect(merged[1]!.changes).toEqual(['generated'])
   })
 })

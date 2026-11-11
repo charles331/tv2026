@@ -105,6 +105,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.release.outputs.tag }}
+          # Historique + tags : les Nouveautés sont générées depuis les commits.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -123,6 +125,12 @@ jobs:
 
       - name: Version de la release
         run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+
+      - name: Nouveautés de la version
+        # Même génération que la release Windows (sections « ## Nouveautés » des PR).
+        run: node scripts/generate-changelog.mjs "${TAG#v}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & package Linux (.deb + AppImage)
         run: pnpm run package:linux
