@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { FileCheckResult, VodInfo, VodStream } from '@shared/index'
-import { detectLowQualityTag, fileQuality } from '@shared/index'
+import { detectLowQualityTag, fileQuality, resumeStart } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { publishFileCheck } from '../../lib/fileChecks'
 import { useDownloads } from '../../lib/downloads'
+import { useProgress } from '../../lib/progress'
 import {
   Button,
   Badge,
@@ -17,7 +18,7 @@ import {
   IconX,
   IconCheck
 } from '../../components/ui'
-import { formatBytes, formatDuration, formatRating, trailerUrl } from '../../lib/format'
+import { formatBytes, formatClock, formatDuration, formatRating, trailerUrl } from '../../lib/format'
 import { FavoriteButton } from '../favorites/FavoriteButton'
 import { FileQualityPill, LowQualityTag, formatMbps, type FilePillState } from './quality'
 
@@ -33,9 +34,13 @@ export function MovieDetail({
 }: {
   stream: VodStream
   onClose: () => void
-  onPlay: (stream: VodStream, info: VodInfo | null) => void
+  /** `fromStart` ignores the saved position (default: resume). */
+  onPlay: (stream: VodStream, info: VodInfo | null, fromStart?: boolean) => void
 }): ReactElement {
   const { add, downloadedStreamIds, items } = useDownloads()
+  const progressStore = useProgress()
+  const watchProgress = progressStore.get('movie', stream.streamId)
+  const resumeAt = resumeStart(watchProgress)
   const [info, setInfo] = useState<VodInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -211,6 +216,28 @@ export function MovieDetail({
               <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                 {year != null && <span>{year}</span>}
+                <button
+                  type="button"
+                  onClick={() =>
+                    void progressStore.setWatched({
+                      kind: 'movie',
+                      itemId: stream.streamId,
+                      watched: !watchProgress?.watched,
+                      name: title,
+                      image: poster,
+                      containerExtension: info?.containerExtension ?? stream.containerExtension
+                    })
+                  }
+                  title={watchProgress?.watched ? 'Marquer comme non vu' : 'Marquer comme vu'}
+                  className={
+                    'rounded-full px-2 py-0.5 text-xs transition-colors ' +
+                    (watchProgress?.watched
+                      ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                      : 'text-gray-500 hover:bg-white/[0.08] hover:text-gray-200')
+                  }
+                >
+                  {watchProgress?.watched ? '✓ Vu' : 'Marquer comme vu'}
+                </button>
                 {rating != null && rating > 0 && (
                   <span
                     className="flex items-center gap-1 text-amber-300"
@@ -282,8 +309,17 @@ export function MovieDetail({
                       : 'Lecture en streaming'
                   }
                 >
-                  {completedLocally ? 'Lire (hors-ligne)' : 'Lire'}
+                  {resumeAt != null
+                    ? `Reprendre à ${formatClock(watchProgress?.positionSecs)}`
+                    : completedLocally
+                      ? 'Lire (hors-ligne)'
+                      : 'Lire'}
                 </Button>
+                {resumeAt != null && (
+                  <Button variant="ghost" size="lg" onClick={() => onPlay(stream, info, true)}>
+                    Depuis le début
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   size="lg"

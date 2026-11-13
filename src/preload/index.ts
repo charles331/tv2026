@@ -153,6 +153,10 @@ const api: RendererApi = {
       invoke(InvokeChannels.SERIES_GET_INFO, { seriesId }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.SERIES_GET_INFO>>
       >,
+    episodeNeighbors: (seriesId, episodeId) =>
+      invoke(InvokeChannels.SERIES_EPISODE_NEIGHBORS, { seriesId, episodeId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.SERIES_EPISODE_NEIGHBORS>>
+      >,
     search: (req) =>
       invoke(InvokeChannels.SERIES_SEARCH, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.SERIES_SEARCH>>
@@ -171,6 +175,10 @@ const api: RendererApi = {
     list: (req) =>
       invoke(InvokeChannels.LIVE_LIST, req) as Promise<
         Result<IpcResponse<typeof InvokeChannels.LIVE_LIST>>
+      >,
+    neighbors: (streamId) =>
+      invoke(InvokeChannels.LIVE_NEIGHBORS, { streamId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIVE_NEIGHBORS>>
       >,
     search: (req) =>
       invoke(InvokeChannels.LIVE_SEARCH, req) as Promise<
@@ -207,6 +215,22 @@ const api: RendererApi = {
       invoke(InvokeChannels.FAVORITES_REMOVE, { kind, itemId }) as Promise<
         Result<IpcResponse<typeof InvokeChannels.FAVORITES_REMOVE>>
       >
+  },
+
+  progress: {
+    list: () =>
+      invoke(InvokeChannels.PROGRESS_LIST) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PROGRESS_LIST>>
+      >,
+    clear: (kind, itemId) =>
+      invoke(InvokeChannels.PROGRESS_CLEAR, { kind, itemId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PROGRESS_CLEAR>>
+      >,
+    setWatched: (req) =>
+      invoke(InvokeChannels.PROGRESS_SET_WATCHED, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PROGRESS_SET_WATCHED>>
+      >,
+    onChanged: (cb) => subscribe(EventChannels.PROGRESS_CHANGED, () => cb())
   },
 
   reminders: {

@@ -3,6 +3,9 @@ import type { Episode, SeriesInfo, SeriesStream } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useDownloads } from '../../lib/downloads'
 import { useToast } from '../../lib/toast'
+import { useProgress } from '../../lib/progress'
+import { resumeStart } from '@shared/index'
+import { WatchProgressBar } from '../progress/ProgressBar'
 import {
   Badge,
   Button,
@@ -15,7 +18,7 @@ import {
   IconX,
   IconCheck
 } from '../../components/ui'
-import { formatDuration, formatRating } from '../../lib/format'
+import { formatClock, formatDuration, formatRating } from '../../lib/format'
 import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /** "S01E04" tag from a season/episode pair. */
@@ -31,9 +34,11 @@ export function SeriesDetail({
 }: {
   series: SeriesStream
   onClose: () => void
-  onPlayEpisode: (episode: Episode, seriesName: string) => void
+  /** `fromStart` ignores the saved position (default: resume). */
+  onPlayEpisode: (episode: Episode, seriesName: string, fromStart?: boolean) => void
 }): ReactElement {
   const { add, downloadedStreamIds } = useDownloads()
+  const progressStore = useProgress()
   const toast = useToast()
   const [info, setInfo] = useState<SeriesInfo | null>(null)
   const [loading, setLoading] = useState(true)
@@ -288,6 +293,9 @@ export function SeriesDetail({
               <ul className="mt-4 space-y-2">
                 {(season?.episodes ?? []).map((ep) => {
                   const inQueue = downloadedStreamIds.has(ep.episodeId)
+                  const watchProgress = progressStore.get('series', ep.episodeId)
+                  const resumeAt = resumeStart(watchProgress)
+                  const watched = watchProgress?.watched === true
                   return (
                     <li
                       key={ep.episodeId}
@@ -298,17 +306,58 @@ export function SeriesDetail({
                           <span className="text-gray-500">{tag(ep.season, ep.episodeNum)}</span>{' '}
                           {ep.title}
                         </p>
-                        {ep.durationSecs != null && ep.durationSecs > 0 && (
-                          <p className="text-xs text-gray-500">{formatDuration(ep.durationSecs)}</p>
-                        )}
+                        <p className="text-xs text-gray-500">
+                          {ep.durationSecs != null && ep.durationSecs > 0 && formatDuration(ep.durationSecs)}
+                          {resumeAt != null && (
+                            <span className="text-accent-hover">
+                              {ep.durationSecs ? ' · ' : ''}arrêté à {formatClock(watchProgress?.positionSecs)}
+                            </span>
+                          )}
+                        </p>
+                        <WatchProgressBar progress={watchProgress} className="mt-1 max-w-xs" />
                       </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void progressStore.setWatched({
+                            kind: 'series',
+                            itemId: ep.episodeId,
+                            watched: !watched,
+                            name: `${title} ${tag(ep.season, ep.episodeNum)}`,
+                            image: ep.image ?? series.cover,
+                            containerExtension: ep.containerExtension,
+                            seriesId: series.seriesId
+                          })
+                        }
+                        title={watched ? 'Marquer comme non vu' : 'Marquer comme vu'}
+                        aria-label={watched ? 'Marquer comme non vu' : 'Marquer comme vu'}
+                        aria-pressed={watched}
+                        className={
+                          'flex h-7 items-center gap-1 rounded-full px-2 text-xs transition-colors ' +
+                          (watched
+                            ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                            : 'text-gray-600 hover:bg-white/[0.08] hover:text-gray-200')
+                        }
+                      >
+                        <IconCheck size={12} /> {watched ? 'Vu' : ''}
+                      </button>
+                      {resumeAt != null && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Relire depuis le début"
+                          onClick={() => onPlayEpisode(ep, title, true)}
+                        >
+                          Début
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="secondary"
                         icon={<IconPlay size={14} />}
                         onClick={() => onPlayEpisode(ep, title)}
                       >
-                        Lire
+                        {resumeAt != null ? 'Reprendre' : 'Lire'}
                       </Button>
                       {inQueue ? (
                         <Badge tone="success">

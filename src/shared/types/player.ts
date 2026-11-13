@@ -7,19 +7,42 @@
 
 export type PlaySourceKind = 'local' | 'stream'
 
+/**
+ * What is played. 'archive' is a catch-up: a past programme of a live channel,
+ * served as a finite file (so it seeks and ends like a movie, never reconnects).
+ */
+export type PlayMediaKind = 'movie' | 'series' | 'live' | 'archive'
+
 export interface PlayRequest {
   kind: PlaySourceKind
-  /** Movie / series episode / live channel — selects the provider URL for kind === 'stream'. */
-  mediaKind?: 'movie' | 'series' | 'live'
+  /** Movie / episode / live channel / catch-up — selects the provider URL for kind === 'stream'. */
+  mediaKind?: PlayMediaKind
   /** For kind === 'local': absolute file path. */
   filePath?: string
-  /** For kind === 'stream': the stream id (movie stream id or episode id). */
+  /**
+   * The movie stream id, episode id or channel id. Required for kind ===
+   * 'stream' (it builds the URL); also set for a local file, so its watch
+   * progress is saved under the same id.
+   */
   streamId?: number
   containerExtension?: string
   /** Display title for window/overlay. */
   title?: string
   /** Optional start position in seconds (resume). */
   startSecs?: number
+  /**
+   * Poster / cover / channel logo, stored with the watch progress so "Reprendre"
+   * and the recent channels can show it.
+   */
+  image?: string | null
+  /** For an episode: its series (to chain episodes). */
+  seriesId?: number
+  /** For mediaKind === 'archive': which programme of the channel `streamId`. */
+  archive?: {
+    /** Programme start as the provider wrote it ("YYYY-MM-DD HH:MM:SS"). */
+    start: string
+    durationMin: number
+  }
 }
 
 export type PlayerState = 'idle' | 'loading' | 'reconnecting' | 'playing' | 'paused' | 'ended' | 'error'

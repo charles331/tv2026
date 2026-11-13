@@ -28,7 +28,8 @@ export function CategorySidebar({
   onSelect,
   title = 'Catégories',
   allLabel = 'Tous les films',
-  favoritesCount
+  favoritesCount,
+  pinned = []
 }: {
   categories: VodCategory[]
   loading: boolean
@@ -42,6 +43,8 @@ export function CategorySidebar({
   allLabel?: string
   /** When defined, show a pinned "★ Favoris" entry at the very top with this count. */
   favoritesCount?: number
+  /** Other pinned entries under Favoris (e.g. "Reprendre"), each a synthetic id. */
+  pinned?: { id: string; label: string; count: number }[]
 }): ReactElement {
   const asideRef = useRef<HTMLElement>(null)
   const [width, setWidth] = useState<number>(() => readStoredWidth())
@@ -118,6 +121,16 @@ export function CategorySidebar({
                 />
               </li>
             )}
+            {pinned.map((entry) => (
+              <li key={entry.id}>
+                <CategoryButton
+                  label={entry.label}
+                  count={entry.count}
+                  active={selectedId === entry.id}
+                  onClick={() => onSelect(entry.id)}
+                />
+              </li>
+            ))}
             {q === '' && (
               <li>
                 <CategoryButton

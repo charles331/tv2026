@@ -7,6 +7,7 @@ import { join } from 'path'
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { LATEST_VERSION, MIGRATIONS } from './schema'
+import { SEARCH_NORM_FN, normalizeForSearch } from './searchText'
 
 let db: Database.Database | null = null
 
@@ -37,6 +38,8 @@ export function initDatabase(): Database.Database {
   conn.pragma('journal_mode = WAL')
   conn.pragma('foreign_keys = ON')
   conn.pragma('synchronous = NORMAL')
+  // Title normaliser used by the tolerant search (accents, case, punctuation).
+  conn.function(SEARCH_NORM_FN, { deterministic: true }, normalizeForSearch)
   migrate(conn)
   db = conn
   return db

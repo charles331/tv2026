@@ -76,6 +76,14 @@ export interface SeriesInfo {
   seasons: Season[]
 }
 
+/** The episodes before / after one episode, to chain playback. */
+export interface EpisodeNeighbors {
+  seriesName: string
+  cover: string | null
+  previous: Episode | null
+  next: Episode | null
+}
+
 /** Catalogue listing request for series, with optional category filter. */
 export interface ListSeriesRequest {
   categoryId?: string | null
@@ -91,6 +99,9 @@ export interface SearchSeriesRequest {
   categoryId?: string | null
   page: number
   pageSize: number
+  /** Sort field (default: name). */
+  sortBy?: ListSeriesRequest['sortBy']
+  sortDir?: 'asc' | 'desc'
 }
 
 /** Result of refreshing the series cache from the provider. */

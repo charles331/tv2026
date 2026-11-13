@@ -163,6 +163,9 @@ export function GuideSearchResults({
                   const channel = h.channels[0]!
                   const onAir = h.startSecs <= nowSecs
                   const reminded = reminders.has(channel.streamId, h.startSecs, h.title)
+                  // The channel is always reachable, even before the programme starts.
+                  const watchTitle = (name: string): string =>
+                    onAir ? `Regarder sur ${name}` : `Regarder ${name} maintenant (ce programme n’a pas encore commencé)`
                   return (
                     <div
                       key={`${h.startSecs}-${channel.streamId}-${i}`}
@@ -175,9 +178,16 @@ export function GuideSearchResults({
                         {formatClockFromEpochSecs(h.startSecs)}
                         <div className="text-gray-600">{formatClockFromEpochSecs(h.endSecs)}</div>
                       </div>
-                      <div className="h-9 w-14 shrink-0 overflow-hidden rounded bg-black/30">
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        aria-hidden="true"
+                        onClick={() => onPlayChannel(channel)}
+                        title={watchTitle(channel.name)}
+                        className="h-9 w-14 shrink-0 overflow-hidden rounded bg-black/30 hover:ring-1 hover:ring-white/30"
+                      >
                         <Poster src={channel.icon} alt={channel.name} className="h-full w-full object-contain" />
-                      </div>
+                      </button>
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-2 text-sm text-gray-100">
                           <span className="truncate" title={h.title}>
@@ -186,7 +196,14 @@ export function GuideSearchResults({
                           {onAir && <Badge tone="success">En cours</Badge>}
                         </p>
                         <p className="truncate text-xs text-gray-400">
-                          {channel.name}
+                          <button
+                            type="button"
+                            onClick={() => onPlayChannel(channel)}
+                            title={watchTitle(channel.name)}
+                            className="hover:text-white hover:underline"
+                          >
+                            {channel.name}
+                          </button>
                           {h.channels.length > 1 && (
                             <span className="text-gray-600"> · aussi sur {h.channels.length - 1} autre(s)</span>
                           )}
@@ -203,9 +220,8 @@ export function GuideSearchResults({
                                 key={c.streamId}
                                 type="button"
                                 onClick={() => onPlayChannel(c)}
-                                disabled={!onAir}
-                                title={onAir ? `Regarder sur ${c.name}` : c.name}
-                                className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-white/10 hover:text-white disabled:cursor-default disabled:hover:bg-white/5 disabled:hover:text-gray-400"
+                                title={watchTitle(c.name)}
+                                className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-white/10 hover:text-white"
                               >
                                 {c.name}
                               </button>

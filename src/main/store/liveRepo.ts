@@ -3,7 +3,9 @@
  * Mirrors catalogRepo/seriesRepo. The EPG is volatile and never persisted here.
  */
 
+import { wrapNeighbors } from '@shared/index'
 import type {
+  ChannelNeighbors,
   ListLiveRequest,
   LiveCategory,
   LiveStream,
@@ -11,6 +13,7 @@ import type {
   SearchLiveRequest
 } from '@shared/index'
 import { getDb } from './db'
+import { nameSearch } from './searchText'
 
 interface CategoryRow {
   category_id: string
@@ -152,28 +155,48 @@ export function searchChannels(req: SearchLiveRequest): Page<LiveStream> {
   const page = Math.max(1, req.page)
   const pageSize = Math.min(500, Math.max(1, req.pageSize))
   const offset = (page - 1) * pageSize
-  const like = `%${req.query.replace(/[%_]/g, (m) => '\\' + m)}%`
+  // Accent-insensitive, words in any order (see searchText.ts).
+  const match = nameSearch('name', req.query)
+  if (!match) return { items: [], page, pageSize, total: 0 }
+  const sortCol = SORT_COLUMNS[req.sortBy ?? 'name'] ?? SORT_COLUMNS.name
+  const dir = req.sortDir === 'desc' ? 'DESC' : 'ASC'
 
   const catClause = req.categoryId ? 'AND category_id = ?' : ''
-  const baseParams: (string | number)[] = [like]
+  const baseParams: (string | number)[] = [...match.params]
   if (req.categoryId) baseParams.push(req.categoryId)
 
   const total = (
     db
-      .prepare(`SELECT COUNT(*) AS n FROM live_streams WHERE name LIKE ? ESCAPE '\\' ${catClause}`)
+      .prepare(`SELECT COUNT(*) AS n FROM live_streams WHERE ${match.clause} ${catClause}`)
       .get(...baseParams) as { n: number }
   ).n
 
   const rows = db
     .prepare(
       `SELECT * FROM live_streams
-       WHERE name LIKE ? ESCAPE '\\' ${catClause}
-       ORDER BY name COLLATE NOCASE ASC
+       WHERE ${match.clause} ${catClause}
+       ORDER BY ${sortCol} ${dir}
        LIMIT ? OFFSET ?`
     )
     .all(...baseParams, pageSize, offset) as ChannelRow[]
 
   return { items: rows.map(mapChannel), page, pageSize, total }
+}
+
+/**
+ * The channels before / after `streamId` in its category (by channel number,
+ * unnumbered last), wrapping around — what a remote's P+ / P− would do.
+ */
+export function channelNeighbors(streamId: number): ChannelNeighbors {
+  const current = getChannel(streamId)
+  if (!current) return { previous: null, next: null }
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM live_streams WHERE category_id = ?
+       ORDER BY number IS NULL, number, name COLLATE NOCASE`
+    )
+    .all(current.categoryId) as ChannelRow[]
+  return wrapNeighbors(rows.map(mapChannel), (c) => c.streamId, streamId)
 }
 
 export function getChannel(streamId: number): LiveStream | null {

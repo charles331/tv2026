@@ -27,6 +27,12 @@ export interface PlayerController {
   unavailable: boolean
   error: string | null
   play: (req: PlayRequest) => Promise<void>
+  /**
+   * True while a play() call is in flight. Starting a source first stops the
+   * previous one, so an 'idle' seen meanwhile is that stop — not the end of
+   * what is being started.
+   */
+  isStarting: () => boolean
   togglePlay: () => Promise<void>
   stop: () => Promise<void>
   seek: (positionSecs: number) => Promise<void>
@@ -46,6 +52,8 @@ export function usePlayer(): PlayerController {
   const [error, setError] = useState<string | null>(null)
   const statusRef = useRef(status)
   statusRef.current = status
+  const startingRef = useRef(0)
+  const isStarting = useCallback(() => startingRef.current > 0, [])
 
   // Live position / state ticks from main.
   useEffect(() => {
@@ -115,6 +123,7 @@ export function usePlayer(): PlayerController {
       setError(message)
       setStatus((s) => (s.state === 'loading' ? { ...s, state: 'error', error: message } : s))
     }
+    startingRef.current++
     try {
       const r = await api().player.play(req)
       if (r.ok) {
@@ -127,6 +136,8 @@ export function usePlayer(): PlayerController {
       }
     } catch (e) {
       fail(describeError(e))
+    } finally {
+      startingRef.current--
     }
   }, [])
 
@@ -171,6 +182,7 @@ export function usePlayer(): PlayerController {
     unavailable,
     error,
     play,
+    isStarting,
     togglePlay,
     stop,
     seek,

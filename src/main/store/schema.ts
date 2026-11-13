@@ -257,6 +257,26 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE vod_file_check ADD COLUMN height INTEGER;
       ALTER TABLE vod_file_check ADD COLUMN video_codec TEXT;
     `
+  },
+  {
+    version: 9,
+    description: 'watch progress: resume position / watched flag, recent live channels',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS watch_progress (
+        kind                TEXT NOT NULL,     -- 'movie' | 'series' (one episode) | 'live'
+        item_id             INTEGER NOT NULL,  -- movie stream id / episode id / channel id
+        position_secs       REAL NOT NULL DEFAULT 0,
+        duration_secs       REAL,
+        watched             INTEGER NOT NULL DEFAULT 0,
+        updated_at          INTEGER NOT NULL,  -- epoch ms
+        name                TEXT NOT NULL,     -- snapshot, like favorites
+        image               TEXT,
+        container_extension TEXT,
+        series_id           INTEGER,           -- for an episode
+        PRIMARY KEY (kind, item_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_watch_progress_updated ON watch_progress(updated_at);
+    `
   }
 ]
 

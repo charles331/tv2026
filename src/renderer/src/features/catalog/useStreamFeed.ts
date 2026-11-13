@@ -53,7 +53,9 @@ export function useStreamFeed(params: StreamFeedParams): StreamFeed {
             query: trimmed,
             categoryId,
             page: pageToLoad,
-            pageSize: PAGE_SIZE
+            pageSize: PAGE_SIZE,
+            sortBy,
+            sortDir
           })
         )
       }

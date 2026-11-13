@@ -34,6 +34,7 @@ import type {
   VodStream
 } from '../types/catalog'
 import type {
+  EpisodeNeighbors,
   ListSeriesRequest,
   RefreshSeriesResult,
   SearchSeriesRequest,
@@ -42,6 +43,7 @@ import type {
   SeriesStream
 } from '../types/series'
 import type {
+  ChannelNeighbors,
   EpgEntry,
   FullEpgRequest,
   GuideSearchResult,
@@ -53,6 +55,7 @@ import type {
   ShortEpgRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from '../types/favorites'
+import type { ProgressRef, SetWatchedRequest, WatchProgress } from '../types/progress'
 import type { ListLogsRequest, LogEntry, WriteLogRequest } from '../types/logs'
 import type {
   AddReminderRequest,
@@ -132,6 +135,10 @@ export interface IpcContract {
   [InvokeChannels.SERIES_LIST_CATEGORIES]: { request: void; response: SeriesCategory[] }
   [InvokeChannels.SERIES_LIST]: { request: ListSeriesRequest; response: Page<SeriesStream> }
   [InvokeChannels.SERIES_GET_INFO]: { request: { seriesId: number }; response: SeriesInfo }
+  [InvokeChannels.SERIES_EPISODE_NEIGHBORS]: {
+    request: { seriesId: number; episodeId: number }
+    response: EpisodeNeighbors
+  }
   [InvokeChannels.SERIES_SEARCH]: { request: SearchSeriesRequest; response: Page<SeriesStream> }
   [InvokeChannels.SERIES_REFRESH]: { request: RefreshCatalogRequest; response: RefreshSeriesResult }
 
@@ -140,6 +147,7 @@ export interface IpcContract {
   [InvokeChannels.LIVE_LIST]: { request: ListLiveRequest; response: Page<LiveStream> }
   [InvokeChannels.LIVE_SEARCH]: { request: SearchLiveRequest; response: Page<LiveStream> }
   [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
+  [InvokeChannels.LIVE_NEIGHBORS]: { request: { streamId: number }; response: ChannelNeighbors }
   [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
   [InvokeChannels.LIVE_FULL_EPG]: { request: FullEpgRequest; response: EpgEntry[] }
   [InvokeChannels.LIVE_SEARCH_GUIDE]: { request: { query: string }; response: GuideSearchResult }
@@ -148,6 +156,11 @@ export interface IpcContract {
   [InvokeChannels.FAVORITES_LIST]: { request: { kind: FavoriteKind }; response: FavoriteItem[] }
   [InvokeChannels.FAVORITES_ADD]: { request: AddFavoriteRequest; response: { ok: true } }
   [InvokeChannels.FAVORITES_REMOVE]: { request: FavoriteRef; response: { ok: true } }
+
+  // watch progress
+  [InvokeChannels.PROGRESS_LIST]: { request: void; response: WatchProgress[] }
+  [InvokeChannels.PROGRESS_CLEAR]: { request: ProgressRef; response: { ok: true } }
+  [InvokeChannels.PROGRESS_SET_WATCHED]: { request: SetWatchedRequest; response: { ok: true } }
 
   // reminders / scheduled recordings
   [InvokeChannels.REMINDERS_LIST]: { request: void; response: Reminder[] }
@@ -216,6 +229,7 @@ export interface EventContract {
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
+  [EventChannels.PROGRESS_CHANGED]: Record<string, never>
   [EventChannels.UPDATE_STATUS]: UpdateStatusEvent
 }
 

@@ -16,10 +16,11 @@
 import { join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
-import { InvokeChannels, ok, err } from '@shared/index'
+import { InvokeChannels, ok, err, episodeNeighbors } from '@shared/index'
 import type {
   AppSettings,
   ConnectionTestResult,
+  PlayMediaKind,
   PlayRequest,
   PlaySourceKind,
   XtreamCredentials
@@ -31,6 +32,7 @@ import {
   seriesRepo,
   liveRepo,
   favoritesRepo,
+  progressRepo,
   downloadsRepo,
   remindersRepo
 } from '../store'
@@ -82,6 +84,13 @@ function fromXtreamError(e: unknown): ReturnType<typeof err> {
     return err(toErrorCode(e.kind), e.message, e.details)
   }
   throw e
+}
+
+/** Validate the `kind` of a watch-progress request. */
+function requireProgressKind(req: Record<string, unknown>): 'movie' | 'series' | 'live' {
+  const kind = requireString(req, 'kind', 16)
+  assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+  return kind
 }
 
 /**
@@ -314,7 +323,9 @@ export const handlers: IpcHandlers = {
         query: requireString(req, 'query', 256),
         categoryId: optionalString(req, 'categoryId') ?? null,
         page: requireInt(req, 'page'),
-        pageSize: requireInt(req, 'pageSize')
+        pageSize: requireInt(req, 'pageSize'),
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
   },
@@ -355,6 +366,21 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  [InvokeChannels.SERIES_EPISODE_NEIGHBORS]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const seriesId = requireInt(req, 'seriesId')
+    try {
+      const info = await getSeriesInfo(seriesId)
+      return ok({
+        seriesName: info.name,
+        cover: info.cover,
+        ...episodeNeighbors(info, requireInt(req, 'episodeId'))
+      })
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
   [InvokeChannels.SERIES_SEARCH]: (req) => {
     assert(isObject(req), 'request must be an object')
     return ok(
@@ -362,7 +388,9 @@ export const handlers: IpcHandlers = {
         query: requireString(req, 'query', 256),
         categoryId: optionalString(req, 'categoryId') ?? null,
         page: requireInt(req, 'page'),
-        pageSize: requireInt(req, 'pageSize')
+        pageSize: requireInt(req, 'pageSize'),
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
   },
@@ -393,6 +421,11 @@ export const handlers: IpcHandlers = {
     )
   },
 
+  [InvokeChannels.LIVE_NEIGHBORS]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    return ok(liveRepo.channelNeighbors(requireInt(req, 'streamId')))
+  },
+
   [InvokeChannels.LIVE_SEARCH]: (req) => {
     assert(isObject(req), 'request must be an object')
     return ok(
@@ -400,7 +433,9 @@ export const handlers: IpcHandlers = {
         query: requireString(req, 'query', 256),
         categoryId: optionalString(req, 'categoryId') ?? null,
         page: requireInt(req, 'page'),
-        pageSize: requireInt(req, 'pageSize')
+        pageSize: requireInt(req, 'pageSize'),
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
   },
@@ -474,6 +509,37 @@ export const handlers: IpcHandlers = {
     const kind = requireString(req, 'kind', 16)
     assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
     favoritesRepo.removeFavorite(kind, requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
+  },
+
+  // ---------------- watch progress (local, SQLite) ----------------
+  [InvokeChannels.PROGRESS_LIST]: () => ok(progressRepo.listProgress()),
+
+  [InvokeChannels.PROGRESS_CLEAR]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    progressRepo.removeProgress(requireProgressKind(req), requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.PROGRESS_SET_WATCHED]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireProgressKind(req)
+    const itemId = requireInt(req, 'itemId')
+    if (optionalBoolean(req, 'watched') === false) {
+      progressRepo.removeProgress(kind, itemId)
+    } else {
+      progressRepo.saveProgress({
+        kind,
+        itemId,
+        positionSecs: 0,
+        durationSecs: null,
+        watched: true,
+        name: requireString(req, 'name', 512),
+        image: optionalString(req, 'image', 2048) ?? null,
+        containerExtension: optionalString(req, 'containerExtension', 16) ?? null,
+        seriesId: optionalNumber(req, 'seriesId') ?? null
+      })
+    }
     return ok({ ok: true as const })
   },
 
@@ -683,15 +749,25 @@ export const handlers: IpcHandlers = {
     assert(kind === 'local' || kind === 'stream', 'kind must be "local" or "stream"')
     const playReq: PlayRequest = {
       kind: kind as PlaySourceKind,
-      mediaKind: ((): 'movie' | 'series' | 'live' => {
+      mediaKind: ((): PlayMediaKind => {
         const m = optionalString(req, 'mediaKind')
-        return m === 'series' || m === 'live' ? m : 'movie'
+        return m === 'series' || m === 'live' || m === 'archive' ? m : 'movie'
       })(),
       filePath: optionalString(req, 'filePath'),
       streamId: optionalNumber(req, 'streamId'),
       containerExtension: optionalString(req, 'containerExtension', 16),
       title: optionalString(req, 'title', 512),
-      startSecs: optionalNumber(req, 'startSecs')
+      startSecs: optionalNumber(req, 'startSecs'),
+      image: optionalString(req, 'image', 2048) ?? null,
+      seriesId: optionalNumber(req, 'seriesId')
+    }
+    if (playReq.mediaKind === 'archive') {
+      assert(kind === 'stream', 'a catch-up is always streamed')
+      assert(isObject(req.archive), 'archive is required for a catch-up')
+      playReq.archive = {
+        start: requireString(req.archive, 'start', 32),
+        durationMin: requireNumber(req.archive, 'durationMin')
+      }
     }
     if (kind === 'local') {
       assert(playReq.filePath !== undefined, 'filePath is required for local playback')

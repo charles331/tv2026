@@ -31,6 +31,7 @@ import type {
   VodStream
 } from '../types/catalog'
 import type {
+  EpisodeNeighbors,
   ListSeriesRequest,
   RefreshSeriesResult,
   SearchSeriesRequest,
@@ -39,6 +40,7 @@ import type {
   SeriesStream
 } from '../types/series'
 import type {
+  ChannelNeighbors,
   EpgEntry,
   GuideSearchResult,
   ListLiveRequest,
@@ -48,6 +50,7 @@ import type {
   SearchLiveRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind } from '../types/favorites'
+import type { ProgressKind, SetWatchedRequest, WatchProgress } from '../types/progress'
 import type { LogEntry, LogLevel } from '../types/logs'
 import type {
   AddReminderRequest,
@@ -140,6 +143,8 @@ export interface SeriesApi {
   listCategories(): Promise<Result<SeriesCategory[]>>
   list(req: ListSeriesRequest): Promise<Result<Page<SeriesStream>>>
   getInfo(seriesId: number): Promise<Result<SeriesInfo>>
+  /** Episodes before / after one episode (from the series info). */
+  episodeNeighbors(seriesId: number, episodeId: number): Promise<Result<EpisodeNeighbors>>
   search(req: SearchSeriesRequest): Promise<Result<Page<SeriesStream>>>
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshSeriesResult>>
 }
@@ -149,6 +154,8 @@ export interface LiveApi {
   list(req: ListLiveRequest): Promise<Result<Page<LiveStream>>>
   search(req: SearchLiveRequest): Promise<Result<Page<LiveStream>>>
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshLiveResult>>
+  /** Channels before / after one channel in its category, wrapping around. */
+  neighbors(streamId: number): Promise<Result<ChannelNeighbors>>
   /** Now/next programmes for a channel (empty when no EPG). */
   epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
   /** Full programme guide for a channel, sorted by start (empty when no EPG). */
@@ -167,6 +174,17 @@ export interface FavoritesApi {
   add(req: AddFavoriteRequest): Promise<Result<{ ok: true }>>
   /** Unpin a favorite. */
   remove(kind: FavoriteKind, itemId: number): Promise<Result<{ ok: true }>>
+}
+
+export interface ProgressApi {
+  /** Every watch-progress row, most recent first. */
+  list(): Promise<Result<WatchProgress[]>>
+  /** Forget an item's progress (start over / remove from "Reprendre"). */
+  clear(kind: ProgressKind, itemId: number): Promise<Result<{ ok: true }>>
+  /** Mark an item watched / not watched by hand. */
+  setWatched(req: SetWatchedRequest): Promise<Result<{ ok: true }>>
+  /** A row changed (playback stopped, a channel was started). */
+  onChanged(cb: () => void): Unsubscribe
 }
 
 export interface RemindersApi {
@@ -271,6 +289,7 @@ export interface RendererApi {
   series: SeriesApi
   live: LiveApi
   favorites: FavoritesApi
+  progress: ProgressApi
   reminders: RemindersApi
   logs: LogsApi
   downloads: DownloadsApi

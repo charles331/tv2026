@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type {
+  EpgEntry,
   Episode,
   CredentialsStatus,
   LiveStream,
   PlayRequest,
   SeriesStream,
   VodInfo,
-  VodStream
+  VodStream,
+  WatchProgress
 } from '@shared/index'
-import { isActiveReminderStatus } from '@shared/index'
+import { isActiveReminderStatus, resumeStart } from '@shared/index'
 import { api, describeError, unwrap } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
@@ -16,8 +18,10 @@ import { useChangelogStatus } from './lib/changelog'
 import { ToastProvider, useToast } from './lib/toast'
 import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { RemindersProvider, useReminders } from './lib/reminders'
+import { ProgressProvider, useProgress } from './lib/progress'
 import { AppNav, type Route } from './components/AppNav'
 import { Button, LoadingState } from './components/ui'
+import { SearchScreen, type SearchTarget } from './features/search/SearchScreen'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
 import { SeriesScreen } from './features/series/SeriesScreen'
 import { SeriesDetail } from './features/series/SeriesDetail'
@@ -27,7 +31,10 @@ import { SettingsScreen } from './features/settings/SettingsScreen'
 import { ScheduledScreen } from './features/reminders/ScheduledScreen'
 import { ConflictDialog } from './features/reminders/ConflictDialog'
 import { MovieDetail } from './features/movie/MovieDetail'
-import { PlayerView } from './features/player/PlayerView'
+import { PlayerView, type PlayerNeighbor } from './features/player/PlayerView'
+
+/** Minutes added to a catch-up, after the programme's announced end. */
+const ARCHIVE_PAD_MIN = 5
 
 export function App(): ReactElement {
   return (
@@ -35,7 +42,9 @@ export function App(): ReactElement {
       <FavoritesProvider>
         <RemindersProvider>
           <DownloadsProvider>
-            <AppShell />
+            <ProgressProvider>
+              <AppShell />
+            </ProgressProvider>
           </DownloadsProvider>
         </RemindersProvider>
       </FavoritesProvider>
@@ -55,12 +64,38 @@ function AppShell(): ReactElement {
   // Bumped when "Tout mettre à jour" finishes: used as the key of the catalogue
   // screens so the one currently displayed remounts and refetches fresh data.
   const [catalogEpoch, setCatalogEpoch] = useState(0)
+  // Global search: its query survives a detour to another tab; "Tout voir"
+  // opens a catalogue tab seeded with that query (dropped on the next navigation).
+  const [globalQuery, setGlobalQuery] = useState('')
+  const [seed, setSeed] = useState<{ route: SearchTarget; query: string } | null>(null)
+  const navigate = useCallback((next: Route) => {
+    setSeed(null)
+    setRoute(next)
+  }, [])
+  const seeAll = useCallback((target: SearchTarget, query: string) => {
+    setSeed({ route: target, query })
+    setRoute(target)
+  }, [])
+  const seedFor = (target: SearchTarget): string => (seed?.route === target ? seed.query : '')
+
+  // Ctrl+K (Cmd+K) opens the global search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        navigate('search')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navigate])
 
   const { items } = useDownloads()
   const busy = useConnectionBusy()
   const toast = useToast()
   const { reload: reloadFavorites } = useFavorites()
   const { reminders } = useReminders()
+  const progress = useProgress()
   const { hasUnseen: changelogHasUnseen, markSeen: markChangelogSeen } = useChangelogStatus()
 
   const scheduledCount = useMemo(
@@ -101,29 +136,88 @@ function AppShell(): ReactElement {
     if (route === 'settings') markChangelogSeen()
   }, [route, markChangelogSeen])
 
-  const handlePlay = useCallback(async (stream: VodStream, info: VodInfo | null) => {
-    setSelected(null)
-    const title = info?.title ?? info?.name ?? stream.name
-    const containerExtension = info?.containerExtension ?? stream.containerExtension
+  /**
+   * Play a movie or an episode, resuming where the user stopped unless
+   * `fromStart`. Prefers a completed local download: it doesn't take the
+   * single-connection lock, so it never pauses ongoing downloads. Any failure
+   * to find it falls back to streaming from the provider.
+   */
+  const playItem = useCallback(
+    async (
+      item: {
+        mediaKind: 'movie' | 'series'
+        id: number
+        title: string
+        containerExtension: string
+        image: string | null
+        seriesId?: number
+      },
+      fromStart = false
+    ) => {
+      let localFilePath: string | null = null
+      try {
+        const r = await api().downloads.localPath(
+          item.id,
+          item.mediaKind === 'series' ? 'series' : undefined
+        )
+        if (r.ok) localFilePath = r.data.path
+        else console.warn('localPath a échoué, lecture en streaming :', r.error.message)
+      } catch (e) {
+        console.warn('localPath a levé une exception, lecture en streaming :', e)
+      }
 
-    // Prefer offline playback of a completed local download: it doesn't take
-    // the single-connection lock, so it never pauses ongoing downloads.
-    // Any failure falls back to streaming from the provider.
-    let localFilePath: string | null = null
-    try {
-      const r = await api().downloads.localPath(stream.streamId)
-      if (r.ok) localFilePath = r.data.path
-      else console.warn('localPath a échoué, lecture en streaming :', r.error.message)
-    } catch (e) {
-      console.warn('localPath a levé une exception, lecture en streaming :', e)
-    }
+      if (fromStart) await progress.clear(item.mediaKind, item.id)
+      const startSecs = fromStart
+        ? undefined
+        : (resumeStart(progress.get(item.mediaKind, item.id)) ?? undefined)
 
-    setPlayRequest(
-      localFilePath
-        ? { kind: 'local', filePath: localFilePath, title }
-        : { kind: 'stream', streamId: stream.streamId, containerExtension, title }
-    )
-  }, [])
+      setPlayRequest({
+        kind: localFilePath ? 'local' : 'stream',
+        filePath: localFilePath ?? undefined,
+        mediaKind: item.mediaKind,
+        streamId: item.id,
+        containerExtension: item.containerExtension,
+        title: item.title,
+        image: item.image,
+        seriesId: item.seriesId,
+        startSecs
+      })
+    },
+    [progress]
+  )
+
+  const handlePlay = useCallback(
+    (stream: VodStream, info: VodInfo | null, fromStart = false) => {
+      setSelected(null)
+      void playItem(
+        {
+          mediaKind: 'movie',
+          id: stream.streamId,
+          title: info?.title ?? info?.name ?? stream.name,
+          containerExtension: info?.containerExtension ?? stream.containerExtension,
+          image: stream.streamIcon
+        },
+        fromStart
+      )
+    },
+    [playItem]
+  )
+
+  /** "Reprendre": replay an item from its stored snapshot. */
+  const handleResume = useCallback(
+    (p: WatchProgress) => {
+      if (p.kind === 'live') return
+      void playItem({
+        mediaKind: p.kind,
+        id: p.itemId,
+        title: p.name,
+        containerExtension: p.containerExtension ?? 'mkv',
+        image: p.image,
+        seriesId: p.seriesId ?? undefined
+      })
+    },
+    [playItem]
+  )
 
   const handlePlayChannel = useCallback((channel: LiveStream) => {
     // Live is stream-only (it acquires the connection lock → downloads pause).
@@ -132,7 +226,26 @@ function AppShell(): ReactElement {
       mediaKind: 'live',
       streamId: channel.streamId,
       containerExtension: 'ts',
-      title: channel.name
+      title: channel.name,
+      image: channel.icon
+    })
+  }, [])
+
+  /** Catch-up: replay a programme the provider archived (a finite stream). */
+  const handlePlayArchive = useCallback((channel: LiveStream, programme: EpgEntry) => {
+    if (!programme.startText || programme.startSecs == null || programme.endSecs == null) return
+    setPlayRequest({
+      kind: 'stream',
+      mediaKind: 'archive',
+      streamId: channel.streamId,
+      containerExtension: 'ts',
+      title: `${programme.title} — ${channel.name}`,
+      image: channel.icon,
+      archive: {
+        start: programme.startText,
+        // A few minutes more: programmes rarely start and end on the dot.
+        durationMin: Math.ceil((programme.endSecs - programme.startSecs) / 60) + ARCHIVE_PAD_MIN
+      }
     })
   }, [])
 
@@ -187,33 +300,86 @@ function AppShell(): ReactElement {
     })
   }, [])
 
-  const handlePlayEpisode = useCallback(async (episode: Episode, seriesName: string) => {
-    setSelectedSeries(null)
-    const title = `${seriesName} S${String(episode.season).padStart(2, '0')}E${String(
-      episode.episodeNum
-    ).padStart(2, '0')}`
+  const handlePlayEpisode = useCallback(
+    (series: SeriesStream, episode: Episode, seriesName: string, fromStart = false) => {
+      setSelectedSeries(null)
+      const title = `${seriesName} S${String(episode.season).padStart(2, '0')}E${String(
+        episode.episodeNum
+      ).padStart(2, '0')}`
+      void playItem(
+        {
+          mediaKind: 'series',
+          id: episode.episodeId,
+          title,
+          containerExtension: episode.containerExtension,
+          image: episode.image ?? series.cover,
+          seriesId: series.seriesId
+        },
+        fromStart
+      )
+    },
+    [playItem]
+  )
 
-    // Prefer an already-downloaded local episode (no provider connection taken).
-    let localFilePath: string | null = null
-    try {
-      const r = await api().downloads.localPath(episode.episodeId, 'series')
-      if (r.ok) localFilePath = r.data.path
-    } catch (e) {
-      console.warn('localPath épisode a échoué, lecture en streaming :', e)
+  // Previous / next of what is playing: episodes of the series (in viewing
+  // order) or channels of the category (zapping). Looked up on each new source.
+  const [neighbors, setNeighbors] = useState<{
+    previous: PlayerNeighbor | null
+    next: PlayerNeighbor | null
+  }>({ previous: null, next: null })
+  // The lookups below outlive a render: always call the latest playItem (it
+  // reads the current watch progress to resume the neighbour at the right place).
+  const playItemRef = useRef(playItem)
+  playItemRef.current = playItem
+  const playingKind = playRequest?.mediaKind
+  const playingId = playRequest?.streamId
+  const playingSeriesId = playRequest?.seriesId
+  useEffect(() => {
+    let cancelled = false
+    const none = { previous: null, next: null }
+    setNeighbors(none)
+    if (playingId == null) return
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    const load = async (): Promise<typeof neighbors> => {
+      if (playingKind === 'live') {
+        const n = unwrap(await api().live.neighbors(playingId))
+        const of = (c: LiveStream | null): PlayerNeighbor | null =>
+          c ? { label: c.name, play: () => handlePlayChannel(c) } : null
+        return { previous: of(n.previous), next: of(n.next) }
+      }
+      if (playingKind === 'series' && playingSeriesId != null) {
+        const n = unwrap(await api().series.episodeNeighbors(playingSeriesId, playingId))
+        const of = (e: Episode | null): PlayerNeighbor | null =>
+          e
+            ? {
+                label: `S${pad(e.season)}E${pad(e.episodeNum)} — ${e.title}`,
+                play: () =>
+                  void playItemRef.current({
+                    mediaKind: 'series',
+                    id: e.episodeId,
+                    title: `${n.seriesName} S${pad(e.season)}E${pad(e.episodeNum)}`,
+                    containerExtension: e.containerExtension,
+                    image: e.image ?? n.cover,
+                    seriesId: playingSeriesId
+                  })
+              }
+            : null
+        return { previous: of(n.previous), next: of(n.next) }
+      }
+      return none
     }
-
-    setPlayRequest(
-      localFilePath
-        ? { kind: 'local', filePath: localFilePath, title }
-        : {
-            kind: 'stream',
-            mediaKind: 'series',
-            streamId: episode.episodeId,
-            containerExtension: episode.containerExtension,
-            title
-          }
-    )
-  }, [])
+    load()
+      .then((n) => {
+        if (!cancelled) setNeighbors(n)
+      })
+      .catch((e) => console.warn('voisins de lecture indisponibles :', describeError(e)))
+    return () => {
+      cancelled = true
+    }
+  }, [playingKind, playingId, playingSeriesId, handlePlayChannel])
+  // Read by the "file ended" callback, which must see the latest lookup.
+  const nextRef = useRef(neighbors.next)
+  nextRef.current = neighbors.next
 
   // Refresh movies + series + live in one go (triggered from the nav, confirmed
   // by the user). Reports the outcome via a toast.
@@ -282,7 +448,7 @@ function AppShell(): ReactElement {
       <div className="flex min-h-0 flex-1">
         <AppNav
           route={route}
-          onNavigate={setRoute}
+          onNavigate={navigate}
           activeDownloads={activeDownloads}
           scheduledCount={scheduledCount}
           busyReason={busy.busy ? busy.reason : null}
@@ -292,24 +458,41 @@ function AppShell(): ReactElement {
         />
 
         <main className="min-w-0 flex-1">
+          {route === 'search' && (
+            <SearchScreen
+              query={globalQuery}
+              onQueryChange={setGlobalQuery}
+              onSelectMovie={setSelected}
+              onSelectSeries={setSelectedSeries}
+              onPlayChannel={handlePlayChannel}
+              onPlayArchive={handlePlayArchive}
+              onSeeAll={seeAll}
+            />
+          )}
           {route === 'catalog' && (
             <CatalogScreen
-              key={catalogEpoch}
+              key={`${catalogEpoch}:${seedFor('catalog')}`}
+              initialQuery={seedFor('catalog')}
               onSelectMovie={setSelected}
+              onResume={handleResume}
               onGoToSettings={() => setRoute('settings')}
             />
           )}
           {route === 'series' && (
             <SeriesScreen
-              key={catalogEpoch}
+              key={`${catalogEpoch}:${seedFor('series')}`}
+              initialQuery={seedFor('series')}
               onSelectSeries={setSelectedSeries}
+              onResume={handleResume}
               onGoToSettings={() => setRoute('settings')}
             />
           )}
           {route === 'live' && (
             <LiveScreen
-              key={catalogEpoch}
+              key={`${catalogEpoch}:${seedFor('live')}`}
+              initialQuery={seedFor('live')}
               onPlayChannel={handlePlayChannel}
+              onPlayArchive={handlePlayArchive}
               onGoToSettings={() => setRoute('settings')}
             />
           )}
@@ -322,7 +505,22 @@ function AppShell(): ReactElement {
       </div>
 
       {/* Non-blocking player bar (mpv plays in its own window; navigation stays free). */}
-      {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
+      {playRequest && (
+        <PlayerView
+          request={playRequest}
+          onClose={() => setPlayRequest(null)}
+          previous={neighbors.previous}
+          next={neighbors.next}
+          onEnded={() => {
+            // An episode ended: chain the next one (live never "ends").
+            const following = playRequest.mediaKind === 'series' ? nextRef.current : null
+            if (!following) return false
+            toast.show(`Épisode suivant : ${following.label}`, 'info')
+            following.play()
+            return true
+          }}
+        />
+      )}
 
       {/* Recording-vs-playback conflict prompt (driven by the main scheduler). */}
       <ConflictDialog />
@@ -335,7 +533,9 @@ function AppShell(): ReactElement {
         <SeriesDetail
           series={selectedSeries}
           onClose={() => setSelectedSeries(null)}
-          onPlayEpisode={handlePlayEpisode}
+          onPlayEpisode={(episode, seriesName, fromStart) =>
+            handlePlayEpisode(selectedSeries, episode, seriesName, fromStart)
+          }
         />
       )}
 

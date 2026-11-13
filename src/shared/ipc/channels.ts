@@ -45,6 +45,8 @@ export const InvokeChannels = {
   SERIES_LIST_CATEGORIES: 'series:listCategories',
   SERIES_LIST: 'series:list',
   SERIES_GET_INFO: 'series:getInfo',
+  SERIES_EPISODE_NEIGHBORS: 'series:episodeNeighbors', // previous / next episode
+
   SERIES_SEARCH: 'series:search',
   SERIES_REFRESH: 'series:refresh',
 
@@ -53,6 +55,7 @@ export const InvokeChannels = {
   LIVE_LIST: 'live:list',
   LIVE_SEARCH: 'live:search',
   LIVE_REFRESH: 'live:refresh',
+  LIVE_NEIGHBORS: 'live:neighbors', // previous / next channel of the category (zapping)
   LIVE_EPG: 'live:epg',
   LIVE_FULL_EPG: 'live:fullEpg',
   LIVE_SEARCH_GUIDE: 'live:searchGuide', // search programme titles in all guides (xmltv)
@@ -61,6 +64,11 @@ export const InvokeChannels = {
   FAVORITES_LIST: 'favorites:list',
   FAVORITES_ADD: 'favorites:add',
   FAVORITES_REMOVE: 'favorites:remove',
+
+  // --- watch progress (resume position, watched, recent channels) ---
+  PROGRESS_LIST: 'progress:list',
+  PROGRESS_CLEAR: 'progress:clear',
+  PROGRESS_SET_WATCHED: 'progress:setWatched',
 
   // --- reminders / scheduled recordings ---
   REMINDERS_LIST: 'reminders:list',
@@ -120,6 +128,8 @@ export const EventChannels = {
   RECORDING_CONFLICT: 'event:recording:conflict',
   /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */
   RECORDING_CONFLICT_RESOLVED: 'event:recording:conflictResolved',
+  /** A watch-progress row changed for good (playback stopped, channel started). */
+  PROGRESS_CHANGED: 'event:progress:changed',
   /** App-update lifecycle: available / downloading (progress) / downloaded / error. */
   UPDATE_STATUS: 'event:update:status'
 } as const

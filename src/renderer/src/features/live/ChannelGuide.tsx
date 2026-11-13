@@ -62,11 +62,14 @@ function groupByDay(entries: EpgEntry[]): { key: string; label: string; items: E
 export function ChannelGuide({
   channel,
   onClose,
-  onPlay
+  onPlay,
+  onPlayArchive
 }: {
   channel: LiveStream
   onClose: () => void
   onPlay: (channel: LiveStream) => void
+  /** Catch-up: replay a programme the provider says it archived. */
+  onPlayArchive?: (channel: LiveStream, programme: EpgEntry) => void
 }): ReactElement {
   const [epg, setEpg] = useState<EpgEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -189,6 +192,15 @@ export function ChannelGuide({
                           nowSecs >= e.startSecs &&
                           nowSecs < e.endSecs)
                       const isPast = e.endSecs != null && nowSecs >= e.endSecs
+                      // Catch-up is offered for what already started; the
+                      // provider's flag is a promise, not a guarantee.
+                      const canReplay =
+                        onPlayArchive != null &&
+                        e.hasArchive === true &&
+                        !!e.startText &&
+                        e.startSecs != null &&
+                        e.endSecs != null &&
+                        e.startSecs <= nowSecs
                       const reminded =
                         e.startSecs != null
                           ? reminders.has(channel.streamId, e.startSecs, e.title)
@@ -220,6 +232,21 @@ export function ChannelGuide({
                               </p>
                             )}
                           </div>
+                          {canReplay && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<IconPlay size={14} />}
+                              title={
+                                isPast
+                                  ? 'Revoir ce programme (rattrapage)'
+                                  : 'Regarder ce programme depuis le début (rattrapage)'
+                              }
+                              onClick={() => onPlayArchive?.(channel, e)}
+                            >
+                              {isPast ? 'Revoir' : 'Du début'}
+                            </Button>
+                          )}
                           {!isPast && (
                             <div className="flex shrink-0 items-center gap-1">
                               <Button
