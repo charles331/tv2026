@@ -3,6 +3,7 @@ import type { VodStream } from '@shared/index'
 import { Poster, Badge, IconStar, IconCheck } from '../../components/ui'
 import { formatRating } from '../../lib/format'
 import { LowQualityTag, PosterFileLabel } from '../movie/quality'
+import { useFileCheck } from '../../lib/fileChecks'
 
 function PosterCardImpl({
   stream,
@@ -13,6 +14,11 @@ function PosterCardImpl({
   downloaded: boolean
   onSelect: (stream: VodStream) => void
 }): ReactElement {
+  // A check made on the movie page this session wins over the list's data.
+  const known = useFileCheck(stream.streamId)
+  const sizeBytes = known?.sizeBytes ?? stream.fileSizeBytes
+  const durationSecs = known ? known.durationSecs : stream.fileDurationSecs
+  const video = known?.video ?? stream.fileVideo
   return (
     <button
       type="button"
@@ -40,13 +46,9 @@ function PosterCardImpl({
             <LowQualityTag name={stream.name} />
           </div>
         </div>
-        {stream.fileSizeBytes ? (
+        {sizeBytes ? (
           <div className="pointer-events-none absolute bottom-1.5 left-1.5">
-            <PosterFileLabel
-              sizeBytes={stream.fileSizeBytes}
-              durationSecs={stream.fileDurationSecs}
-              video={stream.fileVideo}
-            />
+            <PosterFileLabel sizeBytes={sizeBytes} durationSecs={durationSecs} video={video} />
           </div>
         ) : null}
       </div>

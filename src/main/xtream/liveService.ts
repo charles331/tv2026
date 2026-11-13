@@ -10,6 +10,7 @@ import type { GuideProgrammeRow } from '../store/epgRepo'
 import { getXtreamClient } from './index'
 import { XmltvProgrammeParser } from './xmltv'
 import { appLog } from '../log/logger'
+import { withRefreshLog } from './refreshLog'
 
 /** A populated live cache exists if it has at least one channel. */
 export function isLivePopulated(): boolean {
@@ -26,25 +27,35 @@ export async function refreshLive(force: boolean): Promise<RefreshLiveResult> {
     return { categories: counts.categories, channels: counts.channels, refreshedAt: Date.now() }
   }
 
-  const client = getXtreamClient()
-  try {
-    const categories = await client.getLiveCategories()
-    liveRepo.upsertCategories(categories)
+  return withRefreshLog(
+    'live',
+    'Liste des chaînes',
+    async () => {
+      const client = getXtreamClient()
+      try {
+        const categories = await client.getLiveCategories()
+        liveRepo.upsertCategories(categories)
 
-    const channels = await client.getLiveStreams()
-    liveRepo.upsertChannels(channels)
+        const channels = await client.getLiveStreams()
+        liveRepo.upsertChannels(channels)
 
-    // The guide search depends on the channel list: refresh it too (best-effort,
-    // a guide failure must not fail the channel refresh).
-    await refreshGuide().catch((e) =>
-      appLog.warn('live', `Guide des programmes non mis à jour : ${e instanceof Error ? e.message : String(e)}`)
-    )
+        // The guide search depends on the channel list: refresh it too (best-effort,
+        // a guide failure must not fail the channel refresh).
+        await refreshGuide().catch((e) =>
+          appLog.warn(
+            'live',
+            `Guide des programmes non mis à jour : ${e instanceof Error ? e.message : String(e)}`
+          )
+        )
 
-    const counts = liveRepo.liveCounts()
-    return { categories: counts.categories, channels: counts.channels, refreshedAt: Date.now() }
-  } finally {
-    await client.close()
-  }
+        const counts = liveRepo.liveCounts()
+        return { categories: counts.categories, channels: counts.channels, refreshedAt: Date.now() }
+      } finally {
+        await client.close()
+      }
+    },
+    (r) => `${r.channels} chaînes, ${r.categories} catégories`
+  )
 }
 
 /** Short-EPG in-memory cache: the guide changes slowly; avoid hammering. */
@@ -162,7 +173,10 @@ export async function searchGuide(query: string, limit = 150): Promise<GuideSear
       await refreshGuide()
     } catch (e) {
       // Stale guide is better than none: search what we have, if anything.
-      appLog.warn('live', `Guide des programmes non mis à jour : ${e instanceof Error ? e.message : String(e)}`)
+      appLog.warn(
+        'live',
+        `Guide des programmes non mis à jour : ${e instanceof Error ? e.message : String(e)}`
+      )
       if (fetchedAt == null) throw e
     }
   }

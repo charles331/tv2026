@@ -221,20 +221,48 @@ function AppShell(): ReactElement {
     setConfirmUpdateAll(false)
     setUpdatingAll(true)
     try {
-      const movies = unwrap(await api().catalog.refresh({ force: true }))
-      const series = unwrap(await api().series.refresh({ force: true }))
-      const live = unwrap(await api().live.refresh({ force: true }))
-      // Availability of favorites may have changed (sources added/removed).
-      await reloadFavorites()
-      // Remount the catalogue screens so the fresh data shows immediately —
-      // without this the displayed screen kept its pre-refresh list.
-      setCatalogEpoch((e) => e + 1)
-      toast.show(
-        `Catalogues à jour : ${movies.streams} films, ${series.series} séries, ${live.channels} chaînes.`,
-        'success'
-      )
-    } catch (e) {
-      toast.show(`Échec de la mise à jour : ${describeError(e)}`, 'error')
+      // Each catalogue on its own: a failure on one (e.g. films) must not leave
+      // the others stale. Sequential, the provider allows a single connection.
+      const parts: { label: string; run: () => Promise<string> }[] = [
+        {
+          label: 'films',
+          run: async () => `${unwrap(await api().catalog.refresh({ force: true })).streams} films`
+        },
+        {
+          label: 'séries',
+          run: async () => `${unwrap(await api().series.refresh({ force: true })).series} séries`
+        },
+        {
+          label: 'chaînes',
+          run: async () => `${unwrap(await api().live.refresh({ force: true })).channels} chaînes`
+        }
+      ]
+      const done: string[] = []
+      const failed: string[] = []
+      for (const part of parts) {
+        try {
+          done.push(await part.run())
+        } catch (e) {
+          failed.push(`${part.label} (${describeError(e)})`)
+        }
+      }
+      if (done.length > 0) {
+        // Availability of favorites may have changed (sources added/removed).
+        await reloadFavorites()
+        // Remount the catalogue screens so the fresh data shows immediately —
+        // without this the displayed screen kept its pre-refresh list.
+        setCatalogEpoch((e) => e + 1)
+      }
+      if (failed.length === 0) {
+        toast.show(`Catalogues à jour : ${done.join(', ')}.`, 'success')
+      } else {
+        toast.show(
+          (done.length > 0 ? `Mis à jour : ${done.join(', ')}. ` : '') +
+            `Échec pour : ${failed.join(' ; ')}. Détails dans Réglages → Journal.`,
+          'error',
+          12000
+        )
+      }
     } finally {
       setUpdatingAll(false)
     }
