@@ -15,6 +15,30 @@ export const MOVIES = [
   { stream_id: 43, name: 'FR - Autre Film (2025) CAM', category_id: 1, container_extension: 'mp4', duration: '01:30:00', size: 700_000_000 }
 ]
 
+/** Two variants sharing one guide, and a channel with its own guide. */
+export const CHANNELS = [
+  { stream_id: 101, num: 1, name: 'Chaîne Test HD', epg_channel_id: 'test.fr', category_id: 9 },
+  { stream_id: 102, num: 2, name: 'Chaîne Test FHD', epg_channel_id: 'test.fr', category_id: 9 },
+  { stream_id: 103, num: 3, name: 'Solo TV', epg_channel_id: 'solo.fr', category_id: 9 }
+]
+
+/** XMLTV guide relative to now: one programme on air, two starting tomorrow. */
+function xmltv() {
+  const stamp = (ms) =>
+    new Date(ms).toISOString().replace(/[-:T]/g, '').slice(0, 14) + ' +0000'
+  const now = Date.now()
+  const hour = 3_600_000
+  const prog = (channel, start, stop, title) =>
+    `<programme start="${stamp(start)}" stop="${stamp(stop)}" channel="${channel}"><title>${title}</title></programme>`
+  return (
+    '<?xml version="1.0"?><tv>' +
+    prog('test.fr', now - hour / 2, now + hour / 2, 'Marathon en cours') +
+    prog('test.fr', now + 24 * hour, now + 25 * hour, 'Marathon de demain') +
+    prog('solo.fr', now + 26 * hour, now + 27 * hour, 'Marathon solo') +
+    '</tv>'
+  )
+}
+
 export function startFakeProvider({ fail = [] } = {}) {
   const json = (res, body, status = 200) => {
     res.writeHead(status, { 'content-type': 'application/json' })
@@ -59,9 +83,14 @@ export function startFakeProvider({ fail = [] } = {}) {
         }
         case 'get_series_categories':
         case 'get_series':
-        case 'get_live_categories':
-        case 'get_live_streams':
           return json(res, [])
+        case 'get_live_categories':
+          return json(res, [{ category_id: 9, category_name: 'Chaînes test', parent_id: 0 }])
+        case 'get_live_streams':
+          return json(
+            res,
+            CHANNELS.map((c) => ({ ...c, stream_type: 'live', stream_icon: null, tv_archive: 0 }))
+          )
         default:
           return json(res, [])
       }
@@ -75,7 +104,7 @@ export function startFakeProvider({ fail = [] } = {}) {
     }
     if (url.pathname === '/xmltv.php') {
       res.writeHead(200, { 'content-type': 'application/xml' })
-      return res.end('<?xml version="1.0"?><tv></tv>')
+      return res.end(xmltv())
     }
     res.writeHead(404).end()
   })

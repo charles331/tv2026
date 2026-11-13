@@ -111,6 +111,29 @@ try {
   await page.waitForTimeout(600)
   check('Film disparu → message', /plus dans le catalogue/.test(await body()))
 
+  // Direct, recherche dans les guides : la chaîne d'un programme à venir s'ouvre au clic.
+  await page.getByRole('button', { name: 'Direct' }).first().click()
+  await page.getByLabel('Chercher aussi dans les guides').check()
+  await page.getByPlaceholder(/rechercher/i).first().fill('Marathon')
+  await page.getByText('Marathon solo').first().waitFor({ timeout: 20_000 })
+  // La barre de lecture se ferme par « Arrêter », ou « Fermer » si la lecture a échoué.
+  const closePlayer = page.getByRole('button', { name: /^(Arrêter|Fermer)$/ })
+  for (const name of ['Solo TV', 'Chaîne Test FHD']) {
+    // « Chaîne Test FHD » : la variante du programme de demain (dernier bouton de ce nom).
+    const target = page.getByRole('button', { name, exact: true }).last()
+    const clickable = (await target.count()) > 0 && (await target.isEnabled())
+    // Le titre de la barre de lecture : un <p title="nom de la chaîne">.
+    const playing = page.locator(`p[title="${name}"]`)
+    if (clickable) {
+      await target.click()
+      await playing.waitFor({ timeout: 5000 }).catch(() => undefined)
+    }
+    const opened = clickable && (await playing.isVisible())
+    check(`Programme à venir → ouvre la chaîne « ${name} »`, opened, clickable ? '' : 'rien à cliquer')
+    if (await closePlayer.isVisible()) await closePlayer.click()
+    await page.waitForTimeout(600)
+  }
+
   // Nouveautés : 3 versions, les autres repliées.
   await page.getByRole('button', { name: /^Réglages/ }).first().click()
   await page.getByText('Application', { exact: true }).first().click()
