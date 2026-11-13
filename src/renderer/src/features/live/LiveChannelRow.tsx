@@ -51,27 +51,35 @@ function LiveChannelRowImpl({
       ref={ref}
       className="flex items-center gap-3 rounded-lg border border-white/10 bg-surface-raised p-3"
     >
-      <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-        <Poster src={channel.icon} alt={channel.name} className="h-full w-full object-contain" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-100">
-          {channel.number != null && <span className="text-gray-500">{channel.number} · </span>}
-          {channel.name}
-        </p>
-        {now ? (
-          <p className="truncate text-xs text-gray-400">
-            <span className="text-emerald-400">● </span>
-            {now.title}
-            {now.endSecs != null && (
-              <span className="text-gray-600"> · jusqu’à {formatClockFromEpochSecs(now.endSecs)}</span>
-            )}
-            {next && <span className="text-gray-600"> — puis {next.title}</span>}
-          </p>
-        ) : (
-          <p className="text-xs text-gray-600">{epg === null ? 'Programme…' : 'Pas de guide'}</p>
-        )}
-      </div>
+      {/* Logo + name + programme: one click target that plays the channel. */}
+      <button
+        type="button"
+        onClick={() => onPlay(channel)}
+        title={`Regarder ${channel.name}`}
+        className="group flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <span className="block h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
+          <Poster src={channel.icon} alt={channel.name} className="h-full w-full object-contain" />
+        </span>
+        <span className="block min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-gray-100 group-hover:text-white group-hover:underline">
+            {channel.number != null && <span className="text-gray-500">{channel.number} · </span>}
+            {channel.name}
+          </span>
+          {now ? (
+            <span className="block truncate text-xs text-gray-400">
+              <span className="text-emerald-400">● </span>
+              {now.title}
+              {now.endSecs != null && (
+                <span className="text-gray-600"> · jusqu’à {formatClockFromEpochSecs(now.endSecs)}</span>
+              )}
+              {next && <span className="text-gray-600"> — puis {next.title}</span>}
+            </span>
+          ) : (
+            <span className="block text-xs text-gray-600">{epg === null ? 'Programme…' : 'Pas de guide'}</span>
+          )}
+        </span>
+      </button>
       <Button
         size="sm"
         variant="ghost"

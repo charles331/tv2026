@@ -73,17 +73,28 @@ export function FavoritesView({
               key={f.itemId}
               className="flex items-center gap-3 rounded-lg border border-white/10 bg-surface-raised p-3"
             >
-              <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-                <Poster src={f.image} alt={f.name} className="h-full w-full object-contain" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-100">{f.name}</p>
-                {!f.available && (
-                  <div className="mt-1">
-                    <OfflineBadge />
-                  </div>
-                )}
-              </div>
+              {/* Logo + name: one click target that plays the channel. */}
+              <button
+                type="button"
+                disabled={!f.available}
+                onClick={() => onActivate(f)}
+                title={f.available ? `Regarder ${f.name}` : undefined}
+                className="group flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <span className="block h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
+                  <Poster src={f.image} alt={f.name} className="h-full w-full object-contain" />
+                </span>
+                <span className="block min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-gray-100 group-enabled:group-hover:text-white group-enabled:group-hover:underline">
+                    {f.name}
+                  </span>
+                  {!f.available && (
+                    <span className="mt-1 block">
+                      <OfflineBadge />
+                    </span>
+                  )}
+                </span>
+              </button>
               {onOpenGuide && (
                 <Button
                   size="sm"

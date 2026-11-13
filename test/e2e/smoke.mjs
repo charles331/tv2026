@@ -134,6 +134,23 @@ try {
     await page.waitForTimeout(600)
   }
 
+  // Direct, liste des chaînes : cliquer sur la chaîne (logo ou nom) la lance.
+  await page.getByPlaceholder(/rechercher/i).first().fill('Solo')
+  const row = page.locator('button[title="Regarder Solo TV"]')
+  await row.first().waitFor({ timeout: 10_000 }).catch(() => undefined)
+  const rowClickable = (await row.count()) > 0
+  if (rowClickable) {
+    await row.first().click()
+    await page.locator('p[title="Solo TV"]').waitFor({ timeout: 5000 }).catch(() => undefined)
+  }
+  check(
+    'Liste des chaînes → clic sur la chaîne la lance',
+    rowClickable && (await page.locator('p[title="Solo TV"]').isVisible()),
+    rowClickable ? '' : 'rien à cliquer'
+  )
+  if (await closePlayer.isVisible()) await closePlayer.click()
+  await page.waitForTimeout(600)
+
   // Nouveautés : 3 versions, les autres repliées.
   await page.getByRole('button', { name: /^Réglages/ }).first().click()
   await page.getByText('Application', { exact: true }).first().click()
