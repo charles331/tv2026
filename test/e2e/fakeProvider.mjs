@@ -7,9 +7,10 @@
  * `fail` lists catalogues whose refresh must fail (HTTP 500): 'movies',
  * 'series', 'live'.
  * `videos` maps a movie or episode id to a real video file, served with Range
- * support so mpv can really play (and seek in) it.
+ * support so mpv can really play (and seek in) it; an `archive:<channel id>`
+ * key does the same for that channel's catch-up.
  */
-/* global URL */
+/* global URL, Buffer */
 import { createServer } from 'node:http'
 import { createReadStream, statSync } from 'node:fs'
 
@@ -62,6 +63,23 @@ function serveFile(req, res, path) {
   return createReadStream(path, { start, end }).pipe(res)
 }
 
+/** `get_simple_data_table`: one archived programme (ended an hour ago) and the current one. */
+function guideOf() {
+  const b64 = (s) => Buffer.from(s, 'utf8').toString('base64')
+  const now = Math.floor(Date.now() / 1000)
+  const text = (secs) => new Date(secs * 1000).toISOString().slice(0, 19).replace('T', ' ')
+  const entry = (title, start, stop, extra) => ({
+    id: String(start), title: b64(title), description: '', start: text(start), end: text(stop),
+    start_timestamp: String(start), stop_timestamp: String(stop), ...extra
+  })
+  return {
+    epg_listings: [
+      entry('Émission passée', now - 7200, now - 3600, { now_playing: 0, has_archive: 1 }),
+      entry('Émission en cours', now - 3600, now + 1800, { now_playing: 1, has_archive: 0 })
+    ]
+  }
+}
+
 export function startFakeProvider({ fail = [], videos = {} } = {}) {
   const json = (res, body, status = 200) => {
     res.writeHead(status, { 'content-type': 'application/json' })
@@ -104,6 +122,8 @@ export function startFakeProvider({ fail = [], videos = {} } = {}) {
             movie_data: { stream_id: m.stream_id, name: m.name, container_extension: m.container_extension }
           })
         }
+        case 'get_simple_data_table':
+          return json(res, guideOf())
         case 'get_series_categories':
         case 'get_series':
           return json(res, [])
@@ -120,6 +140,14 @@ export function startFakeProvider({ fail = [], videos = {} } = {}) {
     }
     const media = /^\/(?:movie|series)\/[^/]+\/[^/]+\/(\d+)\.\w+$/.exec(url.pathname)
     if (media && videos[media[1]]) return serveFile(req, res, videos[media[1]])
+    // Catch-up, as measured on a real provider: a channel either sends the
+    // video, or answers 200 with an empty HTML body although it announced one.
+    const archive = /^\/timeshift\/[^/]+\/[^/]+\/\d+\/\d{4}-\d\d-\d\d:\d\d-\d\d\/(\d+)\.ts$/.exec(url.pathname)
+    if (archive) {
+      if (videos[`archive:${archive[1]}`]) return serveFile(req, res, videos[`archive:${archive[1]}`])
+      res.writeHead(200, { 'content-type': 'text/html; charset=UTF-8' })
+      return res.end()
+    }
     const movie = /^\/movie\/[^/]+\/[^/]+\/(\d+)\.\w+$/.exec(url.pathname)
     if (movie) {
       const m = MOVIES.find((x) => x.stream_id === Number(movie[1]))

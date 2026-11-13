@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type {
+  EpgEntry,
   Episode,
   CredentialsStatus,
   LiveStream,
@@ -31,6 +32,9 @@ import { ScheduledScreen } from './features/reminders/ScheduledScreen'
 import { ConflictDialog } from './features/reminders/ConflictDialog'
 import { MovieDetail } from './features/movie/MovieDetail'
 import { PlayerView, type PlayerNeighbor } from './features/player/PlayerView'
+
+/** Minutes added to a catch-up, after the programme's announced end. */
+const ARCHIVE_PAD_MIN = 5
 
 export function App(): ReactElement {
   return (
@@ -224,6 +228,24 @@ function AppShell(): ReactElement {
       containerExtension: 'ts',
       title: channel.name,
       image: channel.icon
+    })
+  }, [])
+
+  /** Catch-up: replay a programme the provider archived (a finite stream). */
+  const handlePlayArchive = useCallback((channel: LiveStream, programme: EpgEntry) => {
+    if (!programme.startText || programme.startSecs == null || programme.endSecs == null) return
+    setPlayRequest({
+      kind: 'stream',
+      mediaKind: 'archive',
+      streamId: channel.streamId,
+      containerExtension: 'ts',
+      title: `${programme.title} — ${channel.name}`,
+      image: channel.icon,
+      archive: {
+        start: programme.startText,
+        // A few minutes more: programmes rarely start and end on the dot.
+        durationMin: Math.ceil((programme.endSecs - programme.startSecs) / 60) + ARCHIVE_PAD_MIN
+      }
     })
   }, [])
 
@@ -443,6 +465,7 @@ function AppShell(): ReactElement {
               onSelectMovie={setSelected}
               onSelectSeries={setSelectedSeries}
               onPlayChannel={handlePlayChannel}
+              onPlayArchive={handlePlayArchive}
               onSeeAll={seeAll}
             />
           )}
@@ -469,6 +492,7 @@ function AppShell(): ReactElement {
               key={`${catalogEpoch}:${seedFor('live')}`}
               initialQuery={seedFor('live')}
               onPlayChannel={handlePlayChannel}
+              onPlayArchive={handlePlayArchive}
               onGoToSettings={() => setRoute('settings')}
             />
           )}

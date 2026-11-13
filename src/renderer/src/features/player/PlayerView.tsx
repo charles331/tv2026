@@ -107,7 +107,7 @@ export function PlayerView({
   // was starting; the resulting "idle" then closed this bar, whose unmount
   // stopped the second mpv too: nothing ever played under `pnpm dev`.
   // A real unmount, or a change of source, still stops (on the next tick).
-  const sourceKey = `${request.kind}|${request.streamId ?? ''}|${request.filePath ?? ''}|${request.startSecs ?? ''}`
+  const sourceKey = `${request.kind}|${request.mediaKind ?? ''}|${request.streamId ?? ''}|${request.filePath ?? ''}|${request.startSecs ?? ''}|${request.archive?.start ?? ''}`
   const pendingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const playingKeyRef = useRef<string | null>(null)
   useEffect(() => {
@@ -134,29 +134,25 @@ export function PlayerView({
   // once playback has actually started, a transition back to idle/ended means
   // the mpv process is gone, so the bar should disappear with it.
   const startedRef = useRef(false)
-  // True from the end of an episode until the next one really plays (see below).
-  const chainingRef = useRef(false)
   useEffect(() => {
     const s = status.state
-    if (s === 'reconnecting' || s === 'playing' || s === 'paused') {
+    if (s === 'loading' || s === 'reconnecting' || s === 'playing' || s === 'paused') {
       startedRef.current = true
-      chainingRef.current = false
-    } else if (s === 'loading') {
-      // While chaining, 'loading' is not proof the new playback started: the
-      // 'idle' of the finished mpv can still arrive after it (measured).
-      if (!chainingRef.current) startedRef.current = true
-    } else if (s === 'error') {
-      chainingRef.current = false
-    } else if (startedRef.current && (s === 'idle' || s === 'ended')) {
+    } else if (startedRef.current && (s === 'idle' || s === 'ended') && !player.isStarting()) {
+      // Not while a source is being started: starting one stops the previous
+      // one first, and that 'idle' is not the end of the new playback. Without
+      // this guard, switching source (next episode, zapping, another channel)
+      // sometimes closed the bar — and with it the playback just requested.
       onClose()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a state change matters
   }, [status.state, onClose])
 
   // End of file → chain the next episode. Handled on the raw event, not on the
   // rendered state: 'ended' is followed at once by 'idle' (the finished mpv
   // exits) and React usually renders only the latter. When something else
-  // starts, the bar forgets it had started, so that 'idle' does not close it —
-  // even when it arrives after the next playback was requested.
+  // starts, the bar forgets it had started, so that 'idle' does not close it
+  // before the next playback is requested (after that, the guard above applies).
   const onEndedRef = useRef(onEnded)
   onEndedRef.current = onEnded
   useEffect(
@@ -164,7 +160,6 @@ export function PlayerView({
       api().player.onState((e) => {
         if (e.state === 'ended' && startedRef.current && onEndedRef.current?.()) {
           startedRef.current = false
-          chainingRef.current = true
         }
       }),
     []

@@ -53,11 +53,12 @@ export function createProgressSink(emit: EventEmitterFn): PlaybackProgressSink {
     },
 
     position(req, positionSecs, durationSecs, { ended, final }) {
-      if (req.streamId == null || req.mediaKind === 'live') return
+      const kind = req.mediaKind ?? 'movie'
+      if (req.streamId == null || (kind !== 'movie' && kind !== 'series')) return
       const update = progressUpdate(positionSecs, durationSecs, ended)
       if (update) {
         progressRepo.saveProgress({
-          ...snapshot(req, req.mediaKind === 'series' ? 'series' : 'movie'),
+          ...snapshot(req, kind),
           positionSecs: update.positionSecs,
           durationSecs,
           watched: update.watched

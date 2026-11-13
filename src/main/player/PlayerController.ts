@@ -84,6 +84,8 @@ const OBS = {
 const POSITION_THROTTLE_MS = 500
 /** How often the position of a movie / episode is saved while it plays. */
 const PROGRESS_REPORT_MS = 10_000
+const ARCHIVE_UNAVAILABLE =
+  'Rattrapage indisponible : le fournisseur n’a pas renvoyé l’archive de ce programme.'
 
 /** A typed error that maps to a clear PLAYER_ERROR for the renderer. */
 export class PlayerError extends Error {
@@ -278,6 +280,9 @@ export class PlayerController {
     let url: string
     if (req.mediaKind === 'live') {
       url = client.buildLiveUrl(req.streamId, req.containerExtension ?? 'ts')
+    } else if (req.mediaKind === 'archive') {
+      if (!req.archive) throw new PlayerError('Programme à revoir manquant.')
+      url = client.buildTimeshiftUrl(req.streamId, req.archive.start, req.archive.durationMin)
     } else if (req.mediaKind === 'series') {
       url = client.buildEpisodeUrl(req.streamId, req.containerExtension ?? 'mkv')
     } else {
@@ -590,10 +595,23 @@ export class PlayerController {
       )
       this.trackProgress(true)
       void this.teardown()
-      this.toError('Erreur de lecture mpv (codec ou réseau).')
+      this.toError(
+        this.currentReq?.mediaKind === 'archive'
+          ? ARCHIVE_UNAVAILABLE
+          : 'Erreur de lecture mpv (codec ou réseau).'
+      )
       return
     }
     if (e.reason === 'eof') {
+      // A catch-up that "ends" before playing anything: the provider answered
+      // with an empty body (measured: some channels announce an archive they
+      // do not serve). Say so instead of silently closing.
+      if (this.currentReq?.mediaKind === 'archive' && this.status.positionSecs < 1) {
+        appLog.warn('player', 'Rattrapage vide : le fournisseur n’a pas renvoyé l’archive')
+        void this.teardown()
+        this.toError(ARCHIVE_UNAVAILABLE)
+        return
+      }
       appLog.info('player', 'Fin de lecture (eof)')
       this.trackProgress(true, true)
       // Recording (if any) stops with the stream — clear the flag BEFORE emitting
@@ -627,6 +645,10 @@ export class PlayerController {
     // Already reported when the file ended; otherwise keep where it crashed.
     if (this.status.state !== 'ended' && this.status.state !== 'idle') this.trackProgress(true)
     await this.teardown()
+    // An error already shown must stay on screen: this exit is only the mpv of
+    // the failed playback going away (it used to reset the state to idle, which
+    // wiped the message and closed the bar).
+    if (this.status.state === 'error') return
     if (this.status.state === 'ended' || this.status.state === 'idle') {
       this.setState('idle')
     } else if (wasError) {

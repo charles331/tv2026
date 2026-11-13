@@ -160,6 +160,14 @@ describe('PlayerController — watch progress', () => {
     expect(args).toContain('--start=2587')
   })
 
+  it('keeps a playback error on screen when the failed mpv then exits', async () => {
+    await player.play(MOVIE)
+    h.ipcs[0].emit('end-file', { reason: 'error' })
+    h.procs[0].emit('exit', 0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(player.getStatus()).toMatchObject({ state: 'error', error: 'Erreur de lecture mpv (codec ou réseau).' })
+  })
+
   it('announces every playback request (recent channels)', async () => {
     await player.play(MOVIE)
     expect(started).toEqual([7])

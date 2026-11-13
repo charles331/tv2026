@@ -37,7 +37,9 @@ const realPlayback =
      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', videoPath],
     { stdio: 'ignore' }
   ).status === 0
-const provider = await startFakeProvider({ fail: ['series'], videos: realPlayback ? { 43: videoPath, 1000: videoPath, 1001: videoPath } : {}
+const provider = await startFakeProvider({ fail: ['series'], videos: realPlayback
+    ? { 43: videoPath, 1000: videoPath, 1001: videoPath, 'archive:103': videoPath }
+    : {}
 })
 const env = {
   ...process.env,
@@ -327,6 +329,42 @@ try {
     recentNames[0] === 'Regarder Solo TV' && recentNames.includes('Regarder Chaîne Test HD'),
     recentNames.join(' | ')
   )
+
+  // Rattrapage : « Revoir » dans le guide — archive servie, puis archive annoncée mais vide.
+  if (realPlayback) {
+    await page.getByRole('button', { name: /^Toutes les chaînes/ }).click()
+    const guideOfChannel = async (name) => {
+      const rowOf = page.locator('div.rounded-lg', { has: page.locator(`button[title="Regarder ${name}"]`) })
+      await rowOf.getByRole('button', { name: 'Guide', exact: true }).click()
+      await page
+        .getByRole('dialog')
+        .getByText('Émission passée')
+        .waitFor({ timeout: 10_000 })
+        .catch(async () => {
+          if (process.env.E2E_SHOT) await page.screenshot({ path: process.env.E2E_SHOT })
+          const shown = (await page.getByRole('dialog').count()) ? await page.getByRole('dialog').innerText() : '(aucun dialogue)'
+          throw new Error(`guide de ${name} sans « Émission passée » : ${shown.replace(/\s+/g, ' ').slice(0, 200)}`)
+        })
+    }
+    await guideOfChannel('Solo TV')
+    await page.getByRole('dialog').getByRole('button', { name: 'Revoir' }).click()
+    await waitPlaying()
+    const replay = await playerStatus()
+    check(
+      'Rattrapage : le programme passé est relu',
+      /Émission passée — Solo TV/.test(replay.title ?? '') && replay.durationSecs > 100,
+      `${replay.title} (${Math.round(replay.durationSecs ?? 0)} s)`
+    )
+    check('Rattrapage : pas de zapping sur un programme relu', (await page.getByRole('button', { name: 'Chaîne suivante' }).count()) === 0)
+    await closePlayer.click()
+    await page.waitForTimeout(600)
+    await guideOfChannel('Chaîne Test HD')
+    await page.getByRole('dialog').getByRole('button', { name: 'Revoir' }).click()
+    await page.getByText(/Rattrapage indisponible/).first().waitFor({ timeout: 20_000 }).catch(() => undefined)
+    check('Rattrapage : archive vide → message clair', /Rattrapage indisponible/.test(await body()))
+    if (await closePlayer.isVisible()) await closePlayer.click()
+    await page.waitForTimeout(600)
+  }
 
   // Nouveautés : 3 versions, les autres repliées.
   await page.getByRole('button', { name: /^Réglages/ }).first().click()

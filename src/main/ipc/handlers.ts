@@ -20,6 +20,7 @@ import { InvokeChannels, ok, err, episodeNeighbors } from '@shared/index'
 import type {
   AppSettings,
   ConnectionTestResult,
+  PlayMediaKind,
   PlayRequest,
   PlaySourceKind,
   XtreamCredentials
@@ -748,9 +749,9 @@ export const handlers: IpcHandlers = {
     assert(kind === 'local' || kind === 'stream', 'kind must be "local" or "stream"')
     const playReq: PlayRequest = {
       kind: kind as PlaySourceKind,
-      mediaKind: ((): 'movie' | 'series' | 'live' => {
+      mediaKind: ((): PlayMediaKind => {
         const m = optionalString(req, 'mediaKind')
-        return m === 'series' || m === 'live' ? m : 'movie'
+        return m === 'series' || m === 'live' || m === 'archive' ? m : 'movie'
       })(),
       filePath: optionalString(req, 'filePath'),
       streamId: optionalNumber(req, 'streamId'),
@@ -759,6 +760,14 @@ export const handlers: IpcHandlers = {
       startSecs: optionalNumber(req, 'startSecs'),
       image: optionalString(req, 'image', 2048) ?? null,
       seriesId: optionalNumber(req, 'seriesId')
+    }
+    if (playReq.mediaKind === 'archive') {
+      assert(kind === 'stream', 'a catch-up is always streamed')
+      assert(isObject(req.archive), 'archive is required for a catch-up')
+      playReq.archive = {
+        start: requireString(req.archive, 'start', 32),
+        durationMin: requireNumber(req.archive, 'durationMin')
+      }
     }
     if (kind === 'local') {
       assert(playReq.filePath !== undefined, 'filePath is required for local playback')

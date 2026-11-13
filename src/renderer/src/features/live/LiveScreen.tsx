@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import type { FavoriteItem, LiveCategory, LiveStream, VodCategory, WatchProgress } from '@shared/index'
+import type {
+  EpgEntry,
+  FavoriteItem,
+  LiveCategory,
+  LiveStream,
+  VodCategory,
+  WatchProgress
+} from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
 import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
@@ -68,10 +75,13 @@ function recentToLive(p: WatchProgress): LiveStream {
 
 export function LiveScreen({
   onPlayChannel,
+  onPlayArchive,
   onGoToSettings,
   initialQuery = ''
 }: {
   onPlayChannel: (channel: LiveStream) => void
+  /** Catch-up: replay an archived programme of a channel. */
+  onPlayArchive: (channel: LiveStream, programme: EpgEntry) => void
   onGoToSettings: () => void
   /** Query to start with ("Tout voir" from the global search). */
   initialQuery?: string
@@ -284,6 +294,10 @@ export function LiveScreen({
           onPlay={(c) => {
             setGuideChannel(null)
             onPlayChannel(c)
+          }}
+          onPlayArchive={(c, programme) => {
+            setGuideChannel(null)
+            onPlayArchive(c, programme)
           }}
         />
       )}

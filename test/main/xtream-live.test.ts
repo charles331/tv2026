@@ -42,6 +42,23 @@ describe('buildLiveUrl', () => {
   })
 })
 
+describe('buildTimeshiftUrl (catch-up)', () => {
+  const client = new XtreamClient(creds)
+  it('builds /timeshift/USER/PASS/{minutes}/{YYYY-MM-DD:HH-MM}/{id}.ts from the guide start', () => {
+    expect(client.buildTimeshiftUrl(148463, '2026-11-12 17:01:00', 39)).toBe(
+      'http://provider.test:8080/timeshift/user/pass/39/2026-11-12:17-01/148463.ts'
+    )
+  })
+  it('rejects a start that is not a guide timestamp (it goes into the URL path)', () => {
+    expect(() => client.buildTimeshiftUrl(1, '../../etc', 30)).toThrow()
+    expect(() => client.buildTimeshiftUrl(1, '2026-11-12T17:01', 30)).toThrow()
+  })
+  it('keeps the duration within sane bounds', () => {
+    expect(client.buildTimeshiftUrl(1, '2026-11-12 17:01:00', 0)).toContain('/1/2026-11-12:17-01/')
+    expect(client.buildTimeshiftUrl(1, '2026-11-12 17:01:00', 99999)).toContain('/720/2026-11-12:17-01/')
+  })
+})
+
 describe('getLiveCategories', () => {
   it('maps and coerces ids', async () => {
     requestMock.mockResolvedValueOnce(
@@ -109,9 +126,11 @@ describe('getShortEpg', () => {
             {
               title: b64('Film du soir'),
               description: '',
+              start: '2023-11-14 23:13:20',
               start_timestamp: '1700003600',
               stop_timestamp: '1700010800',
-              now_playing: '0'
+              now_playing: '0',
+              has_archive: 1
             }
           ]
         })
@@ -125,9 +144,13 @@ describe('getShortEpg', () => {
       startSecs: 1700000000,
       endSecs: 1700003600,
       nowPlaying: true,
-      epgId: null
+      epgId: null,
+      hasArchive: false,
+      startText: null
     })
     expect(epg[1].title).toBe('Film du soir')
+    // Catch-up: the archive flag, and the start exactly as the provider wrote it.
+    expect(epg[1]).toMatchObject({ hasArchive: true, startText: '2023-11-14 23:13:20' })
     expect(epg[1].description).toBeNull()
     expect(epg[1].nowPlaying).toBe(false)
   })

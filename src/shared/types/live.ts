@@ -44,6 +44,16 @@ export interface EpgEntry {
   nowPlaying: boolean
   /** Provider EPG id (`id`/`epg_id`) if present — not guaranteed stable. */
   epgId: string | null
+  /**
+   * The provider says it keeps a recording of this programme (catch-up). Not a
+   * guarantee: some channels announce an archive and return nothing.
+   */
+  hasArchive?: boolean
+  /**
+   * Start exactly as the provider wrote it ("YYYY-MM-DD HH:MM:SS", in ITS
+   * timezone) — the catch-up URL wants that, not a time we would recompute.
+   */
+  startText?: string | null
 }
 
 /** Listing request for live channels, with optional category filter. */

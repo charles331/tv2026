@@ -49,6 +49,8 @@ const USER_AGENT =
 
 /** Timeouts (ms). Metadata is small JSON, but get_vod_streams can be a few MB. */
 const HEADERS_TIMEOUT_MS = 15_000
+/** Longest catch-up window asked from the provider, in minutes. */
+const TIMESHIFT_MAX_MIN = 720
 const BODY_TIMEOUT_MS = 60_000
 
 /** Normalized account info returned by getAccountInfo(). */
@@ -403,6 +405,23 @@ export class XtreamClient {
     return u.toString()
   }
 
+  /**
+   * Build the catch-up URL of a past programme:
+   * `/timeshift/USER/PASS/{minutes}/{YYYY-MM-DD:HH-MM}/{streamId}.ts`.
+   * `startText` is the guide's own `start` ("YYYY-MM-DD HH:MM:SS", provider
+   * timezone), passed through untouched: recomputing it from the epoch would
+   * need the provider's timezone. Measured on the real provider: some channels
+   * answer with the video, others with an empty body despite `has_archive`.
+   */
+  buildTimeshiftUrl(streamId: number, startText: string, durationMin: number): string {
+    const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})(?::\d{2})?$/.exec(startText.trim())
+    if (!m) throw new XtreamError('MALFORMED', 'Heure de début du programme illisible.')
+    const minutes = Math.min(TIMESHIFT_MAX_MIN, Math.max(1, Math.round(durationMin)))
+    return `${this.baseUrl}/timeshift/${encodeURIComponent(this.creds.username)}/${encodeURIComponent(
+      this.creds.password
+    )}/${minutes}/${m[1]}:${m[2]}-${m[3]}/${streamId}.ts`
+  }
+
   buildLiveUrl(streamId: number, ext = 'ts'): string {
     const cleanExt = ext.replace(/^\.+/, '').trim() || 'ts'
     return `${this.baseUrl}/live/${encodeURIComponent(this.creds.username)}/${encodeURIComponent(
@@ -640,7 +659,9 @@ export class XtreamClient {
       startSecs: toInt(l.start_timestamp),
       endSecs: toInt(l.stop_timestamp),
       nowPlaying: toInt(l.now_playing) === 1,
-      epgId: rawEpgId === null || rawEpgId === '' ? null : String(rawEpgId)
+      epgId: rawEpgId === null || rawEpgId === '' ? null : String(rawEpgId),
+      hasArchive: toInt(l.has_archive) === 1,
+      startText: nonEmpty(l.start ?? null)
     }
   }
 }

@@ -4,7 +4,7 @@
  * button that opens the matching tab with the same query.
  */
 import { useState, type ReactElement, type ReactNode } from 'react'
-import type { LiveStream, SeriesStream, VodStream } from '@shared/index'
+import type { EpgEntry, LiveStream, SeriesStream, VodStream } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
 import { useDownloads } from '../../lib/downloads'
@@ -64,6 +64,7 @@ export function SearchScreen({
   onSelectMovie,
   onSelectSeries,
   onPlayChannel,
+  onPlayArchive,
   onSeeAll
 }: {
   /** Kept by the app so the search survives a detour to another tab. */
@@ -72,6 +73,8 @@ export function SearchScreen({
   onSelectMovie: (stream: VodStream) => void
   onSelectSeries: (series: SeriesStream) => void
   onPlayChannel: (channel: LiveStream) => void
+  /** Catch-up: replay an archived programme of a channel. */
+  onPlayArchive: (channel: LiveStream, programme: EpgEntry) => void
   onSeeAll: (target: SearchTarget, query: string) => void
 }): ReactElement {
   const query = useDebounced(rawQuery, 300).trim()
@@ -189,6 +192,10 @@ export function SearchScreen({
           onPlay={(c) => {
             setGuideChannel(null)
             onPlayChannel(c)
+          }}
+          onPlayArchive={(c, programme) => {
+            setGuideChannel(null)
+            onPlayArchive(c, programme)
           }}
         />
       )}
