@@ -4,6 +4,8 @@ import { Poster, Badge, IconStar, IconCheck } from '../../components/ui'
 import { formatRating } from '../../lib/format'
 import { LowQualityTag, PosterFileLabel } from '../movie/quality'
 import { useFileCheck } from '../../lib/fileChecks'
+import { useProgress } from '../../lib/progress'
+import { WatchProgressBar } from '../progress/ProgressBar'
 
 function PosterCardImpl({
   stream,
@@ -19,6 +21,7 @@ function PosterCardImpl({
   const sizeBytes = known?.sizeBytes ?? stream.fileSizeBytes
   const durationSecs = known ? known.durationSecs : stream.fileDurationSecs
   const video = known?.video ?? stream.fileVideo
+  const watchProgress = useProgress().get('movie', stream.streamId)
   return (
     <button
       type="button"
@@ -43,6 +46,11 @@ function PosterCardImpl({
                 <IconCheck size={11} /> Téléchargé
               </Badge>
             )}
+            {watchProgress?.watched && (
+              <Badge tone="neutral" className="backdrop-blur">
+                <IconCheck size={11} /> Vu
+              </Badge>
+            )}
             <LowQualityTag name={stream.name} />
           </div>
         </div>
@@ -51,6 +59,10 @@ function PosterCardImpl({
             <PosterFileLabel sizeBytes={sizeBytes} durationSecs={durationSecs} video={video} />
           </div>
         ) : null}
+        <WatchProgressBar
+          progress={watchProgress}
+          className="pointer-events-none absolute inset-x-0 bottom-0 rounded-none bg-black/60"
+        />
       </div>
       <div className="mt-2 w-full min-w-0 px-0.5">
         <p className="truncate text-sm font-medium text-gray-100 group-hover:text-white">

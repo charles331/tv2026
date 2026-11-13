@@ -31,6 +31,7 @@ import {
   seriesRepo,
   liveRepo,
   favoritesRepo,
+  progressRepo,
   downloadsRepo,
   remindersRepo
 } from '../store'
@@ -82,6 +83,13 @@ function fromXtreamError(e: unknown): ReturnType<typeof err> {
     return err(toErrorCode(e.kind), e.message, e.details)
   }
   throw e
+}
+
+/** Validate the `kind` of a watch-progress request. */
+function requireProgressKind(req: Record<string, unknown>): 'movie' | 'series' | 'live' {
+  const kind = requireString(req, 'kind', 16)
+  assert(kind === 'movie' || kind === 'series' || kind === 'live', 'invalid kind')
+  return kind
 }
 
 /**
@@ -483,6 +491,37 @@ export const handlers: IpcHandlers = {
     return ok({ ok: true as const })
   },
 
+  // ---------------- watch progress (local, SQLite) ----------------
+  [InvokeChannels.PROGRESS_LIST]: () => ok(progressRepo.listProgress()),
+
+  [InvokeChannels.PROGRESS_CLEAR]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    progressRepo.removeProgress(requireProgressKind(req), requireInt(req, 'itemId'))
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.PROGRESS_SET_WATCHED]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    const kind = requireProgressKind(req)
+    const itemId = requireInt(req, 'itemId')
+    if (optionalBoolean(req, 'watched') === false) {
+      progressRepo.removeProgress(kind, itemId)
+    } else {
+      progressRepo.saveProgress({
+        kind,
+        itemId,
+        positionSecs: 0,
+        durationSecs: null,
+        watched: true,
+        name: requireString(req, 'name', 512),
+        image: optionalString(req, 'image', 2048) ?? null,
+        containerExtension: optionalString(req, 'containerExtension', 16) ?? null,
+        seriesId: optionalNumber(req, 'seriesId') ?? null
+      })
+    }
+    return ok({ ok: true as const })
+  },
+
   // ---------------- reminders / scheduled recordings (local, SQLite) ----------------
   [InvokeChannels.REMINDERS_LIST]: () => ok(remindersRepo.listReminders()),
 
@@ -697,7 +736,9 @@ export const handlers: IpcHandlers = {
       streamId: optionalNumber(req, 'streamId'),
       containerExtension: optionalString(req, 'containerExtension', 16),
       title: optionalString(req, 'title', 512),
-      startSecs: optionalNumber(req, 'startSecs')
+      startSecs: optionalNumber(req, 'startSecs'),
+      image: optionalString(req, 'image', 2048) ?? null,
+      seriesId: optionalNumber(req, 'seriesId')
     }
     if (kind === 'local') {
       assert(playReq.filePath !== undefined, 'filePath is required for local playback')

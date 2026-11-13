@@ -209,6 +209,22 @@ const api: RendererApi = {
       >
   },
 
+  progress: {
+    list: () =>
+      invoke(InvokeChannels.PROGRESS_LIST) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PROGRESS_LIST>>
+      >,
+    clear: (kind, itemId) =>
+      invoke(InvokeChannels.PROGRESS_CLEAR, { kind, itemId }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PROGRESS_CLEAR>>
+      >,
+    setWatched: (req) =>
+      invoke(InvokeChannels.PROGRESS_SET_WATCHED, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PROGRESS_SET_WATCHED>>
+      >,
+    onChanged: (cb) => subscribe(EventChannels.PROGRESS_CHANGED, () => cb())
+  },
+
   reminders: {
     list: () =>
       invoke(InvokeChannels.REMINDERS_LIST) as Promise<

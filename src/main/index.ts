@@ -22,6 +22,7 @@ import {
 import { connectionLock } from './lock/ConnectionLock'
 import { downloadManager } from './downloads/DownloadManager'
 import { playerController } from './player/PlayerController'
+import { createProgressSink } from './player/progressTracker'
 import { reminderScheduler } from './reminders/ReminderScheduler'
 import { initAutoUpdates } from './updater'
 import { appLog } from './log/logger'
@@ -172,6 +173,7 @@ if (!gotLock) {
     // window. Playback acquires the connection lock; the download queue pauses
     // while the player holds it (handled in DownloadManager via the lock).
     playerController.attach(makeEmitter(getWindows))
+    playerController.attachProgress(createProgressSink(makeEmitter(getWindows)))
 
     // Wire + start the reminder/recording scheduler: native notifications at
     // start−lead, scheduled headless recordings (padding + ConnectionLock +

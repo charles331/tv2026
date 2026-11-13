@@ -1,9 +1,11 @@
 import { useState, type ReactElement } from 'react'
-import type { FavoriteItem, SeriesCategory, SeriesStream, VodCategory } from '@shared/index'
+import type { FavoriteItem, SeriesCategory, SeriesStream, VodCategory, WatchProgress } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
 import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
 import { FavoritesView } from '../favorites/FavoritesView'
+import { useProgress, CONTINUE_CATEGORY_ID } from '../../lib/progress'
+import { ContinueView } from '../progress/ContinueView'
 import {
   Button,
   TextInput,
@@ -54,10 +56,13 @@ function favToSeries(f: FavoriteItem): SeriesStream {
 
 export function SeriesScreen({
   onSelectSeries,
+  onResume,
   onGoToSettings,
   initialQuery = ''
 }: {
   onSelectSeries: (series: SeriesStream) => void
+  /** Resume an episode started earlier ("Reprendre"). */
+  onResume: (item: WatchProgress) => void
   onGoToSettings: () => void
   /** Query to start with ("Tout voir" from the global search). */
   initialQuery?: string
@@ -70,6 +75,11 @@ export function SeriesScreen({
 
   const favorites = useFavorites()
   const isFavorites = categoryId === FAVORITES_CATEGORY_ID
+  // "Reprendre": started but not finished. Like Favoris, it is a list of its
+  // own (no catalogue query, no search / sort).
+  const inProgressCount = useProgress().inProgress('series').length
+  const isContinue = categoryId === CONTINUE_CATEGORY_ID
+  const isPinned = isFavorites || isContinue
 
   const categoriesState = useAsync<SeriesCategory[]>(
     () => api().series.listCategories().then(unwrap),
@@ -77,8 +87,8 @@ export function SeriesScreen({
   )
 
   const feed = useSeriesFeed({
-    categoryId: isFavorites ? null : categoryId,
-    query: isFavorites ? '' : query,
+    categoryId: isPinned ? null : categoryId,
+    query: isPinned ? '' : query,
     sortBy,
     sortDir
   })
@@ -100,6 +110,11 @@ export function SeriesScreen({
         onSelect={setCategoryId}
         allLabel="Toutes les séries"
         favoritesCount={favorites.count('series')}
+        pinned={
+          inProgressCount > 0 || isContinue
+            ? [{ id: CONTINUE_CATEGORY_ID, label: '▶ Reprendre', count: inProgressCount }]
+            : []
+        }
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -113,13 +128,13 @@ export function SeriesScreen({
               placeholder="Rechercher une série…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
-              disabled={isFavorites}
+              disabled={isPinned}
             />
           </div>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as typeof sort)}
-            disabled={isFavorites}
+            disabled={isPinned}
             className="h-10 rounded-lg border border-white/10 bg-surface-sunken px-3 text-sm text-gray-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/70 disabled:opacity-40"
             title="Trier"
           >
@@ -138,6 +153,11 @@ export function SeriesScreen({
                 <span className="text-gray-200">★ Favoris</span>
                 <span className="ml-2 text-gray-600">· {favorites.count('series')} séries</span>
               </>
+            ) : isContinue ? (
+              <>
+                <span className="text-gray-200">▶ Reprendre</span>
+                <span className="ml-2 text-gray-600">· {inProgressCount} épisodes</span>
+              </>
             ) : isSearching ? (
               <>
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
@@ -145,7 +165,7 @@ export function SeriesScreen({
             ) : (
               <span className="text-gray-200">{selectedCategoryName}</span>
             )}
-            {!isFavorites && !feed.loading && !feed.error && (
+            {!isPinned && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} séries</span>
             )}
           </span>
@@ -154,6 +174,8 @@ export function SeriesScreen({
         <div className="min-h-0 flex-1 px-4 pb-2 pt-2">
           {isFavorites ? (
             <FavoritesView kind="series" onActivate={(f) => onSelectSeries(favToSeries(f))} />
+          ) : isContinue ? (
+            <ContinueView kind="series" onResume={onResume} />
           ) : feed.loading ? (
             <LoadingState label="Chargement des séries…" />
           ) : feed.error ? (

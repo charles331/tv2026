@@ -62,6 +62,11 @@ export const InvokeChannels = {
   FAVORITES_ADD: 'favorites:add',
   FAVORITES_REMOVE: 'favorites:remove',
 
+  // --- watch progress (resume position, watched, recent channels) ---
+  PROGRESS_LIST: 'progress:list',
+  PROGRESS_CLEAR: 'progress:clear',
+  PROGRESS_SET_WATCHED: 'progress:setWatched',
+
   // --- reminders / scheduled recordings ---
   REMINDERS_LIST: 'reminders:list',
   REMINDERS_ADD: 'reminders:add',
@@ -120,6 +125,8 @@ export const EventChannels = {
   RECORDING_CONFLICT: 'event:recording:conflict',
   /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */
   RECORDING_CONFLICT_RESOLVED: 'event:recording:conflictResolved',
+  /** A watch-progress row changed for good (playback stopped, channel started). */
+  PROGRESS_CHANGED: 'event:progress:changed',
   /** App-update lifecycle: available / downloading (progress) / downloaded / error. */
   UPDATE_STATUS: 'event:update:status'
 } as const

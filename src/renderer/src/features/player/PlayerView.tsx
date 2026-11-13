@@ -83,7 +83,7 @@ export function PlayerView({
   // was starting; the resulting "idle" then closed this bar, whose unmount
   // stopped the second mpv too: nothing ever played under `pnpm dev`.
   // A real unmount, or a change of source, still stops (on the next tick).
-  const sourceKey = `${request.kind}|${request.streamId ?? ''}|${request.filePath ?? ''}`
+  const sourceKey = `${request.kind}|${request.streamId ?? ''}|${request.filePath ?? ''}|${request.startSecs ?? ''}`
   const pendingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const playingKeyRef = useRef<string | null>(null)
   useEffect(() => {

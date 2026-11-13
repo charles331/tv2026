@@ -60,6 +60,7 @@ import { appLog } from '../log/logger'
 import { resolveMpvBinary } from './mpvBinary'
 import { mpvPlatformArgs } from './mpvPlatform'
 import { MpvIpc, type MpvEndFile, type MpvPropertyChange } from './mpvIpc'
+import type { PlaybackProgressSink } from './progressTracker'
 
 /** Typed emitter (shared shape from the IPC contract). */
 export type PlayerEventEmitter = EventEmitterFn
@@ -81,6 +82,8 @@ const OBS = {
 
 /** ms between throttled position events to the renderer. */
 const POSITION_THROTTLE_MS = 500
+/** How often the position of a movie / episode is saved while it plays. */
+const PROGRESS_REPORT_MS = 10_000
 
 /** A typed error that maps to a clear PLAYER_ERROR for the renderer. */
 export class PlayerError extends Error {
@@ -109,6 +112,9 @@ export class PlayerController {
    * stop must never trigger a reconnect).
    */
   private currentReq: PlayRequest | null = null
+  /** Where watch progress is reported (wired from main/index.ts; null in tests). */
+  private progress: PlaybackProgressSink | null = null
+  private lastProgressReport = 0
   /** Consecutive live-reconnect attempts (drives the backoff; reset on success). */
   private retryAttempt = 0
   /** Pending live-reconnect timer, if any. */
@@ -136,6 +142,29 @@ export class PlayerController {
    */
   attach(emit: PlayerEventEmitter): void {
     this.emit = emit
+  }
+
+  /** Wire the watch-progress store (resume positions, recent channels). */
+  attachProgress(sink: PlaybackProgressSink): void {
+    this.progress = sink
+  }
+
+  /**
+   * Report the current position of a movie / episode to the progress store.
+   * Throttled while playing; `final` forces it (stop, end, crash). Must run
+   * BEFORE `currentReq` is cleared. Never throws: progress is a nicety.
+   */
+  private trackProgress(final: boolean, ended = false): void {
+    const req = this.currentReq
+    if (!this.progress || !req) return
+    const now = Date.now()
+    if (!final && now - this.lastProgressReport < PROGRESS_REPORT_MS) return
+    this.lastProgressReport = now
+    try {
+      this.progress.position(req, this.status.positionSecs, this.status.durationSecs, { ended, final })
+    } catch (e) {
+      appLog.warn('player', `Progression non enregistrée : ${describeError(e)}`)
+    }
   }
 
   /** Current snapshot of the player state. */
@@ -179,9 +208,18 @@ export class PlayerController {
     this.currentAid = null
     this.currentSid = null
     this.lastPaused = false
+    try {
+      this.progress?.started(req)
+    } catch (e) {
+      appLog.warn('player', `Chaîne récente non enregistrée : ${describeError(e)}`)
+    }
     this.setState('loading', {
       source: req.kind,
       title: req.title ?? null,
+      // New media: never carry the previous one's position (it would be saved
+      // as this one's watch progress if playback stopped before the first tick).
+      positionSecs: 0,
+      durationSecs: null,
       // New media: forget the previous one's buffer and audio track.
       bufferedSecs: null,
       audioTrack: null
@@ -321,11 +359,6 @@ export class PlayerController {
     this.wireIpc(ipc, req.kind, session)
     await this.observeProperties(ipc)
 
-    // Apply optional start position (resume).
-    if (typeof req.startSecs === 'number' && req.startSecs > 0) {
-      await ipc.command(['seek', req.startSecs, 'absolute']).catch(() => undefined)
-    }
-
     // We don't flip to 'playing' here; the pause property observer drives the
     // authoritative playing/paused state once mpv starts decoding.
   }
@@ -382,6 +415,11 @@ export class PlayerController {
     if (this.status.volume !== 100) args.push(`--volume=${this.status.volume}`)
     if (this.status.muted) args.push('--mute=yes')
     if (this.status.fullscreen) args.push('--fullscreen=yes')
+    // Resume: a launch option, so it applies as soon as the file opens (a seek
+    // sent over IPC right after connecting raced with the file still loading).
+    if (typeof req.startSecs === 'number' && req.startSecs > 0) {
+      args.push(`--start=${Math.floor(req.startSecs)}`)
+    }
 
     args.push(url)
     return args
@@ -465,6 +503,7 @@ export class PlayerController {
         if (pos !== null) {
           this.status.positionSecs = pos
           this.maybeEmitPosition()
+          if (this.status.state === 'playing') this.trackProgress(false)
         }
         break
       }
@@ -549,12 +588,14 @@ export class PlayerController {
           this.lastStderrTail.length ? ` — stderr : ${this.lastStderrTail.join(' | ')}` : ''
         }`
       )
+      this.trackProgress(true)
       void this.teardown()
       this.toError('Erreur de lecture mpv (codec ou réseau).')
       return
     }
     if (e.reason === 'eof') {
       appLog.info('player', 'Fin de lecture (eof)')
+      this.trackProgress(true, true)
       // Recording (if any) stops with the stream — clear the flag BEFORE emitting
       // 'ended' so the renderer never briefly shows "ended" while still REC.
       this.recordingPath = null
@@ -583,6 +624,8 @@ export class PlayerController {
     // mpv process gone. If it ended cleanly we keep 'ended'; otherwise error
     // unless we're already idle (a stop() we initiated).
     const wasError = code !== null && code !== 0
+    // Already reported when the file ended; otherwise keep where it crashed.
+    if (this.status.state !== 'ended' && this.status.state !== 'idle') this.trackProgress(true)
     await this.teardown()
     if (this.status.state === 'ended' || this.status.state === 'idle') {
       this.setState('idle')
@@ -841,6 +884,8 @@ export class PlayerController {
     // so a user stop can never trigger a reconnect (even mid-backoff, when no
     // proc/ipc/lock is held). Bumping the session abandons an in-flight attempt.
     this.clearRetryTimer()
+    // Keep where the user stopped (unless the file already ended: reported then).
+    if (this.status.state !== 'ended' && this.status.state !== 'idle') this.trackProgress(true)
     this.currentReq = null
     this.retryAttempt = 0
     this.sessionId++

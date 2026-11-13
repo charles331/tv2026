@@ -6,9 +6,12 @@
  *
  * `fail` lists catalogues whose refresh must fail (HTTP 500): 'movies',
  * 'series', 'live'.
+ * `videos` maps a movie or episode id to a real video file, served with Range
+ * support so mpv can really play (and seek in) it.
  */
 /* global URL */
 import { createServer } from 'node:http'
+import { createReadStream, statSync } from 'node:fs'
 
 export const MOVIES = [
   { stream_id: 42, name: 'FR - Le Film Test (2026)', category_id: 1, container_extension: 'mkv', duration: '01:40:00', size: 1_800_000_000 },
@@ -40,7 +43,26 @@ function xmltv() {
   )
 }
 
-export function startFakeProvider({ fail = [] } = {}) {
+/** Serve a real file, honouring a `Range: bytes=a-b` request. */
+function serveFile(req, res, path) {
+  const size = statSync(path).size
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '')
+  if (!range) {
+    res.writeHead(200, { 'content-length': size, 'accept-ranges': 'bytes', 'content-type': 'video/mp4' })
+    return createReadStream(path).pipe(res)
+  }
+  const start = range[1] ? Number(range[1]) : 0
+  const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
+  res.writeHead(206, {
+    'content-range': `bytes ${start}-${end}/${size}`,
+    'content-length': end - start + 1,
+    'accept-ranges': 'bytes',
+    'content-type': 'video/mp4'
+  })
+  return createReadStream(path, { start, end }).pipe(res)
+}
+
+export function startFakeProvider({ fail = [], videos = {} } = {}) {
   const json = (res, body, status = 200) => {
     res.writeHead(status, { 'content-type': 'application/json' })
     res.end(JSON.stringify(body))
@@ -96,6 +118,8 @@ export function startFakeProvider({ fail = [] } = {}) {
           return json(res, [])
       }
     }
+    const media = /^\/(?:movie|series)\/[^/]+\/[^/]+\/(\d+)\.\w+$/.exec(url.pathname)
+    if (media && videos[media[1]]) return serveFile(req, res, videos[media[1]])
     const movie = /^\/movie\/[^/]+\/[^/]+\/(\d+)\.\w+$/.exec(url.pathname)
     if (movie) {
       const m = MOVIES.find((x) => x.stream_id === Number(movie[1]))

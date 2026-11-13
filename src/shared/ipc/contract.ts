@@ -53,6 +53,7 @@ import type {
   ShortEpgRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind, FavoriteRef } from '../types/favorites'
+import type { ProgressRef, SetWatchedRequest, WatchProgress } from '../types/progress'
 import type { ListLogsRequest, LogEntry, WriteLogRequest } from '../types/logs'
 import type {
   AddReminderRequest,
@@ -149,6 +150,11 @@ export interface IpcContract {
   [InvokeChannels.FAVORITES_ADD]: { request: AddFavoriteRequest; response: { ok: true } }
   [InvokeChannels.FAVORITES_REMOVE]: { request: FavoriteRef; response: { ok: true } }
 
+  // watch progress
+  [InvokeChannels.PROGRESS_LIST]: { request: void; response: WatchProgress[] }
+  [InvokeChannels.PROGRESS_CLEAR]: { request: ProgressRef; response: { ok: true } }
+  [InvokeChannels.PROGRESS_SET_WATCHED]: { request: SetWatchedRequest; response: { ok: true } }
+
   // reminders / scheduled recordings
   [InvokeChannels.REMINDERS_LIST]: { request: void; response: Reminder[] }
   [InvokeChannels.REMINDERS_ADD]: { request: AddReminderRequest; response: Reminder }
@@ -216,6 +222,7 @@ export interface EventContract {
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
+  [EventChannels.PROGRESS_CHANGED]: Record<string, never>
   [EventChannels.UPDATE_STATUS]: UpdateStatusEvent
 }
 

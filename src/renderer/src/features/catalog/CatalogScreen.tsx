@@ -1,10 +1,12 @@
 import { useState, type ReactElement } from 'react'
-import type { FavoriteItem, VodCategory, VodStream } from '@shared/index'
+import type { FavoriteItem, VodCategory, VodStream, WatchProgress } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
 import { useDownloads } from '../../lib/downloads'
 import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
 import { FavoritesView } from '../favorites/FavoritesView'
+import { useProgress, CONTINUE_CATEGORY_ID } from '../../lib/progress'
+import { ContinueView } from '../progress/ContinueView'
 import {
   Button,
   TextInput,
@@ -44,10 +46,13 @@ function favToVodStream(f: FavoriteItem): VodStream {
 
 export function CatalogScreen({
   onSelectMovie,
+  onResume,
   onGoToSettings,
   initialQuery = ''
 }: {
   onSelectMovie: (stream: VodStream) => void
+  /** Resume a movie started earlier ("Reprendre"). */
+  onResume: (item: WatchProgress) => void
   onGoToSettings: () => void
   /** Query to start with ("Tout voir" from the global search). */
   initialQuery?: string
@@ -61,6 +66,11 @@ export function CatalogScreen({
   const { downloadedStreamIds } = useDownloads()
   const favorites = useFavorites()
   const isFavorites = categoryId === FAVORITES_CATEGORY_ID
+  // "Reprendre": started but not finished. Like Favoris, it is a list of its
+  // own (no catalogue query, no search / sort).
+  const inProgressCount = useProgress().inProgress('movie').length
+  const isContinue = categoryId === CONTINUE_CATEGORY_ID
+  const isPinned = isFavorites || isContinue
 
   const categoriesState = useAsync<VodCategory[]>(
     () => api().catalog.listCategories().then(unwrap),
@@ -68,8 +78,8 @@ export function CatalogScreen({
   )
 
   const feed = useStreamFeed({
-    categoryId: isFavorites ? null : categoryId,
-    query: isFavorites ? '' : query,
+    categoryId: isPinned ? null : categoryId,
+    query: isPinned ? '' : query,
     sortBy,
     sortDir
   })
@@ -90,6 +100,11 @@ export function CatalogScreen({
         selectedId={categoryId}
         onSelect={setCategoryId}
         favoritesCount={favorites.count('movie')}
+        pinned={
+          inProgressCount > 0 || isContinue
+            ? [{ id: CONTINUE_CATEGORY_ID, label: '▶ Reprendre', count: inProgressCount }]
+            : []
+        }
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -104,13 +119,13 @@ export function CatalogScreen({
               placeholder="Rechercher un film…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
-              disabled={isFavorites}
+              disabled={isPinned}
             />
           </div>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as typeof sort)}
-            disabled={isFavorites}
+            disabled={isPinned}
             className="h-10 rounded-lg border border-white/10 bg-surface-sunken px-3 text-sm text-gray-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/70 disabled:opacity-40"
             title="Trier"
           >
@@ -130,6 +145,11 @@ export function CatalogScreen({
                 <span className="text-gray-200">★ Favoris</span>
                 <span className="ml-2 text-gray-600">· {favorites.count('movie')} films</span>
               </>
+            ) : isContinue ? (
+              <>
+                <span className="text-gray-200">▶ Reprendre</span>
+                <span className="ml-2 text-gray-600">· {inProgressCount} films</span>
+              </>
             ) : isSearching ? (
               <>
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
@@ -137,7 +157,7 @@ export function CatalogScreen({
             ) : (
               <span className="text-gray-200">{selectedCategoryName}</span>
             )}
-            {!isFavorites && !feed.loading && !feed.error && (
+            {!isPinned && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} films</span>
             )}
           </span>
@@ -147,6 +167,8 @@ export function CatalogScreen({
         <div className="min-h-0 flex-1 px-4 pb-2 pt-2">
           {isFavorites ? (
             <FavoritesView kind="movie" onActivate={(f) => onSelectMovie(favToVodStream(f))} />
+          ) : isContinue ? (
+            <ContinueView kind="movie" onResume={onResume} />
           ) : feed.loading ? (
             <LoadingState label="Chargement du catalogue…" />
           ) : feed.error ? (

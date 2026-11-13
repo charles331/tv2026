@@ -48,6 +48,7 @@ import type {
   SearchLiveRequest
 } from '../types/live'
 import type { AddFavoriteRequest, FavoriteItem, FavoriteKind } from '../types/favorites'
+import type { ProgressKind, SetWatchedRequest, WatchProgress } from '../types/progress'
 import type { LogEntry, LogLevel } from '../types/logs'
 import type {
   AddReminderRequest,
@@ -169,6 +170,17 @@ export interface FavoritesApi {
   remove(kind: FavoriteKind, itemId: number): Promise<Result<{ ok: true }>>
 }
 
+export interface ProgressApi {
+  /** Every watch-progress row, most recent first. */
+  list(): Promise<Result<WatchProgress[]>>
+  /** Forget an item's progress (start over / remove from "Reprendre"). */
+  clear(kind: ProgressKind, itemId: number): Promise<Result<{ ok: true }>>
+  /** Mark an item watched / not watched by hand. */
+  setWatched(req: SetWatchedRequest): Promise<Result<{ ok: true }>>
+  /** A row changed (playback stopped, a channel was started). */
+  onChanged(cb: () => void): Unsubscribe
+}
+
 export interface RemindersApi {
   /** All reminders/recordings, newest start first. */
   list(): Promise<Result<Reminder[]>>
@@ -271,6 +283,7 @@ export interface RendererApi {
   series: SeriesApi
   live: LiveApi
   favorites: FavoritesApi
+  progress: ProgressApi
   reminders: RemindersApi
   logs: LogsApi
   downloads: DownloadsApi

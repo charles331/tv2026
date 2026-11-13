@@ -7,10 +7,11 @@
  * The XTREAM_* environment variables take priority over the repo's .env in dev
  * builds (see src/main/secrets/credentials.ts), so the app talks to the fake.
  */
-/* global process, console, document */
+/* global process, console, document, window */
 import { _electron as electron } from 'playwright'
 import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startFakeProvider } from './fakeProvider.mjs'
@@ -21,8 +22,22 @@ function check(label, ok, detail = '') {
   if (!ok) failures.push(label)
 }
 
-const provider = await startFakeProvider({ fail: ['series'] })
 const profile = mkdtempSync(join(tmpdir(), 'tv2026-e2e-'))
+
+// A real 200 s video (tiny test pattern) so mpv can really play, seek and end.
+// Needs ffmpeg + mpv; without them the real-playback checks are skipped.
+const videoPath = join(profile, 'video.mp4')
+const hasTool = (name) => spawnSync(name, ['-version'], { stdio: 'ignore' }).status === 0
+const realPlayback =
+  hasTool('ffmpeg') &&
+  spawnSync('mpv', ['--version'], { stdio: 'ignore' }).status === 0 &&
+  spawnSync(
+    'ffmpeg',
+    ['-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=160x90:rate=5', '-t', '200',
+     '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', videoPath],
+    { stdio: 'ignore' }
+  ).status === 0
+const provider = await startFakeProvider({ fail: ['series'], videos: realPlayback ? { 43: videoPath } : {} })
 const env = {
   ...process.env,
   XTREAM_URL: provider.url,
@@ -58,12 +73,37 @@ try {
   q.run(42, 'FR - Le Film Test (2026)', 'film.mkv', join(profile, 'film.mkv'), 'paused', 400, now, now, 'movie')
   q.run(1000, 'La Série Test S01E01', 'ep.mkv', join(profile, 'ep.mkv'), 'completed', 1000, now, now, 'series')
   q.run(99, 'Film disparu', 'gone.mkv', join(profile, 'gone.mkv'), 'failed', 0, now, now, 'movie')
+  // Un film commencé (43:12 sur 1 h 40) : à reprendre.
+  db.prepare(
+    `INSERT INTO watch_progress (kind,item_id,position_secs,duration_secs,watched,updated_at,name,container_extension)
+     VALUES ('movie',42,2592,6000,0,?,'FR - Le Film Test (2026)','mkv')`
+  ).run(now)
   db.close()
 
   app = await launch()
   const page = await app.firstWindow()
   await page.waitForTimeout(2500)
   const body = () => page.locator('body').innerText()
+  // La barre de lecture se ferme par « Arrêter », ou « Fermer » si la lecture a échoué.
+  const closePlayer = page.getByRole('button', { name: /^(Arrêter|Fermer)$/ })
+  const playerStatus = async () => (await page.evaluate(() => window.api.player.status())).data
+  // Attendre que mpv lise vraiment (« playing » arrive avant le chargement du fichier).
+  const waitPlaying = async () => {
+    for (let i = 0; i < 150; i++) {
+      const s = await playerStatus()
+      if (s.state === 'playing' && s.positionSecs > 0.3) return
+      await page.waitForTimeout(200)
+    }
+    throw new Error('la lecture n’a pas démarré')
+  }
+  const progressOf = (kind, id) => {
+    const ro = new Database(join(profile, 'tv2026.db'), { readonly: true })
+    try {
+      return ro.prepare('SELECT * FROM watch_progress WHERE kind = ? AND item_id = ?').get(kind, id)
+    } finally {
+      ro.close()
+    }
+  }
 
   // « Tout mettre à jour » : séries en panne, films et chaînes quand même à jour.
   await page.getByRole('button', { name: /^Tout mettre à jour/ }).first().click()
@@ -90,9 +130,63 @@ try {
   await page.getByRole('dialog').waitFor()
   await page.waitForFunction(() => !/Vérification du fichier…/.test(document.body.innerText), null, { timeout: 15_000 })
   check('Fiche : taille du fichier', /1,8\s?Go|1,7\s?Go|1\.8\s?G/.test(await page.getByRole('dialog').innerText()))
+  // Reprise de lecture : barre sur l'affiche, « Reprendre à » sur la fiche.
+  const dialogText = await page.getByRole('dialog').innerText()
+  check(
+    'Fiche : propose de reprendre',
+    /Reprendre à 43:12/.test(dialogText) && /Depuis le début/.test(dialogText)
+  )
   await page.keyboard.press('Escape')
   await page.waitForTimeout(500)
+  check('Affiche : barre de progression', await poster.getByRole('progressbar').isVisible())
   check('Affiche : taille sans recharger', /[GM]o/.test(await poster.innerText()), (await poster.innerText()).replace(/\n/g, ' | '))
+
+  // « Reprendre » dans la barre latérale : la liste, puis retirer un film.
+  await page.getByPlaceholder(/rechercher/i).first().fill('')
+  await page.getByRole('button', { name: /^▶ Reprendre/ }).click()
+  await page.getByText(/Arrêté à 43:12/).waitFor({ timeout: 5000 }).catch(() => undefined)
+  check('Reprendre : le film commencé est listé', /Arrêté à 43:12 · reste 56 min/.test(await body()))
+  await page.getByRole('button', { name: 'Retirer' }).click()
+  await page.getByText('Rien à reprendre').waitFor({ timeout: 5000 }).catch(() => undefined)
+  check('Reprendre : retirer vide la liste', /Rien à reprendre/.test(await body()))
+  await page.getByRole('button', { name: /^Tous les films/ }).click()
+
+  // Lecture réelle : la position est enregistrée à l'arrêt, puis la lecture reprend là.
+  if (realPlayback) {
+    await page.getByPlaceholder(/rechercher/i).first().fill('Autre Film')
+    const other = page.locator('button[title="FR - Autre Film (2025) CAM"]').first()
+    await other.click()
+    await page.getByRole('dialog').getByRole('button', { name: /^Lire/ }).click()
+    await waitPlaying()
+    await page.evaluate(() => window.api.player.seek({ positionSecs: 100 }))
+    await page.waitForTimeout(2000)
+    await closePlayer.click()
+    await page.waitForTimeout(800)
+    const saved = progressOf('movie', 43)
+    check(
+      'Lecture réelle : position enregistrée à l’arrêt',
+      saved != null && saved.position_secs >= 100 && saved.position_secs < 110 && saved.watched === 0,
+      saved ? `${saved.position_secs} s sur ${Math.round(saved.duration_secs)} s` : 'aucune ligne'
+    )
+    await other.click()
+    await page.getByRole('dialog').getByRole('button', { name: /^Reprendre à 1:4\d/ }).click()
+    await waitPlaying()
+    await page.waitForTimeout(1000)
+    const resumed = await playerStatus()
+    check(
+      'Lecture réelle : reprend où on s’était arrêté',
+      resumed.positionSecs >= 95 && resumed.positionSecs < 115,
+      `${Math.round(resumed.positionSecs)} s`
+    )
+    // Aller presque à la fin : le film passe en « vu » et quitte « Reprendre ».
+    await page.evaluate(() => window.api.player.seek({ positionSecs: 197 }))
+    await page.waitForFunction(() => !/Arrêter/.test(document.body.innerText), null, { timeout: 20_000 })
+    const done = progressOf('movie', 43)
+    check('Lecture réelle : film terminé marqué « vu »', done != null && done.watched === 1 && done.position_secs === 0)
+    await page.getByPlaceholder(/rechercher/i).first().fill('')
+  } else {
+    console.log('– Lecture réelle ignorée (ffmpeg ou mpv absent)')
+  }
 
   // Recherche tolérante : sans accents, mots dans le désordre.
   await page.getByPlaceholder(/rechercher/i).first().fill('bleu elephant')
@@ -142,8 +236,6 @@ try {
   await page.getByLabel('Chercher aussi dans les guides').check()
   await page.getByPlaceholder(/rechercher/i).first().fill('Marathon')
   await page.getByText('Marathon solo').first().waitFor({ timeout: 20_000 })
-  // La barre de lecture se ferme par « Arrêter », ou « Fermer » si la lecture a échoué.
-  const closePlayer = page.getByRole('button', { name: /^(Arrêter|Fermer)$/ })
   for (const name of ['Solo TV', 'Chaîne Test FHD']) {
     // « Chaîne Test FHD » : la variante du programme de demain (dernier bouton de ce nom).
     const target = page.getByRole('button', { name, exact: true }).last()
