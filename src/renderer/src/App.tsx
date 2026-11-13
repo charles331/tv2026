@@ -30,7 +30,7 @@ import { SettingsScreen } from './features/settings/SettingsScreen'
 import { ScheduledScreen } from './features/reminders/ScheduledScreen'
 import { ConflictDialog } from './features/reminders/ConflictDialog'
 import { MovieDetail } from './features/movie/MovieDetail'
-import { PlayerView } from './features/player/PlayerView'
+import { PlayerView, type PlayerNeighbor } from './features/player/PlayerView'
 
 export function App(): ReactElement {
   return (
@@ -299,6 +299,66 @@ function AppShell(): ReactElement {
     [playItem]
   )
 
+  // Previous / next of what is playing: episodes of the series (in viewing
+  // order) or channels of the category (zapping). Looked up on each new source.
+  const [neighbors, setNeighbors] = useState<{
+    previous: PlayerNeighbor | null
+    next: PlayerNeighbor | null
+  }>({ previous: null, next: null })
+  // The lookups below outlive a render: always call the latest playItem (it
+  // reads the current watch progress to resume the neighbour at the right place).
+  const playItemRef = useRef(playItem)
+  playItemRef.current = playItem
+  const playingKind = playRequest?.mediaKind
+  const playingId = playRequest?.streamId
+  const playingSeriesId = playRequest?.seriesId
+  useEffect(() => {
+    let cancelled = false
+    const none = { previous: null, next: null }
+    setNeighbors(none)
+    if (playingId == null) return
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    const load = async (): Promise<typeof neighbors> => {
+      if (playingKind === 'live') {
+        const n = unwrap(await api().live.neighbors(playingId))
+        const of = (c: LiveStream | null): PlayerNeighbor | null =>
+          c ? { label: c.name, play: () => handlePlayChannel(c) } : null
+        return { previous: of(n.previous), next: of(n.next) }
+      }
+      if (playingKind === 'series' && playingSeriesId != null) {
+        const n = unwrap(await api().series.episodeNeighbors(playingSeriesId, playingId))
+        const of = (e: Episode | null): PlayerNeighbor | null =>
+          e
+            ? {
+                label: `S${pad(e.season)}E${pad(e.episodeNum)} — ${e.title}`,
+                play: () =>
+                  void playItemRef.current({
+                    mediaKind: 'series',
+                    id: e.episodeId,
+                    title: `${n.seriesName} S${pad(e.season)}E${pad(e.episodeNum)}`,
+                    containerExtension: e.containerExtension,
+                    image: e.image ?? n.cover,
+                    seriesId: playingSeriesId
+                  })
+              }
+            : null
+        return { previous: of(n.previous), next: of(n.next) }
+      }
+      return none
+    }
+    load()
+      .then((n) => {
+        if (!cancelled) setNeighbors(n)
+      })
+      .catch((e) => console.warn('voisins de lecture indisponibles :', describeError(e)))
+    return () => {
+      cancelled = true
+    }
+  }, [playingKind, playingId, playingSeriesId, handlePlayChannel])
+  // Read by the "file ended" callback, which must see the latest lookup.
+  const nextRef = useRef(neighbors.next)
+  nextRef.current = neighbors.next
+
   // Refresh movies + series + live in one go (triggered from the nav, confirmed
   // by the user). Reports the outcome via a toast.
   const runUpdateAll = useCallback(async () => {
@@ -421,7 +481,22 @@ function AppShell(): ReactElement {
       </div>
 
       {/* Non-blocking player bar (mpv plays in its own window; navigation stays free). */}
-      {playRequest && <PlayerView request={playRequest} onClose={() => setPlayRequest(null)} />}
+      {playRequest && (
+        <PlayerView
+          request={playRequest}
+          onClose={() => setPlayRequest(null)}
+          previous={neighbors.previous}
+          next={neighbors.next}
+          onEnded={() => {
+            // An episode ended: chain the next one (live never "ends").
+            const following = playRequest.mediaKind === 'series' ? nextRef.current : null
+            if (!following) return false
+            toast.show(`Épisode suivant : ${following.label}`, 'info')
+            following.play()
+            return true
+          }}
+        />
+      )}
 
       {/* Recording-vs-playback conflict prompt (driven by the main scheduler). */}
       <ConflictDialog />

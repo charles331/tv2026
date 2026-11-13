@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import type { FavoriteItem, LiveCategory, LiveStream, VodCategory } from '@shared/index'
+import type { FavoriteItem, LiveCategory, LiveStream, VodCategory, WatchProgress } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
 import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
 import { FavoritesView } from '../favorites/FavoritesView'
+import { useProgress, RECENT_CATEGORY_ID } from '../../lib/progress'
 import {
   Button,
   TextInput,
@@ -52,6 +53,19 @@ function favToLive(f: FavoriteItem): LiveStream {
   }
 }
 
+/** Build a minimal LiveStream from a recently watched channel's snapshot. */
+function recentToLive(p: WatchProgress): LiveStream {
+  return {
+    streamId: p.itemId,
+    name: p.name,
+    icon: p.image,
+    number: null,
+    epgChannelId: null,
+    categoryId: '',
+    hasArchive: false
+  }
+}
+
 export function LiveScreen({
   onPlayChannel,
   onGoToSettings,
@@ -78,18 +92,23 @@ export function LiveScreen({
 
   const favorites = useFavorites()
   const isFavorites = categoryId === FAVORITES_CATEGORY_ID
+  // "Récentes": the channels watched lately, most recent first. Like Favoris,
+  // a list of its own (no catalogue query, no search).
+  const recentChannels = useProgress().recentChannels
+  const isRecent = categoryId === RECENT_CATEGORY_ID
+  const isPinned = isFavorites || isRecent
 
   const categoriesState = useAsync<LiveCategory[]>(() => api().live.listCategories().then(unwrap), [])
   const feed = useLiveFeed({
-    categoryId: isFavorites ? null : categoryId,
-    query: isFavorites ? '' : query,
+    categoryId: isPinned ? null : categoryId,
+    query: isPinned ? '' : query,
     sortBy: 'number',
     sortDir: 'asc'
   })
 
   const isSearching = query.trim().length > 0
   // Programme search needs a couple of characters to stay meaningful.
-  const showGuideResults = searchGuides && !isFavorites && query.trim().length >= 2
+  const showGuideResults = searchGuides && !isPinned && query.trim().length >= 2
   const selectedCategoryName =
     categoryId == null
       ? 'Toutes les chaînes'
@@ -121,6 +140,11 @@ export function LiveScreen({
         onSelect={setCategoryId}
         allLabel="Toutes les chaînes"
         favoritesCount={favorites.count('live')}
+        pinned={
+          recentChannels.length > 0 || isRecent
+            ? [{ id: RECENT_CATEGORY_ID, label: '🕘 Récentes', count: recentChannels.length }]
+            : []
+        }
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -134,7 +158,7 @@ export function LiveScreen({
               placeholder={searchGuides ? 'Rechercher une chaîne ou un programme…' : 'Rechercher une chaîne…'}
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
-              disabled={isFavorites}
+              disabled={isPinned}
             />
           </div>
           <label
@@ -146,7 +170,7 @@ export function LiveScreen({
               className="h-4 w-4 accent-accent"
               checked={searchGuides}
               onChange={(e) => toggleSearchGuides(e.target.checked)}
-              disabled={isFavorites}
+              disabled={isPinned}
             />
             Chercher aussi dans les guides
           </label>
@@ -159,6 +183,11 @@ export function LiveScreen({
                 <span className="text-gray-200">★ Favoris</span>
                 <span className="ml-2 text-gray-600">· {favorites.count('live')} chaînes</span>
               </>
+            ) : isRecent ? (
+              <>
+                <span className="text-gray-200">🕘 Récentes</span>
+                <span className="ml-2 text-gray-600">· {recentChannels.length} chaînes</span>
+              </>
             ) : isSearching ? (
               <>
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
@@ -166,7 +195,7 @@ export function LiveScreen({
             ) : (
               <span className="text-gray-200">{selectedCategoryName}</span>
             )}
-            {!isFavorites && !feed.loading && !feed.error && (
+            {!isPinned && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} chaînes</span>
             )}
           </span>
@@ -183,6 +212,25 @@ export function LiveScreen({
               onActivate={(f) => onPlayChannel(favToLive(f))}
               onOpenGuide={(f) => setGuideChannel(favToLive(f))}
             />
+          ) : isRecent ? (
+            recentChannels.length === 0 ? (
+              <EmptyState
+                icon={<IconBroadcast size={36} />}
+                title="Aucune chaîne récente"
+                description="Les chaînes que vous regardez apparaissent ici, la plus récente en premier."
+              />
+            ) : (
+              <div className="space-y-2">
+                {recentChannels.map((p) => (
+                  <LiveChannelRow
+                    key={p.itemId}
+                    channel={recentToLive(p)}
+                    onPlay={onPlayChannel}
+                    onOpenGuide={setGuideChannel}
+                  />
+                ))}
+              </div>
+            )
           ) : feed.loading ? (
             <LoadingState label="Chargement des chaînes…" />
           ) : feed.error ? (

@@ -6,6 +6,8 @@ import {
   cn,
   IconPlay,
   IconPause,
+  IconNext,
+  IconPrevious,
   IconStop,
   IconVolume,
   IconVolumeMute,
@@ -15,6 +17,7 @@ import {
   IconFilm,
   IconRecord
 } from '../../components/ui'
+import { api } from '../../lib/ipc'
 import { formatClock } from '../../lib/format'
 import { SeekBar } from './SeekBar'
 import { VolumeSlider } from './VolumeSlider'
@@ -31,12 +34,30 @@ import { usePlayer } from './usePlayer'
  * volume/fullscreen + subtitle & audio cycling); the same actions are available
  * directly in the mpv window (f / j / # / right-click).
  */
+/** A neighbouring item the bar can jump to (episode or channel). */
+export interface PlayerNeighbor {
+  /** What it is, for the tooltip — e.g. "S01E03 — Titre" or a channel name. */
+  label: string
+  play: () => void
+}
+
 export function PlayerView({
   request,
-  onClose
+  onClose,
+  previous,
+  next,
+  onEnded
 }: {
   request: PlayRequest
   onClose: () => void
+  /** Previous / next episode or channel, when there is one. */
+  previous?: PlayerNeighbor | null
+  next?: PlayerNeighbor | null
+  /**
+   * The file was played to its end. Return true when something else starts
+   * (the next episode): the bar then stays open instead of closing.
+   */
+  onEnded?: () => boolean
 }): ReactElement {
   const player = usePlayer()
   const toast = useToast()
@@ -62,6 +83,9 @@ export function PlayerView({
 
   // Recording is offered only for live streams (mpv `stream-record`).
   const isLive = request.mediaKind === 'live'
+  // "Chaîne précédente" / "Épisode précédent" (French gender agreement).
+  const neighborNoun = isLive ? 'Chaîne' : 'Épisode'
+  const neighborE = isLive ? 'e' : ''
   const recording = status.recording
 
   const toggleRecord = async (): Promise<void> => {
@@ -110,14 +134,41 @@ export function PlayerView({
   // once playback has actually started, a transition back to idle/ended means
   // the mpv process is gone, so the bar should disappear with it.
   const startedRef = useRef(false)
+  // True from the end of an episode until the next one really plays (see below).
+  const chainingRef = useRef(false)
   useEffect(() => {
     const s = status.state
-    if (s === 'loading' || s === 'reconnecting' || s === 'playing' || s === 'paused') {
+    if (s === 'reconnecting' || s === 'playing' || s === 'paused') {
       startedRef.current = true
+      chainingRef.current = false
+    } else if (s === 'loading') {
+      // While chaining, 'loading' is not proof the new playback started: the
+      // 'idle' of the finished mpv can still arrive after it (measured).
+      if (!chainingRef.current) startedRef.current = true
+    } else if (s === 'error') {
+      chainingRef.current = false
     } else if (startedRef.current && (s === 'idle' || s === 'ended')) {
       onClose()
     }
   }, [status.state, onClose])
+
+  // End of file → chain the next episode. Handled on the raw event, not on the
+  // rendered state: 'ended' is followed at once by 'idle' (the finished mpv
+  // exits) and React usually renders only the latter. When something else
+  // starts, the bar forgets it had started, so that 'idle' does not close it —
+  // even when it arrives after the next playback was requested.
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
+  useEffect(
+    () =>
+      api().player.onState((e) => {
+        if (e.state === 'ended' && startedRef.current && onEndedRef.current?.()) {
+          startedRef.current = false
+          chainingRef.current = true
+        }
+      }),
+    []
+  )
 
   // Warn once if a live drop interrupted an in-progress recording (it can't be
   // resumed across the reconnect). A user-initiated stop keeps state 'playing',
@@ -209,6 +260,18 @@ export function PlayerView({
         <>
           {/* Transport + seek */}
           <div className="flex min-w-[260px] flex-1 items-center gap-3">
+            {(previous || next) && (
+              <button
+                type="button"
+                disabled={!previous}
+                onClick={() => previous?.play()}
+                title={previous ? `${neighborNoun} précédent${neighborE} : ${previous.label}` : undefined}
+                aria-label={`${neighborNoun} précédent${neighborE}`}
+                className="shrink-0 text-gray-300 transition-colors hover:text-white disabled:opacity-30"
+              >
+                <IconPrevious size={18} />
+              </button>
+            )}
             <button
               type="button"
               disabled={isLoading}
@@ -218,6 +281,18 @@ export function PlayerView({
             >
               {isLoading ? <Spinner size={16} /> : isPlaying ? <IconPause size={18} /> : <IconPlay size={18} />}
             </button>
+            {(previous || next) && (
+              <button
+                type="button"
+                disabled={!next}
+                onClick={() => next?.play()}
+                title={next ? `${neighborNoun} suivant${neighborE} : ${next.label}` : undefined}
+                aria-label={`${neighborNoun} suivant${neighborE}`}
+                className="shrink-0 text-gray-300 transition-colors hover:text-white disabled:opacity-30"
+              >
+                <IconNext size={18} />
+              </button>
+            )}
             {!isLive && (
               <span className="shrink-0 text-right text-xs tabular-nums text-gray-300">
                 {formatClock(status.positionSecs, duration)}

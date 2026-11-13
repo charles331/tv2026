@@ -37,6 +37,22 @@ export const IconPause = (p: IconProps): ReactElement => (
   </svg>
 )
 
+/** Skip to the next item (next episode / next channel). */
+export const IconNext = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <path d="M5 5v14l10-7L5 5Z" fill="currentColor" stroke="none" />
+    <rect x="16.5" y="5" width="2.5" height="14" rx="1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+/** Skip to the previous item (previous episode / previous channel). */
+export const IconPrevious = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <path d="M19 5v14L9 12l10-7Z" fill="currentColor" stroke="none" />
+    <rect x="5" y="5" width="2.5" height="14" rx="1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 export const IconStop = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none" />

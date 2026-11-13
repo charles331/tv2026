@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { progressUpdate, resumeStart, progressRatio, findNextEpisode } from '../../src/shared/progress'
+import {
+  progressUpdate,
+  resumeStart,
+  progressRatio,
+  episodeNeighbors,
+  wrapNeighbors
+} from '../../src/shared/progress'
 import type { SeriesInfo, WatchProgress } from '../../src/shared'
 
 const row = (patch: Partial<WatchProgress>): WatchProgress => ({
@@ -56,7 +62,7 @@ describe('progressRatio', () => {
   })
 })
 
-describe('findNextEpisode', () => {
+describe('episodeNeighbors', () => {
   const ep = (episodeId: number, season: number, episodeNum: number) => ({
     episodeId,
     title: `Ép ${episodeNum}`,
@@ -78,13 +84,30 @@ describe('findNextEpisode', () => {
   } as unknown as SeriesInfo
 
   it('follows the episode order inside a season', () => {
-    expect(findNextEpisode(info, 11)?.episodeId).toBe(12)
+    const n = episodeNeighbors(info, 11)
+    expect(n.previous).toBeNull()
+    expect(n.next?.episodeId).toBe(12)
   })
-  it('continues with the first episode of the next season', () => {
-    expect(findNextEpisode(info, 12)?.episodeId).toBe(21)
+  it('continues with the first episode of the next season, and back', () => {
+    expect(episodeNeighbors(info, 12).next?.episodeId).toBe(21)
+    expect(episodeNeighbors(info, 21).previous?.episodeId).toBe(12)
   })
-  it('returns null after the last episode or for an unknown one', () => {
-    expect(findNextEpisode(info, 21)).toBeNull()
-    expect(findNextEpisode(info, 999)).toBeNull()
+  it('has no next after the last episode, and nothing for an unknown one', () => {
+    expect(episodeNeighbors(info, 21).next).toBeNull()
+    expect(episodeNeighbors(info, 999)).toEqual({ previous: null, next: null })
+  })
+})
+
+describe('wrapNeighbors', () => {
+  const list = [{ id: 1 }, { id: 2 }, { id: 3 }]
+  const idOf = (x: { id: number }): number => x.id
+  it('gives the items around, wrapping at both ends', () => {
+    expect(wrapNeighbors(list, idOf, 2)).toEqual({ previous: { id: 1 }, next: { id: 3 } })
+    expect(wrapNeighbors(list, idOf, 1)).toEqual({ previous: { id: 3 }, next: { id: 2 } })
+    expect(wrapNeighbors(list, idOf, 3)).toEqual({ previous: { id: 2 }, next: { id: 1 } })
+  })
+  it('gives nothing for an unknown or a lone item', () => {
+    expect(wrapNeighbors(list, idOf, 9)).toEqual({ previous: null, next: null })
+    expect(wrapNeighbors([{ id: 1 }], idOf, 1)).toEqual({ previous: null, next: null })
   })
 })

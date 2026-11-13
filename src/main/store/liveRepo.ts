@@ -3,7 +3,9 @@
  * Mirrors catalogRepo/seriesRepo. The EPG is volatile and never persisted here.
  */
 
+import { wrapNeighbors } from '@shared/index'
 import type {
+  ChannelNeighbors,
   ListLiveRequest,
   LiveCategory,
   LiveStream,
@@ -179,6 +181,22 @@ export function searchChannels(req: SearchLiveRequest): Page<LiveStream> {
     .all(...baseParams, pageSize, offset) as ChannelRow[]
 
   return { items: rows.map(mapChannel), page, pageSize, total }
+}
+
+/**
+ * The channels before / after `streamId` in its category (by channel number,
+ * unnumbered last), wrapping around — what a remote's P+ / P− would do.
+ */
+export function channelNeighbors(streamId: number): ChannelNeighbors {
+  const current = getChannel(streamId)
+  if (!current) return { previous: null, next: null }
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM live_streams WHERE category_id = ?
+       ORDER BY number IS NULL, number, name COLLATE NOCASE`
+    )
+    .all(current.categoryId) as ChannelRow[]
+  return wrapNeighbors(rows.map(mapChannel), (c) => c.streamId, streamId)
 }
 
 export function getChannel(streamId: number): LiveStream | null {

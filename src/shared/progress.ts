@@ -44,13 +44,35 @@ export function progressRatio(progress: WatchProgress | null | undefined): numbe
 }
 
 /**
- * The episode that follows `episodeId`: next in its season, else the first of
- * the next season. Null after the last one (or if the episode is unknown).
+ * The episodes around `episodeId` in viewing order: seasons ascending, then
+ * episode number. `next` after a season's last episode is the first of the
+ * following season. Both null when the episode is unknown.
  */
-export function findNextEpisode(info: SeriesInfo, episodeId: number): Episode | null {
+export function episodeNeighbors(
+  info: SeriesInfo,
+  episodeId: number
+): { previous: Episode | null; next: Episode | null } {
   const ordered = [...info.seasons]
     .sort((a, b) => a.seasonNumber - b.seasonNumber)
     .flatMap((s) => [...s.episodes].sort((a, b) => a.episodeNum - b.episodeNum))
   const index = ordered.findIndex((e) => e.episodeId === episodeId)
-  return index >= 0 ? (ordered[index + 1] ?? null) : null
+  if (index < 0) return { previous: null, next: null }
+  return { previous: ordered[index - 1] ?? null, next: ordered[index + 1] ?? null }
+}
+
+/**
+ * The items around `id` in an ordered list, wrapping around at both ends (the
+ * way a TV remote zaps). Both null when `id` is absent or alone.
+ */
+export function wrapNeighbors<T>(
+  ordered: T[],
+  idOf: (item: T) => number,
+  id: number
+): { previous: T | null; next: T | null } {
+  const index = ordered.findIndex((item) => idOf(item) === id)
+  if (index < 0 || ordered.length < 2) return { previous: null, next: null }
+  return {
+    previous: ordered[(index - 1 + ordered.length) % ordered.length]!,
+    next: ordered[(index + 1) % ordered.length]!
+  }
 }

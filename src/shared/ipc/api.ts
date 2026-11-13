@@ -31,6 +31,7 @@ import type {
   VodStream
 } from '../types/catalog'
 import type {
+  EpisodeNeighbors,
   ListSeriesRequest,
   RefreshSeriesResult,
   SearchSeriesRequest,
@@ -39,6 +40,7 @@ import type {
   SeriesStream
 } from '../types/series'
 import type {
+  ChannelNeighbors,
   EpgEntry,
   GuideSearchResult,
   ListLiveRequest,
@@ -141,6 +143,8 @@ export interface SeriesApi {
   listCategories(): Promise<Result<SeriesCategory[]>>
   list(req: ListSeriesRequest): Promise<Result<Page<SeriesStream>>>
   getInfo(seriesId: number): Promise<Result<SeriesInfo>>
+  /** Episodes before / after one episode (from the series info). */
+  episodeNeighbors(seriesId: number, episodeId: number): Promise<Result<EpisodeNeighbors>>
   search(req: SearchSeriesRequest): Promise<Result<Page<SeriesStream>>>
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshSeriesResult>>
 }
@@ -150,6 +154,8 @@ export interface LiveApi {
   list(req: ListLiveRequest): Promise<Result<Page<LiveStream>>>
   search(req: SearchLiveRequest): Promise<Result<Page<LiveStream>>>
   refresh(req: RefreshCatalogRequest): Promise<Result<RefreshLiveResult>>
+  /** Channels before / after one channel in its category, wrapping around. */
+  neighbors(streamId: number): Promise<Result<ChannelNeighbors>>
   /** Now/next programmes for a channel (empty when no EPG). */
   epg(streamId: number, limit?: number): Promise<Result<EpgEntry[]>>
   /** Full programme guide for a channel, sorted by start (empty when no EPG). */

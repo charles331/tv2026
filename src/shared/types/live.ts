@@ -66,6 +66,12 @@ export interface SearchLiveRequest {
   sortDir?: 'asc' | 'desc'
 }
 
+/** The channels before / after one channel in its category (zapping). */
+export interface ChannelNeighbors {
+  previous: LiveStream | null
+  next: LiveStream | null
+}
+
 /** Short-EPG request: now + next programmes for one channel. */
 export interface ShortEpgRequest {
   streamId: number

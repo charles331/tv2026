@@ -34,6 +34,7 @@ import type {
   VodStream
 } from '../types/catalog'
 import type {
+  EpisodeNeighbors,
   ListSeriesRequest,
   RefreshSeriesResult,
   SearchSeriesRequest,
@@ -42,6 +43,7 @@ import type {
   SeriesStream
 } from '../types/series'
 import type {
+  ChannelNeighbors,
   EpgEntry,
   FullEpgRequest,
   GuideSearchResult,
@@ -133,6 +135,10 @@ export interface IpcContract {
   [InvokeChannels.SERIES_LIST_CATEGORIES]: { request: void; response: SeriesCategory[] }
   [InvokeChannels.SERIES_LIST]: { request: ListSeriesRequest; response: Page<SeriesStream> }
   [InvokeChannels.SERIES_GET_INFO]: { request: { seriesId: number }; response: SeriesInfo }
+  [InvokeChannels.SERIES_EPISODE_NEIGHBORS]: {
+    request: { seriesId: number; episodeId: number }
+    response: EpisodeNeighbors
+  }
   [InvokeChannels.SERIES_SEARCH]: { request: SearchSeriesRequest; response: Page<SeriesStream> }
   [InvokeChannels.SERIES_REFRESH]: { request: RefreshCatalogRequest; response: RefreshSeriesResult }
 
@@ -141,6 +147,7 @@ export interface IpcContract {
   [InvokeChannels.LIVE_LIST]: { request: ListLiveRequest; response: Page<LiveStream> }
   [InvokeChannels.LIVE_SEARCH]: { request: SearchLiveRequest; response: Page<LiveStream> }
   [InvokeChannels.LIVE_REFRESH]: { request: RefreshCatalogRequest; response: RefreshLiveResult }
+  [InvokeChannels.LIVE_NEIGHBORS]: { request: { streamId: number }; response: ChannelNeighbors }
   [InvokeChannels.LIVE_EPG]: { request: ShortEpgRequest; response: EpgEntry[] }
   [InvokeChannels.LIVE_FULL_EPG]: { request: FullEpgRequest; response: EpgEntry[] }
   [InvokeChannels.LIVE_SEARCH_GUIDE]: { request: { query: string }; response: GuideSearchResult }

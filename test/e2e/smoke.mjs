@@ -37,7 +37,8 @@ const realPlayback =
      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', videoPath],
     { stdio: 'ignore' }
   ).status === 0
-const provider = await startFakeProvider({ fail: ['series'], videos: realPlayback ? { 43: videoPath } : {} })
+const provider = await startFakeProvider({ fail: ['series'], videos: realPlayback ? { 43: videoPath, 1000: videoPath, 1001: videoPath } : {}
+})
 const env = {
   ...process.env,
   XTREAM_URL: provider.url,
@@ -62,7 +63,10 @@ try {
     JSON.stringify({
       seriesId: 7, name: 'La Série Test', plot: null, cast: null, director: null, genre: null,
       year: null, rating: null, cover: null, backdropUrls: [], trailer: null,
-      seasons: [{ seasonNumber: 1, name: null, episodes: [{ episodeId: 1000, title: 'Ép 1', season: 1, episodeNum: 1, containerExtension: 'mkv', durationSecs: 2600, plot: null, rating: null, image: null }] }]
+      seasons: [{ seasonNumber: 1, name: null, episodes: [
+        { episodeId: 1000, title: 'Ép 1', season: 1, episodeNum: 1, containerExtension: 'mkv', durationSecs: 2600, plot: null, rating: null, image: null },
+        { episodeId: 1001, title: 'Ép 2', season: 1, episodeNum: 2, containerExtension: 'mkv', durationSecs: 2600, plot: null, rating: null, image: null }
+      ] }]
     }),
     now
   )
@@ -184,6 +188,41 @@ try {
     const done = progressOf('movie', 43)
     check('Lecture réelle : film terminé marqué « vu »', done != null && done.watched === 1 && done.position_secs === 0)
     await page.getByPlaceholder(/rechercher/i).first().fill('')
+
+    // Épisode suivant : bouton dans la barre, et enchaînement en fin d'épisode.
+    await page.getByRole('button', { name: 'Séries', exact: true }).click()
+    await page.locator('button[title="La Série Test"]').first().click()
+    const episodes = page.getByRole('dialog')
+    await episodes.getByText('Ép 1').waitFor()
+    await episodes.getByRole('button', { name: 'Lire' }).first().click()
+    await waitPlaying()
+    const nextEp = page.getByRole('button', { name: 'Épisode suivant' })
+    const prevEp = page.getByRole('button', { name: 'Épisode précédent' })
+    check(
+      'Épisode : « suivant » proposé, « précédent » grisé au premier',
+      (await nextEp.isEnabled()) && (await prevEp.isDisabled())
+    )
+    await page.evaluate(() => window.api.player.seek({ positionSecs: 197 }))
+    // Fin du fichier : l'épisode 2 démarre tout seul.
+    let chained = null
+    for (let i = 0; i < 100; i++) {
+      chained = await playerStatus()
+      if (/S01E02/.test(chained.title ?? '') && chained.state === 'playing' && chained.positionSecs > 0.3) break
+      await page.waitForTimeout(200)
+    }
+    check('Épisode : le suivant s’enchaîne en fin de lecture', /S01E02/.test(chained?.title ?? ''), chained?.title ?? '')
+    check('Épisode : le premier est marqué « vu »', progressOf('series', 1000)?.watched === 1)
+    check('Épisode : la barre reste ouverte', await closePlayer.isVisible())
+    await prevEp.click()
+    for (let i = 0; i < 100; i++) {
+      chained = await playerStatus()
+      if (/S01E01/.test(chained.title ?? '') && chained.state === 'playing') break
+      await page.waitForTimeout(200)
+    }
+    check('Épisode : « précédent » revient au premier', /S01E01/.test(chained?.title ?? ''), chained?.title ?? '')
+    await closePlayer.click()
+    await page.waitForTimeout(600)
+    await page.getByRole('button', { name: 'Catalogue' }).first().click()
   } else {
     console.log('– Lecture réelle ignorée (ffmpeg ou mpv absent)')
   }
@@ -269,6 +308,26 @@ try {
   if (await closePlayer.isVisible()) await closePlayer.click()
   await page.waitForTimeout(600)
 
+  // Zapping : chaîne suivante / précédente de la catégorie, puis chaînes récentes.
+  await page.getByPlaceholder(/rechercher/i).first().fill('')
+  await page.locator('button[title="Regarder Solo TV"]').first().click()
+  await page.locator('p[title="Solo TV"]').waitFor({ timeout: 5000 }).catch(() => undefined)
+  await page.getByRole('button', { name: 'Chaîne suivante' }).click()
+  await page.locator('p[title="Chaîne Test HD"]').waitFor({ timeout: 5000 }).catch(() => undefined)
+  check('Zapping : chaîne suivante (retour à la première)', await page.locator('p[title="Chaîne Test HD"]').isVisible())
+  await page.getByRole('button', { name: 'Chaîne précédente' }).click()
+  await page.locator('p[title="Solo TV"]').waitFor({ timeout: 5000 }).catch(() => undefined)
+  check('Zapping : chaîne précédente', await page.locator('p[title="Solo TV"]').isVisible())
+  if (await closePlayer.isVisible()) await closePlayer.click()
+  await page.waitForTimeout(600)
+  await page.getByRole('button', { name: /^🕘 Récentes/ }).click()
+  const recentNames = await page.locator('button[title^="Regarder "]').evaluateAll((els) => els.map((e) => e.title))
+  check(
+    'Chaînes récentes : la dernière regardée en premier',
+    recentNames[0] === 'Regarder Solo TV' && recentNames.includes('Regarder Chaîne Test HD'),
+    recentNames.join(' | ')
+  )
+
   // Nouveautés : 3 versions, les autres repliées.
   await page.getByRole('button', { name: /^Réglages/ }).first().click()
   await page.getByText('Application', { exact: true }).first().click()
@@ -276,7 +335,11 @@ try {
   const news = await body()
   check('Nouveautés : versions précédentes repliées', /Afficher les versions précédentes \(\d+\)/.test(news))
 } catch (e) {
-  check('scénario terminé sans exception', false, e instanceof Error ? e.message.split('\n')[0] : String(e))
+  check(
+    'scénario terminé sans exception',
+    false,
+    e instanceof Error ? e.message.split('\n').slice(0, 3).join(' ').replace(/\s+/g, ' ') : String(e)
+  )
 } finally {
   await app?.close().catch(() => undefined)
   provider.close()

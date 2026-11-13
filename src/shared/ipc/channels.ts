@@ -45,6 +45,8 @@ export const InvokeChannels = {
   SERIES_LIST_CATEGORIES: 'series:listCategories',
   SERIES_LIST: 'series:list',
   SERIES_GET_INFO: 'series:getInfo',
+  SERIES_EPISODE_NEIGHBORS: 'series:episodeNeighbors', // previous / next episode
+
   SERIES_SEARCH: 'series:search',
   SERIES_REFRESH: 'series:refresh',
 
@@ -53,6 +55,7 @@ export const InvokeChannels = {
   LIVE_LIST: 'live:list',
   LIVE_SEARCH: 'live:search',
   LIVE_REFRESH: 'live:refresh',
+  LIVE_NEIGHBORS: 'live:neighbors', // previous / next channel of the category (zapping)
   LIVE_EPG: 'live:epg',
   LIVE_FULL_EPG: 'live:fullEpg',
   LIVE_SEARCH_GUIDE: 'live:searchGuide', // search programme titles in all guides (xmltv)

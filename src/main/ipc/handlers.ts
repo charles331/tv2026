@@ -16,7 +16,7 @@
 import { join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
-import { InvokeChannels, ok, err } from '@shared/index'
+import { InvokeChannels, ok, err, episodeNeighbors } from '@shared/index'
 import type {
   AppSettings,
   ConnectionTestResult,
@@ -365,6 +365,21 @@ export const handlers: IpcHandlers = {
     }
   },
 
+  [InvokeChannels.SERIES_EPISODE_NEIGHBORS]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const seriesId = requireInt(req, 'seriesId')
+    try {
+      const info = await getSeriesInfo(seriesId)
+      return ok({
+        seriesName: info.name,
+        cover: info.cover,
+        ...episodeNeighbors(info, requireInt(req, 'episodeId'))
+      })
+    } catch (e) {
+      return fromXtreamError(e)
+    }
+  },
+
   [InvokeChannels.SERIES_SEARCH]: (req) => {
     assert(isObject(req), 'request must be an object')
     return ok(
@@ -403,6 +418,11 @@ export const handlers: IpcHandlers = {
         sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
+  },
+
+  [InvokeChannels.LIVE_NEIGHBORS]: (req) => {
+    assert(isObject(req), 'request must be an object')
+    return ok(liveRepo.channelNeighbors(requireInt(req, 'streamId')))
   },
 
   [InvokeChannels.LIVE_SEARCH]: (req) => {
