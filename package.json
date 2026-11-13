@@ -50,7 +50,7 @@
     "@vitest/coverage-v8": "^5.0.5",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "dmg-builder": "26.18.0",
-    "electron": "^44.9.3",
+    "electron": "^45.1.0",
     "electron-builder": "^26.18.0",
     "electron-builder-squirrel-windows": "26.18.0",
     "electron-vite": "^6.0.0",

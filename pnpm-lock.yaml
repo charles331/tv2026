@@ -20,10 +20,10 @@ importers:
     devDependencies:
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@44.9.3(supports-color@7.2.0))
+        version: 3.0.2(electron@45.1.0(supports-color@7.2.0))
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@44.9.3(supports-color@7.2.0))
+        version: 4.0.0(electron@45.1.0(supports-color@7.2.0))
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
@@ -67,8 +67,8 @@ importers:
         specifier: 26.18.0
         version: 26.18.0(electron-builder-squirrel-windows@26.18.0)(supports-color@7.2.0)
       electron:
-        specifier: ^44.9.3
-        version: 44.9.3(supports-color@7.2.0)
+        specifier: ^45.1.0
+        version: 45.1.0(supports-color@7.2.0)
       electron-builder:
         specifier: ^26.18.0
         version: 26.18.0(electron-builder-squirrel-windows@26.18.0)(supports-color@7.2.0)
@@ -1695,8 +1695,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@44.9.3:
-    resolution: {integrity: sha512-Cv9/yMnZxNWsMlIe8T4v//NKHdUvbeyoTJoXE3BIcRxus2meeFaO9h/P3zB5d4cBXum51IgAYrT2QjpIDWKpJA==}
+  electron@45.1.0:
+    resolution: {integrity: sha512-i7qKVAh/KR5v1pf56NhGGX2QYHcdjvLgS7koL6ui50c+zUDGLRunR95nXcTpHPURKOQ4GDBG8BmXiDgOQ8DD0A==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -3652,6 +3652,10 @@ packages:
     resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
 
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
+    engines: {node: '>=20.18.1'}
+
   undici@7.30.2:
     resolution: {integrity: sha512-mLyPQnHwUxaM/rideoK/+KL8DaAJLRl4aBCfmX444aCSLnIaomqPLtNRe2jdCYcsk5wZzXrDIQC8ZeYNRAYyIA==}
     engines: {node: '>=20.18.1'}
@@ -4068,13 +4072,13 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.8': {}
 
-  '@electron-toolkit/preload@3.0.2(electron@44.9.3(supports-color@7.2.0))':
+  '@electron-toolkit/preload@3.0.2(electron@45.1.0(supports-color@7.2.0))':
     dependencies:
-      electron: 44.9.3(supports-color@7.2.0)
+      electron: 45.1.0(supports-color@7.2.0)
 
-  '@electron-toolkit/utils@4.0.0(electron@44.9.3(supports-color@7.2.0))':
+  '@electron-toolkit/utils@4.0.0(electron@45.1.0(supports-color@7.2.0))':
     dependencies:
-      electron: 44.9.3(supports-color@7.2.0)
+      electron: 45.1.0(supports-color@7.2.0)
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -4108,10 +4112,10 @@ snapshots:
       env-paths: 3.0.0
       graceful-fs: 4.2.11
       progress: 2.0.3
-      semver: 7.8.6
+      semver: 7.7.4
       sumchecker: 3.0.1(supports-color@7.2.0)
     optionalDependencies:
-      undici: 7.30.2
+      undici: 7.30.1
     transitivePeerDependencies:
       - supports-color
 
@@ -5602,7 +5606,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.9.3(supports-color@7.2.0):
+  electron@45.1.0(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.8
       '@electron/get': 5.1.0(supports-color@7.2.0)
@@ -7727,6 +7731,9 @@ snapshots:
   undici-types@7.24.6: {}
 
   undici@6.29.1: {}
+
+  undici@7.30.1:
+    optional: true
 
   undici@7.30.2: {}
 
