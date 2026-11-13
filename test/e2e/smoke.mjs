@@ -100,6 +100,26 @@ try {
   await elephant.waitFor({ timeout: 5000 }).catch(() => undefined)
   check('Recherche sans accents, mots dans le désordre', await elephant.isVisible())
 
+  // Recherche globale : films, séries et chaînes d'un seul champ, puis « Tout voir ».
+  await page.keyboard.press('Control+k')
+  const globalField = page.getByPlaceholder(/rechercher partout/i)
+  await globalField.fill('test')
+  await page.getByRole('heading', { name: /^Chaînes/ }).waitFor({ timeout: 5000 }).catch(() => undefined)
+  const found = await body()
+  check(
+    'Recherche globale : films, séries et chaînes',
+    /Le Film Test/.test(found) && /La Série Test/.test(found) && /Chaîne Test HD/.test(found)
+  )
+  await globalField.fill('film')
+  const seeAll = page.getByRole('button', { name: /^Tout voir/ })
+  // 3 films « film » < 12 affichés : pas de « Tout voir » ; la requête reste en revenant.
+  check('Recherche globale : pas de « Tout voir » si tout est affiché', (await seeAll.count()) === 0)
+  await page.getByRole('button', { name: 'Catalogue' }).first().click()
+  await page.getByRole('button', { name: /^Recherche/ }).first().click()
+  check('Recherche globale : la requête est conservée', (await globalField.inputValue()) === 'film')
+  await page.getByRole('button', { name: 'Catalogue' }).first().click()
+  await page.waitForTimeout(400)
+
   // Téléchargements : le titre ouvre la fiche (film, série, ou message).
   await page.getByRole('button', { name: 'Téléchargements' }).first().click()
   await page.waitForTimeout(800)

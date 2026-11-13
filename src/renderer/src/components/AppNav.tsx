@@ -3,6 +3,7 @@ import {
   cn,
   Spinner,
   IconFilm,
+  IconSearch,
   IconTv,
   IconBroadcast,
   IconQueue,
@@ -11,7 +12,7 @@ import {
   IconSettings
 } from './ui'
 
-export type Route = 'catalog' | 'series' | 'live' | 'scheduled' | 'downloads' | 'settings'
+export type Route = 'search' | 'catalog' | 'series' | 'live' | 'scheduled' | 'downloads' | 'settings'
 
 export function AppNav({
   route,
@@ -47,6 +48,12 @@ export function AppNav({
       >
         <span className="text-sm font-bold leading-none tracking-tight">TV</span>
       </button>
+      <NavButton
+        label="Recherche (films, séries, chaînes) — Ctrl+K"
+        active={route === 'search'}
+        onClick={() => onNavigate('search')}
+        icon={<IconSearch size={20} />}
+      />
       <NavButton
         label="Catalogue"
         active={route === 'catalog'}

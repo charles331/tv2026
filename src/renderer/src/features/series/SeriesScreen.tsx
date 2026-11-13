@@ -54,13 +54,16 @@ function favToSeries(f: FavoriteItem): SeriesStream {
 
 export function SeriesScreen({
   onSelectSeries,
-  onGoToSettings
+  onGoToSettings,
+  initialQuery = ''
 }: {
   onSelectSeries: (series: SeriesStream) => void
   onGoToSettings: () => void
+  /** Query to start with ("Tout voir" from the global search). */
+  initialQuery?: string
 }): ReactElement {
   const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [rawQuery, setRawQuery] = useState('')
+  const [rawQuery, setRawQuery] = useState(initialQuery)
   const query = useDebounced(rawQuery, 300)
   const [sort, setSort] = useState<`${SortBy}:${'asc' | 'desc'}`>('lastModified:desc')
   const [sortBy, sortDir] = sort.split(':') as [SortBy, 'asc' | 'desc']

@@ -44,13 +44,16 @@ function favToVodStream(f: FavoriteItem): VodStream {
 
 export function CatalogScreen({
   onSelectMovie,
-  onGoToSettings
+  onGoToSettings,
+  initialQuery = ''
 }: {
   onSelectMovie: (stream: VodStream) => void
   onGoToSettings: () => void
+  /** Query to start with ("Tout voir" from the global search). */
+  initialQuery?: string
 }): ReactElement {
   const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [rawQuery, setRawQuery] = useState('')
+  const [rawQuery, setRawQuery] = useState(initialQuery)
   const query = useDebounced(rawQuery, 300)
   const [sort, setSort] = useState<`${SortBy}:${'asc' | 'desc'}`>('addedAt:desc')
   const [sortBy, sortDir] = sort.split(':') as [SortBy, 'asc' | 'desc']

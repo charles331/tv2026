@@ -18,6 +18,7 @@ import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { RemindersProvider, useReminders } from './lib/reminders'
 import { AppNav, type Route } from './components/AppNav'
 import { Button, LoadingState } from './components/ui'
+import { SearchScreen, type SearchTarget } from './features/search/SearchScreen'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
 import { SeriesScreen } from './features/series/SeriesScreen'
 import { SeriesDetail } from './features/series/SeriesDetail'
@@ -55,6 +56,31 @@ function AppShell(): ReactElement {
   // Bumped when "Tout mettre à jour" finishes: used as the key of the catalogue
   // screens so the one currently displayed remounts and refetches fresh data.
   const [catalogEpoch, setCatalogEpoch] = useState(0)
+  // Global search: its query survives a detour to another tab; "Tout voir"
+  // opens a catalogue tab seeded with that query (dropped on the next navigation).
+  const [globalQuery, setGlobalQuery] = useState('')
+  const [seed, setSeed] = useState<{ route: SearchTarget; query: string } | null>(null)
+  const navigate = useCallback((next: Route) => {
+    setSeed(null)
+    setRoute(next)
+  }, [])
+  const seeAll = useCallback((target: SearchTarget, query: string) => {
+    setSeed({ route: target, query })
+    setRoute(target)
+  }, [])
+  const seedFor = (target: SearchTarget): string => (seed?.route === target ? seed.query : '')
+
+  // Ctrl+K (Cmd+K) opens the global search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        navigate('search')
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navigate])
 
   const { items } = useDownloads()
   const busy = useConnectionBusy()
@@ -282,7 +308,7 @@ function AppShell(): ReactElement {
       <div className="flex min-h-0 flex-1">
         <AppNav
           route={route}
-          onNavigate={setRoute}
+          onNavigate={navigate}
           activeDownloads={activeDownloads}
           scheduledCount={scheduledCount}
           busyReason={busy.busy ? busy.reason : null}
@@ -292,23 +318,36 @@ function AppShell(): ReactElement {
         />
 
         <main className="min-w-0 flex-1">
+          {route === 'search' && (
+            <SearchScreen
+              query={globalQuery}
+              onQueryChange={setGlobalQuery}
+              onSelectMovie={setSelected}
+              onSelectSeries={setSelectedSeries}
+              onPlayChannel={handlePlayChannel}
+              onSeeAll={seeAll}
+            />
+          )}
           {route === 'catalog' && (
             <CatalogScreen
-              key={catalogEpoch}
+              key={`${catalogEpoch}:${seedFor('catalog')}`}
+              initialQuery={seedFor('catalog')}
               onSelectMovie={setSelected}
               onGoToSettings={() => setRoute('settings')}
             />
           )}
           {route === 'series' && (
             <SeriesScreen
-              key={catalogEpoch}
+              key={`${catalogEpoch}:${seedFor('series')}`}
+              initialQuery={seedFor('series')}
               onSelectSeries={setSelectedSeries}
               onGoToSettings={() => setRoute('settings')}
             />
           )}
           {route === 'live' && (
             <LiveScreen
-              key={catalogEpoch}
+              key={`${catalogEpoch}:${seedFor('live')}`}
+              initialQuery={seedFor('live')}
               onPlayChannel={handlePlayChannel}
               onGoToSettings={() => setRoute('settings')}
             />

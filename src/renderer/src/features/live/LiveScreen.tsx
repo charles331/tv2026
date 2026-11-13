@@ -54,13 +54,16 @@ function favToLive(f: FavoriteItem): LiveStream {
 
 export function LiveScreen({
   onPlayChannel,
-  onGoToSettings
+  onGoToSettings,
+  initialQuery = ''
 }: {
   onPlayChannel: (channel: LiveStream) => void
   onGoToSettings: () => void
+  /** Query to start with ("Tout voir" from the global search). */
+  initialQuery?: string
 }): ReactElement {
   const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [rawQuery, setRawQuery] = useState('')
+  const [rawQuery, setRawQuery] = useState(initialQuery)
   const [guideChannel, setGuideChannel] = useState<LiveStream | null>(null)
   const [searchGuides, setSearchGuides] = useState(readGuideSearchPref)
   const query = useDebounced(rawQuery, 300)
