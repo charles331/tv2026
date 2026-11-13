@@ -107,9 +107,9 @@ export function CatalogScreen({
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as typeof sort)}
-            disabled={isSearching || isFavorites}
+            disabled={isFavorites}
             className="h-10 rounded-lg border border-white/10 bg-surface-sunken px-3 text-sm text-gray-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/70 disabled:opacity-40"
-            title={isSearching ? 'Tri indisponible pendant la recherche' : 'Trier'}
+            title="Trier"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>

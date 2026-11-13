@@ -61,6 +61,9 @@ export interface SearchLiveRequest {
   categoryId?: string | null
   page: number
   pageSize: number
+  /** Sort field (default: name). */
+  sortBy?: ListLiveRequest['sortBy']
+  sortDir?: 'asc' | 'desc'
 }
 
 /** Short-EPG request: now + next programmes for one channel. */

@@ -12,7 +12,8 @@ import { createServer } from 'node:http'
 
 export const MOVIES = [
   { stream_id: 42, name: 'FR - Le Film Test (2026)', category_id: 1, container_extension: 'mkv', duration: '01:40:00', size: 1_800_000_000 },
-  { stream_id: 43, name: 'FR - Autre Film (2025) CAM', category_id: 1, container_extension: 'mp4', duration: '01:30:00', size: 700_000_000 }
+  { stream_id: 43, name: 'FR - Autre Film (2025) CAM', category_id: 1, container_extension: 'mp4', duration: '01:30:00', size: 700_000_000 },
+  { stream_id: 44, name: 'FR - L’Éléphant bleu (2024)', category_id: 1, container_extension: 'mkv', duration: '01:35:00', size: 1_200_000_000 }
 ]
 
 /** Two variants sharing one guide, and a channel with its own guide. */

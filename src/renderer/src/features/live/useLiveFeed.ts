@@ -43,7 +43,14 @@ export function useLiveFeed(params: LiveFeedParams): LiveFeed {
       const trimmed = query.trim()
       if (trimmed.length > 0) {
         return unwrap(
-          await api().live.search({ query: trimmed, categoryId, page: pageToLoad, pageSize: PAGE_SIZE })
+          await api().live.search({
+            query: trimmed,
+            categoryId,
+            page: pageToLoad,
+            pageSize: PAGE_SIZE,
+            sortBy,
+            sortDir
+          })
         )
       }
       return unwrap(

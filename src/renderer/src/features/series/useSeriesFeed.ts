@@ -46,7 +46,9 @@ export function useSeriesFeed(params: SeriesFeedParams): SeriesFeed {
             query: trimmed,
             categoryId,
             page: pageToLoad,
-            pageSize: PAGE_SIZE
+            pageSize: PAGE_SIZE,
+            sortBy,
+            sortDir
           })
         )
       }

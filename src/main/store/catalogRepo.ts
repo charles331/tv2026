@@ -15,6 +15,7 @@ import type {
   VodStream
 } from '@shared/index'
 import { getDb } from './db'
+import { nameSearch } from './searchText'
 
 interface CategoryRow {
   category_id: string
@@ -203,15 +204,19 @@ export function searchStreams(req: SearchRequest): Page<VodStream> {
   const page = Math.max(1, req.page)
   const pageSize = Math.min(200, Math.max(1, req.pageSize))
   const offset = (page - 1) * pageSize
-  const like = `%${req.query.replace(/[%_]/g, (m) => '\\' + m)}%`
+  // Accent-insensitive, words in any order (see searchText.ts).
+  const match = nameSearch('s.name', req.query)
+  if (!match) return { items: [], page, pageSize, total: 0 }
+  const sortCol = SORT_COLUMNS[req.sortBy ?? 'name'] ?? 'name COLLATE NOCASE'
+  const dir = req.sortDir === 'desc' ? 'DESC' : 'ASC'
 
   const catClause = req.categoryId ? 'AND s.category_id = ?' : ''
-  const baseParams: (string | number)[] = [like]
+  const baseParams: (string | number)[] = [...match.params]
   if (req.categoryId) baseParams.push(req.categoryId)
 
   const total = (
     db
-      .prepare(`SELECT COUNT(*) AS n FROM vod_streams s WHERE s.name LIKE ? ESCAPE '\\' ${catClause}`)
+      .prepare(`SELECT COUNT(*) AS n FROM vod_streams s WHERE ${match.clause} ${catClause}`)
       .get(...baseParams) as { n: number }
   ).n
 
@@ -225,8 +230,8 @@ export function searchStreams(req: SearchRequest): Page<VodStream> {
               fc.width AS file_width, fc.height AS file_height, fc.video_codec AS file_codec
        FROM vod_streams s
        LEFT JOIN vod_file_check fc ON fc.stream_id = s.stream_id
-       WHERE s.name LIKE ? ESCAPE '\\' ${catClause}
-       ORDER BY s.name COLLATE NOCASE ASC
+       WHERE ${match.clause} ${catClause}
+       ORDER BY ${sortCol} ${dir}
        LIMIT ? OFFSET ?`
     )
     .all(...baseParams, pageSize, offset) as StreamRow[]

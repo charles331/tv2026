@@ -70,14 +70,14 @@ try {
   await page.getByRole('button', { name: 'Tout mettre à jour', exact: true }).last().click()
   await page.waitForFunction(() => /Échec pour|Catalogues à jour/.test(document.body.innerText), null, { timeout: 30_000 })
   const toast = (await body()).match(/(Mis à jour[^\n]*|Catalogues à jour[^\n]*)/)?.[0] ?? ''
-  check('Tout mettre à jour continue après une panne', /2 films/.test(toast) && /séries/.test(toast) && /chaînes/.test(toast), toast)
+  check('Tout mettre à jour continue après une panne', /3 films/.test(toast) && /séries/.test(toast) && /chaînes/.test(toast), toast)
 
   // Journal : une ligne par catalogue, réussite ou échec.
   await page.getByRole('button', { name: /^Réglages/ }).first().click()
   await page.getByText('Journal', { exact: true }).first().click()
   await page.waitForTimeout(800)
   const journal = await body()
-  check('Journal : films mis à jour', /Catalogue des films mis à jour : 2 films/.test(journal))
+  check('Journal : films mis à jour', /Catalogue des films mis à jour : 3 films/.test(journal))
   check('Journal : échec des séries', /Catalogue des séries non mis à jour/.test(journal))
 
   // Fiche film : la taille vérifiée apparaît aussi sur l'affiche, sans recharger.
@@ -93,6 +93,12 @@ try {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(500)
   check('Affiche : taille sans recharger', /[GM]o/.test(await poster.innerText()), (await poster.innerText()).replace(/\n/g, ' | '))
+
+  // Recherche tolérante : sans accents, mots dans le désordre.
+  await page.getByPlaceholder(/rechercher/i).first().fill('bleu elephant')
+  const elephant = page.locator('button[title="FR - L’Éléphant bleu (2024)"]').first()
+  await elephant.waitFor({ timeout: 5000 }).catch(() => undefined)
+  check('Recherche sans accents, mots dans le désordre', await elephant.isVisible())
 
   // Téléchargements : le titre ouvre la fiche (film, série, ou message).
   await page.getByRole('button', { name: 'Téléchargements' }).first().click()

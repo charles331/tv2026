@@ -109,6 +109,9 @@ export interface SearchRequest {
   categoryId?: string | null
   page: number
   pageSize: number
+  /** Sort field (default: name). */
+  sortBy?: ListStreamsRequest['sortBy']
+  sortDir?: 'asc' | 'desc'
 }
 
 /** Force-refresh control for the catalogue cache. */

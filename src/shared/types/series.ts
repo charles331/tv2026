@@ -91,6 +91,9 @@ export interface SearchSeriesRequest {
   categoryId?: string | null
   page: number
   pageSize: number
+  /** Sort field (default: name). */
+  sortBy?: ListSeriesRequest['sortBy']
+  sortDir?: 'asc' | 'desc'
 }
 
 /** Result of refreshing the series cache from the provider. */

@@ -314,7 +314,9 @@ export const handlers: IpcHandlers = {
         query: requireString(req, 'query', 256),
         categoryId: optionalString(req, 'categoryId') ?? null,
         page: requireInt(req, 'page'),
-        pageSize: requireInt(req, 'pageSize')
+        pageSize: requireInt(req, 'pageSize'),
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
   },
@@ -362,7 +364,9 @@ export const handlers: IpcHandlers = {
         query: requireString(req, 'query', 256),
         categoryId: optionalString(req, 'categoryId') ?? null,
         page: requireInt(req, 'page'),
-        pageSize: requireInt(req, 'pageSize')
+        pageSize: requireInt(req, 'pageSize'),
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
   },
@@ -400,7 +404,9 @@ export const handlers: IpcHandlers = {
         query: requireString(req, 'query', 256),
         categoryId: optionalString(req, 'categoryId') ?? null,
         page: requireInt(req, 'page'),
-        pageSize: requireInt(req, 'pageSize')
+        pageSize: requireInt(req, 'pageSize'),
+        sortBy: (optionalString(req, 'sortBy') as never) ?? 'name',
+        sortDir: (optionalString(req, 'sortDir') as never) ?? 'asc'
       })
     )
   },
