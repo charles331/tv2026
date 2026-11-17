@@ -125,10 +125,11 @@ Le raccourci Ctrl+K reste.
   sélection ne peut pas en sortir. À l'ouverture, elle va sur l'action
   principale (Lire / Reprendre ; `ConflictDialog` : le choix qui ne coupe rien).
   À la fermeture, elle revient sur l'élément qui l'a ouverte.
-- **Mémoire par écran** : en quittant une route, on retient la clé de
-  l'élément sélectionné (et, pour une grille, son index + la catégorie) ; en
-  revenant, on la restaure. Les routes étant démontées au changement, la
-  mémoire vit dans un contexte au niveau de `App`.
+- **Mémoire par écran** : les écrans de navigation (Films, Séries, Direct,
+  Recherche) restent montés mais cachés quand on les quitte ; catégorie,
+  défilement et sélection sont donc conservés tels quels (choix du plan, plus
+  simple et plus fiable qu'une mémoire reconstruite). Les autres écrans
+  (Programmés, Téléchargements, Réglages) repartent du premier élément.
 - Le focus DOM suit la sélection (`shouldFocusDOMNode`), pour que les champs de
   saisie et les lecteurs d'écran fonctionnent.
 
