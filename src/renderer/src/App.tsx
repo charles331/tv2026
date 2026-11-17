@@ -380,6 +380,17 @@ function AppShell(): ReactElement {
   // Read by the "file ended" callback, which must see the latest lookup.
   const nextRef = useRef(neighbors.next)
   nextRef.current = neighbors.next
+  const previousRef = useRef(neighbors.previous)
+  previousRef.current = neighbors.previous
+  // SPIKE (remote): previous / next pressed in the video window.
+  useEffect(
+    () =>
+      api().player.onRemote(({ action }) => {
+        const target = action === 'next' ? nextRef.current : previousRef.current
+        if (target) target.play()
+      }),
+    []
+  )
 
   // Refresh movies + series + live in one go (triggered from the nav, confirmed
   // by the user). Reports the outcome via a toast.

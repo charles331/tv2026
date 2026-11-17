@@ -173,6 +173,12 @@ if (!gotLock) {
     // window. Playback acquires the connection lock; the download queue pauses
     // while the player holds it (handled in DownloadManager via the lock).
     playerController.attach(makeEmitter(getWindows))
+    playerController.attachFocusApp(() => {
+      if (!mainWindow) return
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    })
     playerController.attachProgress(createProgressSink(makeEmitter(getWindows)))
 
     // Wire + start the reminder/recording scheduler: native notifications at

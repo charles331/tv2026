@@ -118,6 +118,8 @@ export const EventChannels = {
   DOWNLOAD_STATE: 'event:download:state',
   PLAYER_POSITION: 'event:player:position',
   PLAYER_STATE: 'event:player:state',
+  /** SPIKE (remote): a key of the video window the app acts on. */
+  PLAYER_REMOTE: 'event:player:remote',
   /** Connection lock state changed (e.g. download paused for playback). */
   CONNECTION_BUSY: 'event:connection:busy',
   /** A reminder/recording row changed (status / filePath). */

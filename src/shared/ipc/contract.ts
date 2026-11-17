@@ -224,6 +224,7 @@ export interface EventContract {
   [EventChannels.DOWNLOAD_STATE]: DownloadStateEvent
   [EventChannels.PLAYER_POSITION]: PlayerPositionEvent
   [EventChannels.PLAYER_STATE]: PlayerStateEvent
+  [EventChannels.PLAYER_REMOTE]: { action: 'next' | 'previous' }
   [EventChannels.CONNECTION_BUSY]: { busy: boolean; reason: 'download' | 'playback' | null }
   [EventChannels.REMINDER_UPDATED]: ReminderUpdatedEvent
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent

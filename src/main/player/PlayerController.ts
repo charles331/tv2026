@@ -39,6 +39,7 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { mkdir } from 'fs/promises'
+import { writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
@@ -144,6 +145,24 @@ export class PlayerController {
    */
   attach(emit: PlayerEventEmitter): void {
     this.emit = emit
+  }
+
+  /** SPIKE (remote): bring the app back to the front once the video closes. */
+  private focusApp: () => void = () => {}
+  attachFocusApp(fn: () => void): void {
+    this.focusApp = fn
+  }
+
+  /** SPIKE (remote): a key of the mpv window, forwarded with `script-message tv2026 <action>`. */
+  private onRemote(action: string): void {
+    appLog.info('player', `Télécommande : ${action}`)
+    if (action === 'back') {
+      void this.stop().then(() => this.focusApp())
+      return
+    }
+    if (action === 'next' || action === 'previous') {
+      this.emit(EventChannels.PLAYER_REMOTE, { action })
+    }
   }
 
   /** Wire the watch-progress store (resume positions, recent channels). */
@@ -384,6 +403,10 @@ export class PlayerController {
       '--no-terminal',
       // Native UX inside mpv's own window:
       '--osc=yes', // on-screen controller
+      // SPIKE (remote): fullscreen in front, remote-friendly keys.
+      '--fullscreen=yes',
+      '--ontop=yes',
+      `--input-conf=${remoteInputConf(req.mediaKind === 'live')}`,
       '--input-default-bindings=yes', // f=fullscreen, j/J=subs, #=audio, etc.
       // Comfortable standalone window.
       `--title=${winTitle}`,
@@ -448,6 +471,10 @@ export class PlayerController {
     })
     ipc.on('event', (msg: Record<string, unknown>) => {
       if (session !== this.sessionId) return
+      if (msg.event === 'client-message' && Array.isArray(msg.args) && msg.args[0] === 'tv2026') {
+        this.onRemote(String(msg.args[1]))
+        return
+      }
       // Once a file is loaded (first play, soft reload, or respawn), re-apply the
       // per-file selections a (re)load resets: chosen audio/subtitle track + pause.
       if (msg.event === 'file-loaded') void this.restorePrefs(ipc)
@@ -1091,4 +1118,37 @@ function describeError(e: unknown): string {
   if (e instanceof PlayerError) return e.message
   if (e instanceof Error) return e.message
   return String(e)
+}
+
+/**
+ * SPIKE (remote): mpv key bindings for a remote control (arrows, OK, back).
+ * Written once per kind in the temp folder. Keys the app must act on are sent
+ * back over IPC with `script-message tv2026 <action>`.
+ */
+function remoteInputConf(live: boolean): string {
+  const back = ['ESC', 'BS', 'BACK', 'MBTN_BACK', 'Alt+LEFT']
+  const lines = live
+    ? [
+        'ENTER show-text "${media-title}" 3000',
+        'KP_ENTER show-text "${media-title}" 3000',
+        'LEFT script-message tv2026 previous',
+        'RIGHT script-message tv2026 next',
+        'UP script-message tv2026 previous',
+        'DOWN script-message tv2026 next'
+      ]
+    : [
+        'ENTER cycle pause; show-progress',
+        'KP_ENTER cycle pause; show-progress',
+        'LEFT seek -10; show-progress',
+        'RIGHT seek 30; show-progress',
+        'UP cycle audio',
+        'DOWN cycle sub',
+        'PGUP script-message tv2026 previous',
+        'PGDWN script-message tv2026 next'
+      ]
+  lines.push(...back.map((k) => `${k} script-message tv2026 back`))
+  lines.push('SPACE cycle pause; show-progress', 'PLAYPAUSE cycle pause; show-progress')
+  const path = join(tmpdir(), `tv2026-remote-${live ? 'live' : 'vod'}.conf`)
+  writeFileSync(path, lines.join('\n') + '\n', 'utf8')
+  return path
 }
