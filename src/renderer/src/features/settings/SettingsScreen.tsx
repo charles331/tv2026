@@ -20,8 +20,11 @@ import {
   ProgressBar,
   IconFolder,
   IconRefresh,
-  IconDownload
+  IconDownload,
+  FocusButton,
+  FocusCheckbox
 } from '../../components/ui'
+import { RemoteTester } from './RemoteTester'
 import { formatDateFromEpochSecs, formatPercent, formatSpeed } from '../../lib/format'
 
 /**
@@ -525,6 +528,8 @@ export function SettingsScreen({
   const statusInfo = testResult ? STATUS_LABELS[testResult.status] : null
   const encryptionUnavailable = creds && !creds.encryptionAvailable
 
+  const [testerOpen, setTesterOpen] = useState(false)
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6 fade-in">
       <header>
@@ -535,7 +540,7 @@ export function SettingsScreen({
       {/* Onglets : chaque groupe de réglages sur sa propre page (fini le long défilement). */}
       <nav className="flex flex-wrap gap-2" aria-label="Sections des réglages">
         {(Object.keys(SETTINGS_TABS) as SettingsTab[]).map((key) => (
-          <button
+          <FocusButton
             key={key}
             type="button"
             onClick={() => setTab(key)}
@@ -548,7 +553,7 @@ export function SettingsScreen({
             aria-current={tab === key ? 'page' : undefined}
           >
             {SETTINGS_TABS[key].label}
-          </button>
+          </FocusButton>
         ))}
       </nav>
 
@@ -692,8 +697,7 @@ export function SettingsScreen({
           automatiquement au mode continu.
         </p>
         <label className="mt-4 flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
+          <FocusCheckbox
             className="mt-0.5 h-4 w-4 accent-accent"
             checked={settings?.chunkedDownloads ?? true}
             onChange={(e) => void handleToggleChunked(e.target.checked)}
@@ -719,7 +723,7 @@ export function SettingsScreen({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {BLOCK_SIZE_CHOICES_MIB.map((mib) => (
-              <button
+              <FocusButton
                 key={mib}
                 type="button"
                 onClick={() => void handleSetBlockSize(mib * 1024 * 1024)}
@@ -731,7 +735,7 @@ export function SettingsScreen({
                 }
               >
                 {mib === 2 ? '2 Mio (défaut)' : `${mib} Mio`}
-              </button>
+              </FocusButton>
             ))}
           </div>
         </div>
@@ -750,7 +754,7 @@ export function SettingsScreen({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {[1, 2, 3, 4, 6, 8].map((n) => (
-              <button
+              <FocusButton
                 key={n}
                 type="button"
                 onClick={() => void handleSetConnections(n)}
@@ -762,7 +766,7 @@ export function SettingsScreen({
                 }
               >
                 {n === 1 ? '1 (défaut)' : n}
-              </button>
+              </FocusButton>
             ))}
           </div>
         </div>
@@ -775,7 +779,7 @@ export function SettingsScreen({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {(['browser', 'player'] as const).map((ua) => (
-              <button
+              <FocusButton
                 key={ua}
                 type="button"
                 onClick={() => void handleSetUserAgent(ua)}
@@ -787,7 +791,7 @@ export function SettingsScreen({
                 }
               >
                 {ua === 'browser' ? 'Navigateur (défaut)' : 'Lecteur vidéo (VLC)'}
-              </button>
+              </FocusButton>
             ))}
           </div>
         </div>
@@ -845,8 +849,7 @@ export function SettingsScreen({
           affiché.
         </p>
         <label className="mt-4 flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
+          <FocusCheckbox
             className="mt-0.5 h-4 w-4 accent-accent"
             checked={settings?.qualityCheck ?? true}
             onChange={(e) => void handleToggleQuality(e.target.checked)}
@@ -1034,6 +1037,19 @@ export function SettingsScreen({
 
       {/* Nouveautés (changelog) */}
       {tab === 'application' && (
+        <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
+          <h2 className="text-base font-medium text-gray-100">Télécommande</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            Vérifiez ce que chaque touche de votre télécommande envoie et si l’application la
+            reconnaît (flèches, OK, Retour).
+          </p>
+          <Button className="mt-4" onClick={() => setTesterOpen(true)}>
+            Tester la télécommande
+          </Button>
+          {testerOpen && <RemoteTester onClose={() => setTesterOpen(false)} />}
+        </section>
+      )}
+      {tab === 'application' && (
       <section className="rounded-xl border border-white/10 bg-surface-raised p-5">
         <div className="flex items-center gap-3">
           <h2 className="text-base font-medium text-gray-100">Nouveautés</h2>
@@ -1160,7 +1176,7 @@ export function SettingsScreen({
           <h2 className="text-base font-medium text-gray-100">Journal de l’application</h2>
           <div className="ml-auto flex items-center gap-2">
             {(['all', 'info', 'warn', 'error'] as const).map((lvl) => (
-              <button
+              <FocusButton
                 key={lvl}
                 type="button"
                 onClick={() => setLogLevel(lvl)}
@@ -1172,7 +1188,7 @@ export function SettingsScreen({
                 }
               >
                 {lvl === 'all' ? 'Tout' : lvl === 'info' ? 'Infos' : lvl === 'warn' ? 'Avert.' : 'Erreurs'}
-              </button>
+              </FocusButton>
             ))}
           </div>
         </div>

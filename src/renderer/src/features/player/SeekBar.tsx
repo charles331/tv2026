@@ -4,7 +4,8 @@
  * drag to seek, ←/→ = ±10 s. Live streams have no meaningful duration: the bar
  * then only shows how many seconds are loaded ahead (30 s window), no cursor.
  */
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactElement } from 'react'
+import { useState, type KeyboardEvent, type PointerEvent, type ReactElement } from 'react'
+import { useFocusItem } from '../../lib/remote/focus'
 import { formatClock } from '../../lib/format'
 import { cn } from '../../components/ui'
 import { liveBufferFill, seekGeometry, LIVE_BUFFER_WINDOW_SECS } from './seekGeometry'
@@ -24,7 +25,13 @@ export function SeekBar({
   disabled: boolean
   onSeek: (secs: number) => void
 }): ReactElement {
-  const trackRef = useRef<HTMLDivElement>(null)
+  // Remote control: ←/→ seek (onKeyDown below), ↑/↓ leave the bar. Not
+  // selectable live (no slider is rendered then) nor while seeking is off.
+  const focus = useFocusItem<HTMLDivElement>({
+    focusable: !live && !disabled && (durationSecs ?? 0) > 0,
+    onArrow: (dir) => dir === 'up' || dir === 'down'
+  })
+  const trackRef = focus.ref
   const [hoverSecs, setHoverSecs] = useState<number | null>(null)
   const [dragSecs, setDragSecs] = useState<number | null>(null)
   const duration = durationSecs ?? 0
@@ -41,9 +48,14 @@ export function SeekBar({
           title={`${Math.round(aheadSecs)} s déjà chargées d’avance (barre pleine = ${LIVE_BUFFER_WINDOW_SECS} s)`}
           aria-label="Avance chargée"
         >
-          <div className="absolute inset-y-0 left-0 rounded-full bg-white/35 transition-[width] duration-500" style={{ width: `${pct}%` }} />
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-white/35 transition-[width] duration-500"
+            style={{ width: `${pct}%` }}
+          />
         </div>
-        <span className="w-24 shrink-0 text-xs tabular-nums text-gray-500">{Math.round(aheadSecs)} s d’avance</span>
+        <span className="w-24 shrink-0 text-xs tabular-nums text-gray-500">
+          {Math.round(aheadSecs)} s d’avance
+        </span>
       </div>
     )
   }
@@ -87,6 +99,8 @@ export function SeekBar({
   return (
     <div
       ref={trackRef}
+      data-remote=""
+      data-remote-focus={focus.focused}
       role="slider"
       tabIndex={canSeek ? 0 : -1}
       aria-label="Position"
@@ -107,7 +121,10 @@ export function SeekBar({
     >
       {/* track */}
       <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/10 transition-[height] group-hover:h-1.5 group-focus-visible:h-1.5">
-        <div className="absolute inset-y-0 left-0 bg-white/30" style={{ width: `${bufferedPct}%` }} />
+        <div
+          className="absolute inset-y-0 left-0 bg-white/30"
+          style={{ width: `${bufferedPct}%` }}
+        />
         <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: `${playedPct}%` }} />
       </div>
       {/* knob: only while hovering / dragging / focused */}
@@ -115,7 +132,9 @@ export function SeekBar({
         <div
           className={cn(
             'pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-opacity',
-            dragSecs !== null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+            dragSecs !== null
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
           )}
           style={{ left: `${playedPct}%` }}
         />

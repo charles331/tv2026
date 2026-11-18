@@ -21,6 +21,8 @@ import { RemindersProvider, useReminders } from './lib/reminders'
 import { ProgressProvider, useProgress } from './lib/progress'
 import { AppNav, type Route } from './components/AppNav'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { setTypeToSearchHandler } from './lib/remote/RemoteRuntime'
+import { backStack } from './lib/remote/backStack'
 import { FocusZone, ScreenActiveContext, useBackHandler, useReturnFocus } from './lib/remote/focus'
 import { Button, LoadingState } from './components/ui'
 import { SearchScreen, type SearchTarget } from './features/search/SearchScreen'
@@ -85,9 +87,33 @@ function AppShell(): ReactElement {
   const [visited, setVisited] = useState<ReadonlySet<Route>>(() => new Set<Route>(['catalog']))
   useEffect(() => {
     setVisited((v) => (v.has(route) ? v : new Set(v).add(route)))
-    // The newly shown screen takes the selection (its zone restores its last child).
-    setFocus(`screen-${route}`)
+    // The newly shown screen takes the selection (its zone restores its last
+    // child) — unless it has nothing selectable yet (empty, or still loading):
+    // the selection then stays on the menu, → enters the screen later.
+    const target = pendingFocus.current ?? `screen-${route}`
+    pendingFocus.current = null
+    const zone = document.querySelector(`[data-focus-zone="screen-${route}"]`)
+    if (zone?.querySelector('[data-remote]')) setFocus(target)
   }, [route])
+
+  // Typing a letter outside a text field (keyboard of the remote) starts a
+  // global search with it — not while a page or dialog is open (stack > 1:
+  // the shell's own Back handler is the only permanent one).
+  const pendingFocus = useRef<string | null>(null)
+  const routeRef = useRef(route)
+  routeRef.current = route
+  useEffect(() => {
+    setTypeToSearchHandler((char) => {
+      if (backStack.size() > 1) return
+      setGlobalQuery(char)
+      if (routeRef.current === 'search') setFocus('search-field')
+      else {
+        pendingFocus.current = 'search-field'
+        navigate('search')
+      }
+    })
+    return () => setTypeToSearchHandler(null)
+  }, [navigate])
 
   // Back at screen level: content → its categories → the main menu → nothing.
   useBackHandler(() => {

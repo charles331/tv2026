@@ -20,7 +20,10 @@ describe('formatClock', () => {
 
 describe('seekGeometry', () => {
   it('gives the played and loaded percentages of the track', () => {
-    expect(seekGeometry(394, 1000, 6612)).toEqual({ playedPct: (394 / 6612) * 100, bufferedPct: (1000 / 6612) * 100 })
+    expect(seekGeometry(394, 1000, 6612)).toEqual({
+      playedPct: (394 / 6612) * 100,
+      bufferedPct: (1000 / 6612) * 100
+    })
   })
   it('never shows the loaded part behind the cursor nor beyond the end', () => {
     expect(seekGeometry(500, 100, 1000)).toEqual({ playedPct: 50, bufferedPct: 50 })

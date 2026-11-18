@@ -29,6 +29,7 @@ import {
   type Direction
 } from '@noriginmedia/norigin-spatial-navigation'
 import { backStack } from './backStack'
+import { ReturnFocus } from './returnFocus'
 
 /**
  * False inside a screen that is kept mounted but hidden (App's ScreenSlot):
@@ -79,6 +80,9 @@ export function useFocusItem<E extends HTMLElement = HTMLElement>(opts: FocusIte
   }
 }
 
+/** Keys of the mounted FocusZones (read by the key router, see RemoteRuntime). */
+export const zoneKeys = new Set<string>()
+
 export function FocusZone({
   focusKey,
   boundary = false,
@@ -103,6 +107,12 @@ export function FocusZone({
     preferredChildFocusKey,
     focusable
   })
+  useEffect(() => {
+    zoneKeys.add(focusKey)
+    return () => {
+      zoneKeys.delete(focusKey)
+    }
+  }, [focusKey])
   return (
     <FocusContext.Provider value={focusKey}>
       <div {...rest} ref={ref} className={className} data-focus-zone={focusKey}>
@@ -143,24 +153,12 @@ export function useBackHandler(handler: () => void, active = true): void {
   }, [active])
 }
 
+const returnFocus = new ReturnFocus({
+  getCurrent: () => getCurrentFocusKey() ?? '',
+  exists: doesFocusableExist,
+  focus: (key) => void setFocus(key)
+})
+
 export function useReturnFocus(): void {
-  // Refs survive React StrictMode's simulated unmount/remount: the key is
-  // captured once (before the overlay takes the selection) and a restore
-  // scheduled by the simulated unmount is cancelled by the remount.
-  const previous = useRef<string | null>(null)
-  const timer = useRef<number | null>(null)
-  useEffect(() => {
-    if (timer.current !== null) {
-      window.clearTimeout(timer.current)
-      timer.current = null
-    }
-    if (previous.current === null) previous.current = getCurrentFocusKey() ?? ''
-    return () => {
-      // After the overlay's own focusables are gone.
-      timer.current = window.setTimeout(() => {
-        const key = previous.current
-        if (key && doesFocusableExist(key)) setFocus(key)
-      }, 0)
-    }
-  }, [])
+  useEffect(() => returnFocus.open(), [])
 }

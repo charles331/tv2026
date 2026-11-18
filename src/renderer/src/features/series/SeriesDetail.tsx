@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import type { Episode, SeriesInfo, SeriesStream } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
-import { useBackHandler } from '../../lib/remote/focus'
+import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
 import { useDownloads } from '../../lib/downloads'
 import { useToast } from '../../lib/toast'
 import { useProgress } from '../../lib/progress'
@@ -17,7 +18,8 @@ import {
   IconPlay,
   IconStar,
   IconX,
-  IconCheck
+  IconCheck,
+  FocusButton
 } from '../../components/ui'
 import { formatClock, formatDuration, formatRating } from '../../lib/format'
 import { FavoriteButton } from '../favorites/FavoriteButton'
@@ -79,6 +81,23 @@ export function SeriesDetail({
     () => info?.seasons.find((s) => s.seasonNumber === selectedSeason) ?? null,
     [info, selectedSeason]
   )
+
+  // Remote control: the selection stays in the page and starts on the episode
+  // to resume (else the first one); it goes back to the series card on close.
+  useReturnFocus()
+  useEffect(() => {
+    setFocus('series-detail')
+  }, [])
+  const placedSelection = useRef(false)
+  useEffect(() => {
+    if (placedSelection.current || !season || season.episodes.length === 0) return
+    placedSelection.current = true
+    const resume = season.episodes.find(
+      (ep) => resumeStart(progressStore.get('series', ep.episodeId)) != null
+    )
+    const target = resume ?? season.episodes[0]
+    if (target) setFocus(`series-ep-${target.episodeId}`)
+  }, [season, progressStore])
 
   const handleDownloadEpisode = useCallback(
     async (ep: Episode) => {
@@ -142,10 +161,7 @@ export function SeriesDetail({
     [downloadedStreamIds]
   )
 
-  const allEpisodes = useMemo(
-    () => (info?.seasons ?? []).flatMap((s) => s.episodes),
-    [info]
-  )
+  const allEpisodes = useMemo(() => (info?.seasons ?? []).flatMap((s) => s.episodes), [info])
 
   return (
     <div
@@ -154,25 +170,32 @@ export function SeriesDetail({
       role="dialog"
       aria-modal="true"
     >
-      <div
+      <FocusZone
+        focusKey="series-detail"
+        boundary
         className="fade-in relative h-full w-full max-w-4xl overflow-hidden rounded-none bg-surface-raised shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative h-44 w-full overflow-hidden sm:h-56">
           {backdrop ? (
-            <img src={backdrop} alt="" className="h-full w-full object-cover opacity-60" loading="lazy" />
+            <img
+              src={backdrop}
+              alt=""
+              className="h-full w-full object-cover opacity-60"
+              loading="lazy"
+            />
           ) : (
             <div className="h-full w-full bg-gradient-to-br from-surface-overlay to-surface" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-surface-raised via-surface-raised/40 to-transparent" />
-          <button
+          <FocusButton
             type="button"
             onClick={onClose}
             className="absolute right-3 top-3 rounded-full bg-black/50 p-2 text-gray-200 backdrop-blur transition-colors hover:bg-black/70 hover:text-white"
             aria-label="Fermer"
           >
             <IconX size={18} />
-          </button>
+          </FocusButton>
         </div>
 
         <div className="max-h-[calc(90vh-14rem)] overflow-y-auto p-5 sm:p-6">
@@ -188,7 +211,10 @@ export function SeriesDetail({
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                 {(info?.year ?? series.year) != null && <span>{info?.year ?? series.year}</span>}
                 {rating != null && rating > 0 && (
-                  <span className="flex items-center gap-1 text-amber-300" title="Note du fournisseur">
+                  <span
+                    className="flex items-center gap-1 text-amber-300"
+                    title="Note du fournisseur"
+                  >
                     <IconStar size={13} /> {formatRating(rating)}
                   </span>
                 )}
@@ -220,7 +246,9 @@ export function SeriesDetail({
             </div>
           ) : (
             <>
-              {info?.plot && <p className="mt-4 text-sm leading-relaxed text-gray-300">{info.plot}</p>}
+              {info?.plot && (
+                <p className="mt-4 text-sm leading-relaxed text-gray-300">{info.plot}</p>
+              )}
 
               {actionError && <p className="mt-3 text-sm text-red-300">{actionError}</p>}
 
@@ -228,7 +256,7 @@ export function SeriesDetail({
               {info && info.seasons.length > 0 && (
                 <div className="mt-5 flex flex-wrap gap-2">
                   {info.seasons.map((s) => (
-                    <button
+                    <FocusButton
                       key={s.seasonNumber}
                       type="button"
                       onClick={() => setSelectedSeason(s.seasonNumber)}
@@ -240,7 +268,7 @@ export function SeriesDetail({
                       }
                     >
                       Saison {s.seasonNumber}
-                    </button>
+                    </FocusButton>
                   ))}
                 </div>
               )}
@@ -273,9 +301,7 @@ export function SeriesDetail({
                       icon={<IconDownload size={14} />}
                       loading={bulkBusy === 'all'}
                       disabled={bulkBusy !== null || pendingCount(allEpisodes) === 0}
-                      onClick={() =>
-                        void enqueueEpisodes(allEpisodes, 'all', 'Toutes les saisons')
-                      }
+                      onClick={() => void enqueueEpisodes(allEpisodes, 'all', 'Toutes les saisons')}
                     >
                       {pendingCount(allEpisodes) === 0
                         ? 'Tout est dans la file'
@@ -303,16 +329,19 @@ export function SeriesDetail({
                           {ep.title}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {ep.durationSecs != null && ep.durationSecs > 0 && formatDuration(ep.durationSecs)}
+                          {ep.durationSecs != null &&
+                            ep.durationSecs > 0 &&
+                            formatDuration(ep.durationSecs)}
                           {resumeAt != null && (
                             <span className="text-accent-hover">
-                              {ep.durationSecs ? ' · ' : ''}arrêté à {formatClock(watchProgress?.positionSecs)}
+                              {ep.durationSecs ? ' · ' : ''}arrêté à{' '}
+                              {formatClock(watchProgress?.positionSecs)}
                             </span>
                           )}
                         </p>
                         <WatchProgressBar progress={watchProgress} className="mt-1 max-w-xs" />
                       </div>
-                      <button
+                      <FocusButton
                         type="button"
                         onClick={() =>
                           void progressStore.setWatched({
@@ -336,7 +365,7 @@ export function SeriesDetail({
                         }
                       >
                         <IconCheck size={12} /> {watched ? 'Vu' : ''}
-                      </button>
+                      </FocusButton>
                       {resumeAt != null && (
                         <Button
                           size="sm"
@@ -348,6 +377,7 @@ export function SeriesDetail({
                         </Button>
                       )}
                       <Button
+                        focusKey={`series-ep-${ep.episodeId}`}
                         size="sm"
                         variant="secondary"
                         icon={<IconPlay size={14} />}
@@ -383,7 +413,7 @@ export function SeriesDetail({
             </>
           )}
         </div>
-      </div>
+      </FocusZone>
     </div>
   )
 }

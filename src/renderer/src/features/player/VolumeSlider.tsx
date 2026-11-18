@@ -3,7 +3,14 @@
  * knob on hover/drag, click or drag to set, ←/→ = ±5 %, mouse wheel = ±5 %.
  * Muted shows an empty bar (the level is kept and restored on unmute).
  */
-import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactElement, type WheelEvent } from 'react'
+import {
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactElement,
+  type WheelEvent
+} from 'react'
+import { useFocusItem } from '../../lib/remote/focus'
 import { cn } from '../../components/ui'
 
 const clamp = (v: number): number => Math.min(100, Math.max(0, Math.round(v)))
@@ -19,7 +26,9 @@ export function VolumeSlider({
   disabled: boolean
   onChange: (volume: number) => void
 }): ReactElement {
-  const trackRef = useRef<HTMLDivElement>(null)
+  // Remote control: ←/→ change the volume (onKeyDown below), ↑/↓ leave the bar.
+  const focus = useFocusItem<HTMLDivElement>({ onArrow: (dir) => dir === 'up' || dir === 'down' })
+  const trackRef = focus.ref
   const [drag, setDrag] = useState<number | null>(null)
   const shown = drag ?? (muted ? 0 : volume)
 
@@ -42,8 +51,8 @@ export function VolumeSlider({
   }
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (disabled) return
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') onChange(clamp(shown - 5))
-    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') onChange(clamp(shown + 5))
+    if (e.key === 'ArrowLeft') onChange(clamp(shown - 5))
+    else if (e.key === 'ArrowRight') onChange(clamp(shown + 5))
     else return
     e.preventDefault()
   }
@@ -54,6 +63,8 @@ export function VolumeSlider({
   return (
     <div
       ref={trackRef}
+      data-remote=""
+      data-remote-focus={focus.focused}
       role="slider"
       tabIndex={disabled ? -1 : 0}
       aria-label="Volume"
@@ -80,7 +91,9 @@ export function VolumeSlider({
         <div
           className={cn(
             'pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-opacity',
-            drag !== null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+            drag !== null
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
           )}
           style={{ left: `${shown}%` }}
         />

@@ -68,7 +68,9 @@ export function textFieldKeepsKey(
   if (ALWAYS_EDITING.has(key)) return true
   if (key !== 'ArrowLeft' && key !== 'ArrowRight') return false
   const { selectionStart: start, selectionEnd: end, valueLength } = caret
-  if (start === null || end === null) return false // no caret (e.g. number input)
+  // Caret not readable (number input: Chromium returns null): stay in the
+  // field, ↑/↓ leave it.
+  if (start === null || end === null) return true
   if (start !== end) return true // a selection: the arrow collapses it
   return key === 'ArrowLeft' ? start > 0 : start < valueLength
 }

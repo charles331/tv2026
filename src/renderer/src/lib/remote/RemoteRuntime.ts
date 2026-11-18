@@ -16,13 +16,21 @@
  * selection ring is only drawn after a navigation key, never while the mouse
  * is being used.
  */
-import { init } from '@noriginmedia/norigin-spatial-navigation'
+import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from './keys'
 import { backStack } from './backStack'
+import { zoneKeys } from './focus'
+import { typedSearchChar } from './typing'
 
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
+let typeToSearch: ((char: string) => void) | null = null
+
+/** What typing a letter outside a text field does (null = nothing). */
+export function setTypeToSearchHandler(fn: ((char: string) => void) | null): void {
+  typeToSearch = fn
+}
 
 function setModality(mode: 'keys' | 'pointer'): void {
   const root = document.documentElement
@@ -52,6 +60,12 @@ export function startRemote(): void {
         backStack.dispatch()
         return
       }
+      const typed = typeToSearch ? typedSearchChar(e, { inTextField }) : null
+      if (typed && typeToSearch) {
+        e.preventDefault() // the search box gets the letter from the handler
+        typeToSearch(typed)
+        return
+      }
       if (inTextField) {
         const field = document.activeElement as HTMLInputElement
         let caret: { selectionStart: number | null; selectionEnd: number | null }
@@ -66,6 +80,19 @@ export function startRemote(): void {
         }
       }
       if (action) setModality('keys')
+      // The selection may sit on a zone itself: it was given the selection
+      // while still empty (a list loading). Its children are there now: the
+      // first key enters the zone instead of navigating away from it.
+      const current = getCurrentFocusKey()
+      if (
+        action &&
+        zoneKeys.has(current) &&
+        document.querySelector(`[data-focus-zone="${current}"] [data-remote]`)
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        void setFocus(current)
+      }
     },
     { capture: true }
   )
