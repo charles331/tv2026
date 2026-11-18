@@ -85,8 +85,11 @@ function AppShell(): ReactElement {
   const [visited, setVisited] = useState<ReadonlySet<Route>>(() => new Set<Route>(['catalog']))
   useEffect(() => {
     setVisited((v) => (v.has(route) ? v : new Set(v).add(route)))
-    // The newly shown screen takes the selection (its zone restores its last child).
-    setFocus(`screen-${route}`)
+    // The newly shown screen takes the selection (its zone restores its last
+    // child) — unless it has nothing selectable yet (empty, or still loading):
+    // the selection then stays on the menu, → enters the screen later.
+    const zone = document.querySelector(`[data-focus-zone="screen-${route}"]`)
+    if (zone?.querySelector('[data-remote]')) setFocus(`screen-${route}`)
   }, [route])
 
   // Back at screen level: content → its categories → the main menu → nothing.
