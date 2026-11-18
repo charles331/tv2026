@@ -20,8 +20,10 @@ import {
   IconBroadcast,
   LoadingState,
   EmptyState,
-  ErrorState
+  ErrorState,
+  FocusCheckbox
 } from '../../components/ui'
+import { FocusZone, useFocusWhenReady } from '../../lib/remote/focus'
 import { CategorySidebar } from '../catalog/CategorySidebar'
 import { LiveChannelRow } from './LiveChannelRow'
 import { ChannelGuide } from './ChannelGuide'
@@ -108,7 +110,10 @@ export function LiveScreen({
   const isRecent = categoryId === RECENT_CATEGORY_ID
   const isPinned = isFavorites || isRecent
 
-  const categoriesState = useAsync<LiveCategory[]>(() => api().live.listCategories().then(unwrap), [])
+  const categoriesState = useAsync<LiveCategory[]>(
+    () => api().live.listCategories().then(unwrap),
+    []
+  )
   const feed = useLiveFeed({
     categoryId: isPinned ? null : categoryId,
     query: isPinned ? '' : query,
@@ -116,13 +121,17 @@ export function LiveScreen({
     sortDir: 'asc'
   })
 
+  // Remote control: once channels are listed, the list takes the selection.
+  useFocusWhenReady('live-grid', !isPinned && feed.items.length > 0, 'screen-live')
+
   const isSearching = query.trim().length > 0
   // Programme search needs a couple of characters to stay meaningful.
   const showGuideResults = searchGuides && !isPinned && query.trim().length >= 2
   const selectedCategoryName =
     categoryId == null
       ? 'Toutes les chaînes'
-      : (categoriesState.data?.find((c) => c.categoryId === categoryId)?.categoryName ?? 'Catégorie')
+      : (categoriesState.data?.find((c) => c.categoryId === categoryId)?.categoryName ??
+        'Catégorie')
 
   // Sentinel-based infinite scroll.
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -144,6 +153,7 @@ export function LiveScreen({
     <div className="flex h-full">
       <CategorySidebar
         focusKey="live-categories"
+        contentFocusKey="live-grid"
         categories={toSidebarCategories(categoriesState.data ?? [])}
         loading={categoriesState.loading}
         error={categoriesState.error}
@@ -159,14 +169,19 @@ export function LiveScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-3">
+        <FocusZone
+          focusKey="live-toolbar"
+          className="flex items-center gap-3 border-b border-white/10 px-5 py-3"
+        >
           <div className="relative max-w-md flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
               <IconSearch size={16} />
             </span>
             <TextInput
               className="pl-9"
-              placeholder={searchGuides ? 'Rechercher une chaîne ou un programme…' : 'Rechercher une chaîne…'}
+              placeholder={
+                searchGuides ? 'Rechercher une chaîne ou un programme…' : 'Rechercher une chaîne…'
+              }
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
               disabled={isPinned}
@@ -176,8 +191,7 @@ export function LiveScreen({
             className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-300"
             title="Cherche aussi dans les titres et descriptions des programmes, du programme en cours au dernier jour du guide (≈ 5 jours). Seules les chaînes qui ont un guide sont couvertes."
           >
-            <input
-              type="checkbox"
+            <FocusCheckbox
               className="h-4 w-4 accent-accent"
               checked={searchGuides}
               onChange={(e) => toggleSearchGuides(e.target.checked)}
@@ -185,7 +199,7 @@ export function LiveScreen({
             />
             Chercher aussi dans les guides
           </label>
-        </div>
+        </FocusZone>
 
         <div className="flex items-center justify-between px-5 pt-3 text-sm text-gray-400">
           <span>
@@ -212,10 +226,15 @@ export function LiveScreen({
           </span>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-2">
-          {showGuideResults && <GuideSearchResults query={query.trim()} onPlayChannel={onPlayChannel} />}
+        {/* "live-grid": the screen's main content (ScreenSlot prefers `<route>-grid`). */}
+        <FocusZone focusKey="live-grid" className="min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-2">
           {showGuideResults && (
-            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Chaînes</h3>
+            <GuideSearchResults query={query.trim()} onPlayChannel={onPlayChannel} />
+          )}
+          {showGuideResults && (
+            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Chaînes
+            </h3>
           )}
           {isFavorites ? (
             <FavoritesView
@@ -263,7 +282,11 @@ export function LiveScreen({
                 title="Aucune chaîne"
                 description="Le cache local est vide. Lancez un rafraîchissement du direct depuis les Réglages."
                 action={
-                  <Button variant="primary" icon={<IconRefresh size={16} />} onClick={onGoToSettings}>
+                  <Button
+                    variant="primary"
+                    icon={<IconRefresh size={16} />}
+                    onClick={onGoToSettings}
+                  >
                     Aller aux Réglages
                   </Button>
                 }
@@ -285,7 +308,7 @@ export function LiveScreen({
               )}
             </div>
           )}
-        </div>
+        </FocusZone>
       </div>
 
       {guideChannel && (

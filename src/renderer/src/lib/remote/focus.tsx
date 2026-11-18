@@ -79,6 +79,9 @@ export function useFocusItem<E extends HTMLElement = HTMLElement>(opts: FocusIte
   }
 }
 
+/** Keys of the mounted FocusZones (read by the key router, see RemoteRuntime). */
+export const zoneKeys = new Set<string>()
+
 export function FocusZone({
   focusKey,
   boundary = false,
@@ -103,6 +106,12 @@ export function FocusZone({
     preferredChildFocusKey,
     focusable
   })
+  useEffect(() => {
+    zoneKeys.add(focusKey)
+    return () => {
+      zoneKeys.delete(focusKey)
+    }
+  }, [focusKey])
   return (
     <FocusContext.Provider value={focusKey}>
       <div {...rest} ref={ref} className={className} data-focus-zone={focusKey}>

@@ -1,6 +1,7 @@
 export { cn } from './cn'
 export { Button } from './Button'
 export { FocusButton } from './FocusButton'
+export { FocusCheckbox } from './FocusCheckbox'
 export { SelectMenu } from './SelectMenu'
 export { Spinner } from './Spinner'
 export { Badge } from './Badge'

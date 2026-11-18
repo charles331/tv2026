@@ -16,9 +16,10 @@
  * selection ring is only drawn after a navigation key, never while the mouse
  * is being used.
  */
-import { init } from '@noriginmedia/norigin-spatial-navigation'
+import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from './keys'
 import { backStack } from './backStack'
+import { zoneKeys } from './focus'
 
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
@@ -66,6 +67,19 @@ export function startRemote(): void {
         }
       }
       if (action) setModality('keys')
+      // The selection may sit on a zone itself: it was given the selection
+      // while still empty (a list loading). Its children are there now: the
+      // first key enters the zone instead of navigating away from it.
+      const current = getCurrentFocusKey()
+      if (
+        action &&
+        zoneKeys.has(current) &&
+        document.querySelector(`[data-focus-zone="${current}"] [data-remote]`)
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        void setFocus(current)
+      }
     },
     { capture: true }
   )
