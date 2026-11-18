@@ -18,6 +18,9 @@ export const InvokeChannels = {
   APP_INSTALL_UPDATE: 'app:installUpdate', // quit + run the visible installer
   APP_GET_UPDATE_STATE: 'app:getUpdateState', // pull the last update status (mount-time sync)
   APP_TV_MODE_GET: 'app:tvMode:get', // effective TV mode (setting or --tv)
+  APP_POWER: 'app:power', // TV mode « Éteindre » menu: quit / sleep / shutdown
+  APP_LOGIN_ITEM_GET: 'app:loginItem:get', // start with Windows (in TV mode)?
+  APP_LOGIN_ITEM_SET: 'app:loginItem:set',
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',

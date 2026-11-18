@@ -520,6 +520,24 @@ try {
   await tv.waitForTimeout(200)
   st = await tvState()
   check('Mode TV : la sélection reste visible quand la souris bouge', st.input === 'keys' && st.selected > 0, JSON.stringify(st))
+  // Menu « Éteindre » : chaque action demande confirmation, Annuler sélectionné.
+  const tvLabel = () =>
+    tv.evaluate(() => (document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '').trim())
+  const tvKey = async (k) => {
+    await tv.keyboard.press(k)
+    await tv.waitForTimeout(200)
+  }
+  await tvKey('Escape')
+  await tvKey('Escape')
+  for (let i = 0; i < 10 && (await tvLabel()) !== 'Éteindre'; i++) await tvKey('ArrowDown')
+  await tvKey('Enter')
+  const menuLabel = await tvLabel()
+  await tvKey('Enter')
+  const confirmLabel = await tvLabel()
+  check('Mode TV : Éteindre → Quitter demande confirmation, Annuler sélectionné', menuLabel === 'Quitter TV2026' && confirmLabel === 'Annuler', `${menuLabel} → ${confirmLabel}`)
+  await tvKey('Escape')
+  await tvKey('Escape')
+  check('Mode TV : Retour referme le menu Éteindre', (await tv.getByText('Quitter TV2026').count()) === 0 && (await tvLabel()) === 'Éteindre')
 } catch (e) {
   check(
     'scénario terminé sans exception',

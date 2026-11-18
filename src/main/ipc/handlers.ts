@@ -13,6 +13,8 @@
  * registerIpcHandlers() applies validation + Result wrapping uniformly.
  */
 
+import { execFile } from 'child_process'
+import { isPowerAction, powerCommand } from '../app/power'
 import { isMpvRemoteKey } from '@shared/mpvRemoteKey'
 import { isTvMode, refreshTvMode } from '../app/tvMode'
 import { join as pathJoin } from 'path'
@@ -109,9 +111,35 @@ function joinPath(dir: string, fileName: string): string {
  */
 export const handlers: IpcHandlers = {
   // ---------------- app (real) ----------------
-  [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion() }),
+  [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion(), platform: process.platform }),
 
   [InvokeChannels.APP_TV_MODE_GET]: () => ok({ tvMode: isTvMode() }),
+
+  [InvokeChannels.APP_POWER]: (req) => {
+    assert(isObject(req) && isPowerAction(req.action), 'invalid power action')
+    if (req.action === 'quit') {
+      app.quit()
+      return ok({ ok: true as const })
+    }
+    const cmd = powerCommand(req.action, process.platform)
+    assert(cmd !== null, 'not available on this system')
+    appLog.info('app', `Alimentation : ${req.action}`)
+    execFile(cmd.file, cmd.args, (err) => {
+      if (err) appLog.error('app', `Commande d’alimentation en échec : ${err.message}`)
+    })
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.APP_LOGIN_ITEM_GET]: () =>
+    ok({ enabled: app.getLoginItemSettings({ args: ['--tv'] }).openAtLogin }),
+
+  [InvokeChannels.APP_LOGIN_ITEM_SET]: (req) => {
+    assert(isObject(req) && typeof req.enabled === 'boolean', 'enabled must be a boolean')
+    assert(process.platform === 'win32', 'only on Windows')
+    // Started by Windows: straight into TV mode (the mini PC on the TV).
+    app.setLoginItemSettings({ openAtLogin: req.enabled, args: ['--tv'] })
+    return ok({ enabled: app.getLoginItemSettings({ args: ['--tv'] }).openAtLogin })
+  },
 
   [InvokeChannels.APP_CHECK_UPDATES]: async () => ok(await checkForUpdatesNow()),
 

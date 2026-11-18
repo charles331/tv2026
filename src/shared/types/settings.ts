@@ -138,6 +138,8 @@ export interface TmdbKeyStatus {
 export interface AppInfo {
   /** Semantic version of the running app (from package.json). */
   version: string
+  /** OS of the running app ('win32' offers sleep / shut down / start with Windows). */
+  platform: string
 }
 
 /** Outcome of a manual "check for updates" request. */

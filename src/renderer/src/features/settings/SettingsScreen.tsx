@@ -288,6 +288,25 @@ export function SettingsScreen({
   }, [])
 
   const [qualityMessage, setQualityMessage] = useState<string | null>(null)
+  // Start with Windows (null: not offered on this system).
+  const [loginItem, setLoginItem] = useState<boolean | null>(null)
+  useEffect(() => {
+    void api()
+      .app.info()
+      .then(async (r) => {
+        if (!r.ok || r.data.platform !== 'win32') return
+        setLoginItem(unwrap(await api().app.getLoginItem()).enabled)
+      })
+      .catch(() => undefined)
+  }, [])
+  const handleToggleLoginItem = useCallback(async (enabled: boolean) => {
+    try {
+      setLoginItem(unwrap(await api().app.setLoginItem({ enabled })).enabled)
+    } catch (err) {
+      setQualityMessage(describeError(err))
+    }
+  }, [])
+
   const handleToggleTvMode = useCallback(async (enabled: boolean) => {
     try {
       setSettings(unwrap(await api().settings.set({ tvMode: enabled })))
@@ -1063,6 +1082,19 @@ export function SettingsScreen({
               peut aussi le forcer avec l’option <code>--tv</code>.
             </span>
           </label>
+          {loginItem !== null && (
+            <label className="mt-3 flex cursor-pointer items-start gap-3">
+              <FocusCheckbox
+                className="mt-0.5 h-4 w-4 accent-accent"
+                checked={loginItem}
+                onChange={(e) => void handleToggleLoginItem(e.target.checked)}
+              />
+              <span className="text-sm text-gray-300">
+                Lancer TV2026 au démarrage de Windows, directement en mode TV (pour le mini PC
+                branché sur la télévision).
+              </span>
+            </label>
+          )}
           <Button className="mt-4" onClick={() => setTesterOpen(true)}>
             Tester la télécommande
           </Button>

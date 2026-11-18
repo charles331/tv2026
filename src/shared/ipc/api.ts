@@ -102,6 +102,11 @@ export interface AppApi {
   onUpdateStatus(cb: (e: UpdateStatusEvent) => void): Unsubscribe
   /** Effective TV mode (setting, or launched with --tv). */
   getTvMode(): Promise<Result<{ tvMode: boolean }>>
+  /** TV mode « Éteindre » menu (sleep / shutdown: Windows only). */
+  power(req: { action: 'quit' | 'sleep' | 'shutdown' }): Promise<Result<{ ok: true }>>
+  /** Start TV2026 (in TV mode) with Windows. */
+  getLoginItem(): Promise<Result<{ enabled: boolean }>>
+  setLoginItem(req: { enabled: boolean }): Promise<Result<{ enabled: boolean }>>
   onTvMode(cb: (e: { tvMode: boolean }) => void): Unsubscribe
   /** Windows « back » command (remote / mouse back button) → Back. */
   onBack(cb: () => void): Unsubscribe

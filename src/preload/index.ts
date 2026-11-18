@@ -61,6 +61,18 @@ const api: RendererApi = {
         Result<IpcResponse<typeof InvokeChannels.APP_GET_UPDATE_STATE>>
       >,
     onUpdateStatus: (cb) => subscribe(EventChannels.UPDATE_STATUS, cb),
+    power: (req) =>
+      invoke(InvokeChannels.APP_POWER, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_POWER>>
+      >,
+    getLoginItem: () =>
+      invoke(InvokeChannels.APP_LOGIN_ITEM_GET) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_LOGIN_ITEM_GET>>
+      >,
+    setLoginItem: (req) =>
+      invoke(InvokeChannels.APP_LOGIN_ITEM_SET, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_LOGIN_ITEM_SET>>
+      >,
     getTvMode: () =>
       invoke(InvokeChannels.APP_TV_MODE_GET) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_TV_MODE_GET>>

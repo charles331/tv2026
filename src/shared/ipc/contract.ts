@@ -103,6 +103,9 @@ export interface IpcContract {
   [InvokeChannels.APP_INSTALL_UPDATE]: { request: void; response: { ok: true } }
   [InvokeChannels.APP_GET_UPDATE_STATE]: { request: void; response: UpdateStatusEvent | null }
   [InvokeChannels.APP_TV_MODE_GET]: { request: void; response: { tvMode: boolean } }
+  [InvokeChannels.APP_POWER]: { request: { action: 'quit' | 'sleep' | 'shutdown' }; response: { ok: true } }
+  [InvokeChannels.APP_LOGIN_ITEM_GET]: { request: void; response: { enabled: boolean } }
+  [InvokeChannels.APP_LOGIN_ITEM_SET]: { request: { enabled: boolean }; response: { enabled: boolean } }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
