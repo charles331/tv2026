@@ -35,6 +35,7 @@ import { DownloadsScreen } from './features/downloads/DownloadsScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { ScheduledScreen } from './features/reminders/ScheduledScreen'
 import { ConflictDialog } from './features/reminders/ConflictDialog'
+import { ReminderPrompt } from './features/reminders/ReminderPrompt'
 import { MovieDetail } from './features/movie/MovieDetail'
 import { PlayerView, type PlayerNeighbor } from './features/player/PlayerView'
 
@@ -339,19 +340,21 @@ function AppShell(): ReactElement {
     return api().app.onUpdateStatus(announce)
   }, [toast])
 
-  // A clicked reminder notification asks the renderer to open/play the channel.
-  useEffect(() => {
-    return api().reminders.onOpenChannel((e) => {
-      setRoute('live')
-      setPlayRequest({
-        kind: 'stream',
-        mediaKind: 'live',
-        streamId: e.streamId,
-        containerExtension: 'ts',
-        title: e.channelName
-      })
+  // A clicked reminder notification (or "Regarder" in TV mode) plays the channel.
+  const openReminderChannel = useCallback((streamId: number, channelName: string) => {
+    setRoute('live')
+    setPlayRequest({
+      kind: 'stream',
+      mediaKind: 'live',
+      streamId,
+      containerExtension: 'ts',
+      title: channelName
     })
   }, [])
+  useEffect(
+    () => api().reminders.onOpenChannel((e) => openReminderChannel(e.streamId, e.channelName)),
+    [openReminderChannel]
+  )
 
   const handlePlayEpisode = useCallback(
     (series: SeriesStream, episode: Episode, seriesName: string, fromStart = false) => {
@@ -629,6 +632,8 @@ function AppShell(): ReactElement {
 
       {/* Recording-vs-playback conflict prompt (driven by the main scheduler). */}
       <ConflictDialog />
+      {/* TV mode: due reminders asked inside the app. */}
+      <ReminderPrompt onWatch={(r) => openReminderChannel(r.streamId, r.channelName)} />
 
       {selected && (
         <MovieDetail stream={selected} onClose={() => setSelected(null)} onPlay={handlePlay} />

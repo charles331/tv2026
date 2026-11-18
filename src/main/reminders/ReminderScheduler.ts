@@ -27,6 +27,8 @@ import { buildLiveRecordingPath } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import { recordingController, RecordingError } from '../player/RecordingController'
 import { computeDueActions } from './schedulerLogic'
+import { alertChannel } from './alertChannel'
+import { isTvMode } from '../app/tvMode'
 
 /** Typed emitter shape (matches makeEmitter() in ipc/register.ts). */
 type Emitter = EventEmitterFn
@@ -142,6 +144,13 @@ export class ReminderScheduler {
   // ------------------------------------------------------------ notifications
 
   private fireNotification(r: Reminder): void {
+    // TV mode: ask inside the app, brought in front of a playing video.
+    if (alertChannel(isTvMode()) === 'prompt') {
+      this.emit(EventChannels.REMINDER_PROMPT, { reminder: r })
+      void playerController.bringAppToFront()
+      this.markStatus(r.id, 'notified')
+      return
+    }
     if (!Notification.isSupported()) {
       // No native notifications on this OS — still advance status so we don't
       // re-evaluate the same reminder forever.
@@ -287,6 +296,7 @@ export class ReminderScheduler {
    */
   private askConflict(r: Reminder): Promise<ConflictResolution> {
     this.emit(EventChannels.RECORDING_CONFLICT, { reminder: r })
+    void playerController.bringAppToFront() // TV mode: the dialog must be seen
     return new Promise<ConflictResolution>((resolve) => {
       const timeout = setTimeout(() => {
         this.conflictResolvers.delete(r.id)

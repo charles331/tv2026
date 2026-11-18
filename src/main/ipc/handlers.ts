@@ -839,6 +839,11 @@ export const handlers: IpcHandlers = {
   [InvokeChannels.PLAYER_CYCLE_SUBTITLE]: async () => ok(await playerController.cycleSubtitle()),
   [InvokeChannels.PLAYER_CYCLE_AUDIO]: async () => ok(await playerController.cycleAudio()),
 
+  [InvokeChannels.PLAYER_VIDEO_FRONT]: async () => {
+    await playerController.restoreVideoToFront()
+    return ok({ ok: true as const })
+  },
+
   [InvokeChannels.PLAYER_REMOTE_KEY]: async (req) => {
     assert(isObject(req), 'request must be an object')
     assert(isMpvRemoteKey(req.key), 'invalid remote key')

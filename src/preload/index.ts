@@ -258,6 +258,7 @@ const api: RendererApi = {
       >,
     onUpdated: (cb) => subscribe(EventChannels.REMINDER_UPDATED, cb),
     onOpenChannel: (cb) => subscribe(EventChannels.REMINDER_OPEN_CHANNEL, cb),
+    onPrompt: (cb) => subscribe(EventChannels.REMINDER_PROMPT, cb),
     onConflict: (cb) => subscribe(EventChannels.RECORDING_CONFLICT, cb),
     onConflictResolved: (cb) => subscribe(EventChannels.RECORDING_CONFLICT_RESOLVED, cb)
   },
@@ -382,6 +383,10 @@ const api: RendererApi = {
     stopRecording: () =>
       invoke(InvokeChannels.PLAYER_STOP_RECORDING) as Promise<
         Result<IpcResponse<typeof InvokeChannels.PLAYER_STOP_RECORDING>>
+      >,
+    videoFront: () =>
+      invoke(InvokeChannels.PLAYER_VIDEO_FRONT) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_VIDEO_FRONT>>
       >,
     remoteKey: (req) =>
       invoke(InvokeChannels.PLAYER_REMOTE_KEY, req) as Promise<

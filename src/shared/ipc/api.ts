@@ -206,6 +206,8 @@ export interface RemindersApi {
   onUpdated(cb: (e: ReminderUpdatedEvent) => void): Unsubscribe
   /** Subscribe to "open this channel" requests from a clicked notification. */
   onOpenChannel(cb: (e: ReminderOpenChannelEvent) => void): Unsubscribe
+  /** TV mode: a reminder is due, to show inside the app. */
+  onPrompt(cb: (e: { reminder: Reminder }) => void): Unsubscribe
   /** Subscribe to recording-vs-playback conflicts that need a user decision. */
   onConflict(cb: (e: RecordingConflictEvent) => void): Unsubscribe
   /** Subscribe to "conflict prompt resolved/closed" (dismiss the dialog). */
@@ -276,6 +278,8 @@ export interface PlayerApi {
   stopRecording(): Promise<Result<PlayerStatus>>
   /** TV mode: relay a remote key to the video (closed list, see mpvRemoteKey). */
   remoteKey(req: { key: MpvRemoteKey }): Promise<Result<{ ok: true }>>
+  /** TV mode: put the video back in front once an alert was answered. */
+  videoFront(): Promise<Result<{ ok: true }>>
   onPosition(cb: (e: PlayerPositionEvent) => void): Unsubscribe
   onState(cb: (e: PlayerStateEvent) => void): Unsubscribe
   /** TV mode: previous / next pressed in the video window. */

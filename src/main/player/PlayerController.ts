@@ -177,6 +177,23 @@ export class PlayerController {
     }
   }
 
+  /** TV mode: an alert needs the user — the app goes in front of the video. */
+  async bringAppToFront(): Promise<void> {
+    if (!this.tvMode) return
+    await this.ipc?.setProperty('ontop', false).catch(() => undefined)
+    this.focusApp()
+  }
+
+  /**
+   * TV mode: the alert was answered and the video goes on — back in front.
+   * (Windows does not let the app give mpv the keyboard: the app relays the
+   * remote's keys, see relayKey.)
+   */
+  async restoreVideoToFront(): Promise<void> {
+    if (!this.tvMode) return
+    await this.ipc?.setProperty('ontop', true).catch(() => undefined)
+  }
+
   /** TV mode: a remote key pressed while the app had the focus, replayed in mpv. */
   async relayKey(key: MpvRemoteKey): Promise<void> {
     await this.ipc?.command(['keypress', key]).catch(() => undefined)

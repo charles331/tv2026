@@ -112,7 +112,9 @@ export const InvokeChannels = {
   PLAYER_START_RECORDING: 'player:startRecording', // dump the playing stream to disk (live)
   PLAYER_STOP_RECORDING: 'player:stopRecording',
   /** TV mode: a remote key relayed to mpv while the app has the focus. */
-  PLAYER_REMOTE_KEY: 'player:remoteKey'
+  PLAYER_REMOTE_KEY: 'player:remoteKey',
+  /** TV mode: the video goes back in front after an alert was answered. */
+  PLAYER_VIDEO_FRONT: 'player:videoFront'
 } as const
 
 /** One-way event channels (main -> renderer). */
@@ -131,6 +133,8 @@ export const EventChannels = {
   REMINDER_UPDATED: 'event:reminder:updated',
   /** A reminder notification was clicked → open/play the channel. */
   REMINDER_OPEN_CHANNEL: 'event:reminder:openChannel',
+  /** TV mode: a reminder is due — ask in the app (no Windows notification). */
+  REMINDER_PROMPT: 'event:reminder:prompt',
   /** A scheduled recording conflicts with current playback (ASK the user). */
   RECORDING_CONFLICT: 'event:recording:conflict',
   /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */

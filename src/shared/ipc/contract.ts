@@ -219,6 +219,7 @@ export interface IpcContract {
   }
   [InvokeChannels.PLAYER_STOP_RECORDING]: { request: void; response: PlayerStatus }
   [InvokeChannels.PLAYER_REMOTE_KEY]: { request: { key: MpvRemoteKey }; response: { ok: true } }
+  [InvokeChannels.PLAYER_VIDEO_FRONT]: { request: void; response: { ok: true } }
 }
 
 /** Map of event channel -> payload pushed from main to renderer. */
@@ -232,6 +233,7 @@ export interface EventContract {
   [EventChannels.CONNECTION_BUSY]: { busy: boolean; reason: 'download' | 'playback' | null }
   [EventChannels.REMINDER_UPDATED]: ReminderUpdatedEvent
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
+  [EventChannels.REMINDER_PROMPT]: { reminder: Reminder }
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
   [EventChannels.PROGRESS_CHANGED]: Record<string, never>
