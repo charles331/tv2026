@@ -110,7 +110,9 @@ export const InvokeChannels = {
   PLAYER_CYCLE_AUDIO: 'player:cycleAudio',
   PLAYER_SET_SUBTITLE_VISIBLE: 'player:setSubtitleVisible',
   PLAYER_START_RECORDING: 'player:startRecording', // dump the playing stream to disk (live)
-  PLAYER_STOP_RECORDING: 'player:stopRecording'
+  PLAYER_STOP_RECORDING: 'player:stopRecording',
+  /** TV mode: a remote key relayed to mpv while the app has the focus. */
+  PLAYER_REMOTE_KEY: 'player:remoteKey'
 } as const
 
 /** One-way event channels (main -> renderer). */
@@ -121,6 +123,8 @@ export const EventChannels = {
   PLAYER_STATE: 'event:player:state',
   /** TV mode: previous / next pressed in the video window (zapping, episodes). */
   PLAYER_REMOTE: 'event:player:remote',
+  /** Windows « back » command (app-command browser-backward) → Back. */
+  APP_BACK: 'event:app:back',
   /** Connection lock state changed (e.g. download paused for playback). */
   CONNECTION_BUSY: 'event:connection:busy',
   /** A reminder/recording row changed (status / filePath). */

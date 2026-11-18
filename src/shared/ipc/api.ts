@@ -8,6 +8,7 @@
  * over the channels in channels.ts.
  */
 
+import type { MpvRemoteKey } from '../mpvRemoteKey'
 import type { Result } from '../types/common'
 import type { Page } from '../types/common'
 import type {
@@ -102,6 +103,8 @@ export interface AppApi {
   /** Effective TV mode (setting, or launched with --tv). */
   getTvMode(): Promise<Result<{ tvMode: boolean }>>
   onTvMode(cb: (e: { tvMode: boolean }) => void): Unsubscribe
+  /** Windows « back » command (remote / mouse back button) → Back. */
+  onBack(cb: () => void): Unsubscribe
 }
 
 export interface ConnectionApi {
@@ -271,6 +274,8 @@ export interface PlayerApi {
   startRecording(req: StartRecordingRequest): Promise<Result<PlayerStatus>>
   /** Stop the current recording. */
   stopRecording(): Promise<Result<PlayerStatus>>
+  /** TV mode: relay a remote key to the video (closed list, see mpvRemoteKey). */
+  remoteKey(req: { key: MpvRemoteKey }): Promise<Result<{ ok: true }>>
   onPosition(cb: (e: PlayerPositionEvent) => void): Unsubscribe
   onState(cb: (e: PlayerStateEvent) => void): Unsubscribe
   /** TV mode: previous / next pressed in the video window. */

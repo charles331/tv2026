@@ -53,7 +53,7 @@ import type {
   SeekRequest,
   VolumeRequest
 } from '@shared/index'
-import { EventChannels } from '@shared/index'
+import { EventChannels, type MpvRemoteKey } from '@shared/index'
 
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
@@ -175,6 +175,11 @@ export class PlayerController {
     else if (action === 'next' || action === 'previous') {
       this.emit(EventChannels.PLAYER_REMOTE, { action })
     }
+  }
+
+  /** TV mode: a remote key pressed while the app had the focus, replayed in mpv. */
+  async relayKey(key: MpvRemoteKey): Promise<void> {
+    await this.ipc?.command(['keypress', key]).catch(() => undefined)
   }
 
   /** The user left the video: stop, and in TV mode give the screen back to the app. */

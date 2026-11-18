@@ -65,7 +65,8 @@ const api: RendererApi = {
       invoke(InvokeChannels.APP_TV_MODE_GET) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_TV_MODE_GET>>
       >,
-    onTvMode: (cb) => subscribe(EventChannels.APP_TV_MODE, cb)
+    onTvMode: (cb) => subscribe(EventChannels.APP_TV_MODE, cb),
+    onBack: (cb) => subscribe(EventChannels.APP_BACK, () => cb())
   },
 
   connection: {
@@ -381,6 +382,10 @@ const api: RendererApi = {
     stopRecording: () =>
       invoke(InvokeChannels.PLAYER_STOP_RECORDING) as Promise<
         Result<IpcResponse<typeof InvokeChannels.PLAYER_STOP_RECORDING>>
+      >,
+    remoteKey: (req) =>
+      invoke(InvokeChannels.PLAYER_REMOTE_KEY, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_REMOTE_KEY>>
       >,
     onPosition: (cb) => subscribe(EventChannels.PLAYER_POSITION, cb),
     onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb),

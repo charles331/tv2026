@@ -10,7 +10,7 @@ import type {
   VodStream,
   WatchProgress
 } from '@shared/index'
-import { isActiveReminderStatus, resumeStart } from '@shared/index'
+import { isActiveReminderStatus, resumeStart, MPV_KEY_FOR_ACTION } from '@shared/index'
 import { api, describeError, unwrap } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
@@ -22,7 +22,7 @@ import { ProgressProvider, useProgress } from './lib/progress'
 import { TvModeProvider, useTvMode } from './lib/tvMode'
 import { AppNav, type Route } from './components/AppNav'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { setTypeToSearchHandler } from './lib/remote/RemoteRuntime'
+import { dispatchBack, setTypeToSearchHandler, setVideoRelay } from './lib/remote/RemoteRuntime'
 import { backStack } from './lib/remote/backStack'
 import { FocusZone, ScreenActiveContext, useBackHandler, useReturnFocus } from './lib/remote/focus'
 import { Button, LoadingState } from './components/ui'
@@ -435,6 +435,19 @@ function AppShell(): ReactElement {
   nextRef.current = neighbors.next
   const previousRef = useRef(neighbors.previous)
   previousRef.current = neighbors.previous
+  // Windows « back » command (some remotes, mouse back button) = Back.
+  useEffect(() => api().app.onBack(dispatchBack), [])
+  // TV mode, a video playing while the app is in front (an alert came up):
+  // the remote keeps driving the video.
+  const videoActive = playRequest != null
+  useEffect(() => {
+    setVideoRelay(
+      tvMode && videoActive
+        ? (action) => void api().player.remoteKey({ key: MPV_KEY_FOR_ACTION[action] })
+        : null
+    )
+    return () => setVideoRelay(null)
+  }, [tvMode, videoActive])
   // TV mode: previous / next pressed in the video window (zapping, episodes).
   useEffect(
     () =>

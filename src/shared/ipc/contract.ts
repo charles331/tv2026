@@ -12,6 +12,7 @@
  * never thrown across the boundary.
  */
 
+import type { MpvRemoteKey } from '../mpvRemoteKey'
 import type { Result } from '../types/common'
 import type {
   AppInfo,
@@ -217,6 +218,7 @@ export interface IpcContract {
     response: PlayerStatus
   }
   [InvokeChannels.PLAYER_STOP_RECORDING]: { request: void; response: PlayerStatus }
+  [InvokeChannels.PLAYER_REMOTE_KEY]: { request: { key: MpvRemoteKey }; response: { ok: true } }
 }
 
 /** Map of event channel -> payload pushed from main to renderer. */
@@ -226,6 +228,7 @@ export interface EventContract {
   [EventChannels.PLAYER_POSITION]: PlayerPositionEvent
   [EventChannels.PLAYER_STATE]: PlayerStateEvent
   [EventChannels.PLAYER_REMOTE]: { action: 'next' | 'previous' }
+  [EventChannels.APP_BACK]: Record<string, never>
   [EventChannels.CONNECTION_BUSY]: { busy: boolean; reason: 'download' | 'playback' | null }
   [EventChannels.REMINDER_UPDATED]: ReminderUpdatedEvent
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent

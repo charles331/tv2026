@@ -206,6 +206,10 @@ if (!gotLock) {
         mainWindow.focus()
       }
     })
+    // Remotes / mouse « back » button on Windows arrive as an app command.
+    mainWindow?.on('app-command', (_e, command) => {
+      if (command === 'browser-backward') emitTv(EventChannels.APP_BACK, {})
+    })
     onTvModeChange((on) => {
       playerController.setTvMode(on)
       mainWindow?.setFullScreen(on)

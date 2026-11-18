@@ -13,6 +13,7 @@
  * registerIpcHandlers() applies validation + Result wrapping uniformly.
  */
 
+import { isMpvRemoteKey } from '@shared/mpvRemoteKey'
 import { isTvMode, refreshTvMode } from '../app/tvMode'
 import { join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
@@ -837,6 +838,13 @@ export const handlers: IpcHandlers = {
 
   [InvokeChannels.PLAYER_CYCLE_SUBTITLE]: async () => ok(await playerController.cycleSubtitle()),
   [InvokeChannels.PLAYER_CYCLE_AUDIO]: async () => ok(await playerController.cycleAudio()),
+
+  [InvokeChannels.PLAYER_REMOTE_KEY]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    assert(isMpvRemoteKey(req.key), 'invalid remote key')
+    await playerController.relayKey(req.key)
+    return ok({ ok: true as const })
+  },
 
   [InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE]: async (req) => {
     assert(isObject(req), 'request must be an object')

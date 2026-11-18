@@ -21,10 +21,39 @@ import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from '.
 import { backStack } from './backStack'
 import { zoneKeys } from './focus'
 import { typedSearchChar } from './typing'
+import type { RemoteAction } from './keys'
 
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
+let videoRelay: ((action: RemoteAction) => void) | null = null
+let lastBack = 0
+const BACK_DEDUPE_MS = 200
+
+/**
+ * TV mode, video playing while the app has the keyboard (after an alert came
+ * in front): the remote keys go to the video instead of the interface, as
+ * long as no page or dialog is open (back stack = the shell's handler only).
+ */
+export function setVideoRelay(fn: ((action: RemoteAction) => void) | null): void {
+  videoRelay = fn
+}
+
+/**
+ * Back from any source (key, mouse « back » button, Windows app command). One
+ * press of some remotes produces two of them: the second within 200 ms is
+ * ignored.
+ */
+export function dispatchBack(): void {
+  const now = Date.now()
+  if (now - lastBack < BACK_DEDUPE_MS) return
+  lastBack = now
+  if (videoRelay && backStack.size() <= 1) {
+    videoRelay('back')
+    return
+  }
+  backStack.dispatch()
+}
 let tvMode = false
 
 /**
@@ -81,7 +110,13 @@ export function startRemote(): void {
         e.preventDefault()
         e.stopPropagation()
         setModality('keys')
-        backStack.dispatch()
+        dispatchBack()
+        return
+      }
+      if (action && videoRelay && backStack.size() <= 1) {
+        e.preventDefault()
+        e.stopPropagation()
+        videoRelay(action)
         return
       }
       const typed = typeToSearch ? typedSearchChar(e, { inTextField }) : null
@@ -138,7 +173,7 @@ export function startRemote(): void {
   window.addEventListener('mouseup', (e) => {
     if (e.button === 3) {
       e.preventDefault()
-      backStack.dispatch()
+      dispatchBack()
     }
   })
 }
