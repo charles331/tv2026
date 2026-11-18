@@ -47,7 +47,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "dmg-builder": "26.18.0",
     "electron": "^44.9.3",
@@ -69,7 +69,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^7.3.7",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "pnpm": {
     "neverBuiltDependencies": [
