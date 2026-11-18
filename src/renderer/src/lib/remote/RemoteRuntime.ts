@@ -20,10 +20,17 @@ import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatia
 import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from './keys'
 import { backStack } from './backStack'
 import { zoneKeys } from './focus'
+import { typedSearchChar } from './typing'
 
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
+let typeToSearch: ((char: string) => void) | null = null
+
+/** What typing a letter outside a text field does (null = nothing). */
+export function setTypeToSearchHandler(fn: ((char: string) => void) | null): void {
+  typeToSearch = fn
+}
 
 function setModality(mode: 'keys' | 'pointer'): void {
   const root = document.documentElement
@@ -51,6 +58,12 @@ export function startRemote(): void {
         e.stopPropagation()
         setModality('keys')
         backStack.dispatch()
+        return
+      }
+      const typed = typeToSearch ? typedSearchChar(e, { inTextField }) : null
+      if (typed && typeToSearch) {
+        e.preventDefault() // the search box gets the letter from the handler
+        typeToSearch(typed)
         return
       }
       if (inTextField) {
