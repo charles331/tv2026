@@ -439,7 +439,7 @@ function AppShell(): ReactElement {
   const previousRef = useRef(neighbors.previous)
   previousRef.current = neighbors.previous
   // Windows « back » command (some remotes, mouse back button) = Back.
-  useEffect(() => api().app.onBack(dispatchBack), [])
+  useEffect(() => api().app.onBack(() => dispatchBack('command')), [])
   // TV mode, a video playing while the app is in front (an alert came up):
   // the remote keeps driving the video.
   const videoActive = playRequest != null

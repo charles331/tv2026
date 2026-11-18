@@ -27,8 +27,9 @@ const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
 let videoRelay: ((action: RemoteAction) => void) | null = null
-let lastBack = 0
+let lastBack: { at: number; source: BackSource } | null = null
 const BACK_DEDUPE_MS = 200
+type BackSource = 'key' | 'mouse' | 'command'
 
 /**
  * TV mode, video playing while the app has the keyboard (after an alert came
@@ -41,13 +42,14 @@ export function setVideoRelay(fn: ((action: RemoteAction) => void) | null): void
 
 /**
  * Back from any source (key, mouse « back » button, Windows app command). One
- * press of some remotes produces two of them: the second within 200 ms is
- * ignored.
+ * press of some remotes produces two of them (a key AND the app command): the
+ * second, from another source within 200 ms, is ignored. Quick presses of the
+ * same key all count.
  */
-export function dispatchBack(): void {
+export function dispatchBack(source: BackSource = 'key'): void {
   const now = Date.now()
-  if (now - lastBack < BACK_DEDUPE_MS) return
-  lastBack = now
+  if (lastBack && lastBack.source !== source && now - lastBack.at < BACK_DEDUPE_MS) return
+  lastBack = { at: now, source }
   if (videoRelay && backStack.size() <= 1) {
     videoRelay('back')
     return
@@ -173,7 +175,7 @@ export function startRemote(): void {
   window.addEventListener('mouseup', (e) => {
     if (e.button === 3) {
       e.preventDefault()
-      dispatchBack()
+      dispatchBack('mouse')
     }
   })
 }
