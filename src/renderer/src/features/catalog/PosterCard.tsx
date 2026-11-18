@@ -34,6 +34,7 @@ function PosterCardImpl({
       onClick={() => onSelect(stream)}
       onMouseDown={onPointerSelect}
       data-remote-focus={active}
+      data-remote=""
       className="remote-card group flex w-full min-w-0 flex-col rounded-lg text-left focus-visible:outline-none"
       title={stream.name}
     >

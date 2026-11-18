@@ -195,6 +195,31 @@ try {
   await page.keyboard.press('Control+a')
   await page.keyboard.press('Backspace')
   await page.waitForTimeout(1200)
+  // Menu de tri : à la souris, un second clic sur le bouton le referme.
+  const sortButton = page.locator('button[title="Trier"]').filter({ visible: true })
+  await sortButton.click()
+  check('Tri : un clic ouvre la liste', (await page.getByRole('listbox').count()) === 1)
+  await sortButton.click()
+  await page.waitForTimeout(200)
+  check('Tri : un second clic referme la liste', (await page.getByRole('listbox').count()) === 0)
+  // Ouvert puis Ctrl+K : la liste ne reste pas ouverte dans l'écran caché.
+  await sortButton.click()
+  await page.keyboard.press('Control+k')
+  await page.waitForTimeout(300)
+  check('Tri : la liste se ferme quand on change d’écran', (await page.locator('[role=listbox]').count()) === 0)
+  await page.getByRole('button', { name: 'Catalogue' }).first().click()
+  await page.waitForTimeout(300)
+  // « Tout mettre à jour ? » au clavier : sélection sur Annuler, Retour referme.
+  await key('Escape', 2)
+  for (let i = 0; i < 8 && !/^Tout mettre à jour/.test((await focusInfo()).label); i++) await key('ArrowDown')
+  await key('Enter')
+  await page.waitForTimeout(300)
+  f = await focusInfo()
+  check('Clavier : « Tout mettre à jour ? » s’ouvre sur Annuler', f.label === 'Annuler' && (await page.getByText('Tout mettre à jour ?').count()) === 1, JSON.stringify(f))
+  await key('Escape')
+  f = await focusInfo()
+  check('Clavier : Retour referme la confirmation', (await page.getByText('Tout mettre à jour ?').count()) === 0 && /^Tout mettre à jour/.test(f.label), JSON.stringify(f))
+
   // La souris reste maître : pas d'anneau de sélection après un clic.
   await page.locator('.remote-card').filter({ visible: true }).first().click()
   await page.getByRole('dialog').waitFor()

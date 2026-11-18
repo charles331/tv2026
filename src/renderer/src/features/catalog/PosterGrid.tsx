@@ -149,6 +149,7 @@ export function PosterGrid({
       <div
         ref={scrollRef}
         tabIndex={-1}
+        data-remote=""
         onScroll={onScroll}
         className="relative flex-1 overflow-y-auto overflow-x-hidden px-1 py-1 outline-none"
       >

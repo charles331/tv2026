@@ -72,3 +72,16 @@ export function textFieldKeepsKey(
   if (start !== end) return true // a selection: the arrow collapses it
   return key === 'ArrowLeft' ? start > 0 : start < valueLength
 }
+
+/**
+ * True when the DOM focus sits on an element the spatial navigation does not
+ * manage (focused with the mouse or Tab: a plain button, a slider…). The
+ * navigation must then leave Enter and the arrows to that element.
+ * Managed elements carry a `data-remote` attribute.
+ */
+export function isUnmanagedFocus(el: Element | null): boolean {
+  if (!el) return false
+  const tag = el.tagName?.toUpperCase()
+  if (tag === 'BODY' || tag === 'HTML') return false
+  return !el.hasAttribute('data-remote')
+}

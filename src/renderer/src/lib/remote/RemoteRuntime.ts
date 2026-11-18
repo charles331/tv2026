@@ -7,14 +7,17 @@
  * - In a text field, the editing keys (←/→ inside the text, Backspace,
  *   Home/End) are stopped before Norigin sees them, so the caret moves and
  *   characters get deleted; ←/→ at the edge of the text leave the field.
- * - Everything else (arrows, Enter) goes on to Norigin's own window listener.
+ * - Everything else (arrows, Enter) goes on to Norigin's own window listener,
+ *   unless the DOM focus is on an element Norigin does not manage (a plain
+ *   button or slider focused with the mouse / Tab): Norigin would otherwise
+ *   swallow the key and act on its own selection instead.
  *
  * It also tracks the input modality on <html data-input="keys|pointer">: the
  * selection ring is only drawn after a navigation key, never while the mouse
  * is being used.
  */
 import { init } from '@noriginmedia/norigin-spatial-navigation'
-import { keyToAction, isTextField, textFieldKeepsKey } from './keys'
+import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from './keys'
 import { backStack } from './backStack'
 
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
@@ -29,6 +32,11 @@ function setModality(mode: 'keys' | 'pointer'): void {
 export function startRemote(): void {
   if (started) return
   started = true
+  // Registered BEFORE init(): window bubble listeners run in order, so this one
+  // runs after React's handlers but ahead of Norigin's.
+  window.addEventListener('keydown', (e) => {
+    if (isUnmanagedFocus(document.activeElement)) e.stopImmediatePropagation()
+  })
   init({ shouldFocusDOMNode: true, domNodeFocusOptions: { preventScroll: true }, throttle: 0 })
   setModality('pointer')
 

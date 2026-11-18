@@ -4,11 +4,16 @@
  * stays inside it), ↑/↓ pick, OK applies, Back closes without changing.
  * (A native <select> popup does not cooperate with the spatial navigation.)
  */
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { cn } from './cn'
 import { FocusButton } from './FocusButton'
-import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
+import {
+  FocusZone,
+  ScreenActiveContext,
+  useBackHandler,
+  useReturnFocus
+} from '../../lib/remote/focus'
 
 export function SelectMenu<T extends string>({
   focusKey,
@@ -26,9 +31,16 @@ export function SelectMenu<T extends string>({
   title: string
 }): ReactElement {
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  // A list left open in a screen that gets hidden would keep its Back handler
+  // on top of the stack: close it.
+  const screenActive = useContext(ScreenActiveContext)
+  useEffect(() => {
+    if (!screenActive) setOpen(false)
+  }, [screenActive])
   const current = options.find((o) => o.value === value)?.label ?? value
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <FocusButton
         focusKey={focusKey}
         type="button"
@@ -46,6 +58,7 @@ export function SelectMenu<T extends string>({
       </FocusButton>
       {open && (
         <SelectList
+          containerRef={rootRef}
           focusKey={`${focusKey}-list`}
           value={value}
           options={options}
@@ -61,33 +74,35 @@ export function SelectMenu<T extends string>({
 }
 
 function SelectList<T extends string>({
+  containerRef,
   focusKey,
   value,
   options,
   onPick,
   onClose
 }: {
+  /** The whole menu (trigger + list): a click there is not "outside". */
+  containerRef: RefObject<HTMLDivElement | null>
   focusKey: string
   value: T
   options: { value: T; label: string }[]
   onPick: (value: T) => void
   onClose: () => void
 }): ReactElement {
-  const boxRef = useRef<HTMLDivElement>(null)
   useReturnFocus()
   useBackHandler(onClose)
   useEffect(() => {
     setFocus(`${focusKey}-${value}`)
     // Click outside closes, like a native menu.
     const onDown = (e: MouseEvent): void => {
-      if (!boxRef.current?.contains(e.target as Node)) onClose()
+      if (!containerRef.current?.contains(e.target as Node)) onClose()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- opened once
   }, [])
   return (
-    <div ref={boxRef} className="absolute right-0 top-full z-30 mt-1 min-w-full">
+    <div className="absolute right-0 top-full z-30 mt-1 min-w-full">
       <FocusZone
         focusKey={focusKey}
         boundary

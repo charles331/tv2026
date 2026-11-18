@@ -10,7 +10,15 @@
  * - useReturnFocus: an overlay gives the selection back to whatever had it
  *   before it opened.
  */
-import { useEffect, useRef, type HTMLAttributes, type ReactElement, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  type HTMLAttributes,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 import {
   FocusContext,
   useFocusable,
@@ -21,6 +29,12 @@ import {
   type Direction
 } from '@noriginmedia/norigin-spatial-navigation'
 import { backStack } from './backStack'
+
+/**
+ * False inside a screen that is kept mounted but hidden (App's ScreenSlot):
+ * nothing there may take the selection or keep a menu open.
+ */
+export const ScreenActiveContext = createContext(true)
 
 export interface FocusItemOptions {
   focusKey?: string
@@ -59,6 +73,7 @@ export function useFocusItem<E extends HTMLElement = HTMLElement>(opts: FocusIte
     focusSelf,
     itemProps: {
       'data-remote-focus': focused,
+      'data-remote': '',
       onMouseDown: () => focusSelf()
     }
   }
@@ -104,8 +119,9 @@ export function FocusZone({
  * focusable that no longer exists.
  */
 export function useFocusWhenReady(target: string, ready: boolean, scope: string): void {
+  const screenActive = useContext(ScreenActiveContext)
   useEffect(() => {
-    if (!ready) return
+    if (!ready || !screenActive) return
     const current = getCurrentFocusKey()
     if (
       !current ||
@@ -115,7 +131,7 @@ export function useFocusWhenReady(target: string, ready: boolean, scope: string)
     ) {
       setFocus(target)
     }
-  }, [target, ready, scope])
+  }, [target, ready, scope, screenActive])
 }
 
 export function useBackHandler(handler: () => void, active = true): void {

@@ -45,13 +45,19 @@ export function TextInput({
   const { ref, itemProps } = useFocusItem<HTMLInputElement>({
     focusKey,
     focusable: !disabled,
-    onEnter: () => void navigateByDirection('down')
+    // In a form (Settings: credentials), OK submits it like Enter always did.
+    onEnter: () => {
+      const form = ref.current?.form
+      if (form) form.requestSubmit()
+      else void navigateByDirection('down')
+    }
   })
   return (
     <input
       ref={ref}
       disabled={disabled}
       data-remote-focus={itemProps['data-remote-focus']}
+      data-remote=""
       onMouseDown={(e) => {
         itemProps.onMouseDown()
         onMouseDown?.(e)

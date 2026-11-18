@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { keyToAction, isTextField, textFieldKeepsKey } from '../../src/renderer/src/lib/remote/keys'
+import {
+  keyToAction,
+  isTextField,
+  textFieldKeepsKey,
+  isUnmanagedFocus
+} from '../../src/renderer/src/lib/remote/keys'
 
 describe('keyToAction', () => {
   const out = { inTextField: false }
@@ -77,5 +82,19 @@ describe('textFieldKeepsKey', () => {
     expect(textFieldKeepsKey('Backspace', caret(0, 0, 8))).toBe(true)
     expect(textFieldKeepsKey('Home', caret(0, 0, 8))).toBe(true)
     expect(textFieldKeepsKey('ArrowDown', caret(3, 3, 8))).toBe(false)
+  })
+})
+
+describe('isUnmanagedFocus', () => {
+  const el = (tagName: string, managed: boolean): Element =>
+    ({ tagName, hasAttribute: (n: string) => managed && n === 'data-remote' }) as unknown as Element
+  it('is true for an element the navigation does not manage (mouse/Tab focus)', () => {
+    expect(isUnmanagedFocus(el('BUTTON', false))).toBe(true)
+    expect(isUnmanagedFocus(el('DIV', false))).toBe(true)
+  })
+  it('is false for managed elements and for no focus at all', () => {
+    expect(isUnmanagedFocus(el('BUTTON', true))).toBe(false)
+    expect(isUnmanagedFocus(el('BODY', false))).toBe(false)
+    expect(isUnmanagedFocus(null)).toBe(false)
   })
 })
