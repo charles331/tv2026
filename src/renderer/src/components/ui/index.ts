@@ -1,5 +1,7 @@
 export { cn } from './cn'
 export { Button } from './Button'
+export { FocusButton } from './FocusButton'
+export { SelectMenu } from './SelectMenu'
 export { Spinner } from './Spinner'
 export { Badge } from './Badge'
 export { ProgressBar } from './ProgressBar'

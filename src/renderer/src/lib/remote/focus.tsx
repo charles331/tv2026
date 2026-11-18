@@ -3,7 +3,7 @@
  *
  * - useFocusItem: makes one element selectable. OK clicks it (Norigin blocks
  *   Enter's native action), a mouse press selects it too, and it scrolls into
- *   view when selected. `data-focused` drives the selection ring (CSS).
+ *   view when selected. `data-remote-focus` drives the selection ring (CSS).
  * - FocusZone: a group (menu, sidebar, toolbar, overlay) that remembers its
  *   last selected child; `boundary` keeps the selection inside (overlays).
  * - useBackHandler: registers a Back handler while mounted (the latest wins).
@@ -58,7 +58,7 @@ export function useFocusItem<E extends HTMLElement = HTMLElement>(opts: FocusIte
     focusKey,
     focusSelf,
     itemProps: {
-      'data-focused': focused,
+      'data-remote-focus': focused,
       onMouseDown: () => focusSelf()
     }
   }

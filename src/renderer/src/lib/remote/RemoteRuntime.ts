@@ -4,8 +4,9 @@
  *
  * - Back (Escape, Backspace outside a text field, BrowserBack, mouse "back"
  *   button) never reaches Norigin: it runs the latest handler of the back stack.
- * - In a text field, the editing keys (←/→, Backspace, Home/End) are stopped
- *   before Norigin sees them, so the caret moves and characters get deleted.
+ * - In a text field, the editing keys (←/→ inside the text, Backspace,
+ *   Home/End) are stopped before Norigin sees them, so the caret moves and
+ *   characters get deleted; ←/→ at the edge of the text leave the field.
  * - Everything else (arrows, Enter) goes on to Norigin's own window listener.
  *
  * It also tracks the input modality on <html data-input="keys|pointer">: the
@@ -13,10 +14,9 @@
  * is being used.
  */
 import { init } from '@noriginmedia/norigin-spatial-navigation'
-import { keyToAction, isTextField } from './keys'
+import { keyToAction, isTextField, textFieldKeepsKey } from './keys'
 import { backStack } from './backStack'
 
-const TEXT_EDIT_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Backspace', 'Home', 'End', 'Delete'])
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
@@ -44,9 +44,18 @@ export function startRemote(): void {
         backStack.dispatch()
         return
       }
-      if (inTextField && TEXT_EDIT_KEYS.has(e.key)) {
-        e.stopPropagation() // native caret / deletion, no navigation
-        return
+      if (inTextField) {
+        const field = document.activeElement as HTMLInputElement
+        let caret: { selectionStart: number | null; selectionEnd: number | null }
+        try {
+          caret = { selectionStart: field.selectionStart, selectionEnd: field.selectionEnd }
+        } catch {
+          caret = { selectionStart: null, selectionEnd: null } // input types without a caret
+        }
+        if (textFieldKeepsKey(e.key, { ...caret, valueLength: field.value?.length ?? 0 })) {
+          e.stopPropagation() // native caret / deletion, no navigation
+          return
+        }
       }
       if (action) setModality('keys')
     },

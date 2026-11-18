@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { keyToAction, isTextField } from '../../src/renderer/src/lib/remote/keys'
+import { keyToAction, isTextField, textFieldKeepsKey } from '../../src/renderer/src/lib/remote/keys'
 
 describe('keyToAction', () => {
   const out = { inTextField: false }
@@ -49,5 +49,33 @@ describe('isTextField', () => {
     expect(isTextField(el('INPUT', 'checkbox'))).toBe(false)
     expect(isTextField(el('BUTTON'))).toBe(false)
     expect(isTextField(null)).toBe(false)
+  })
+})
+
+describe('textFieldKeepsKey', () => {
+  const caret = (start: number | null, end: number | null, length: number) => ({
+    selectionStart: start,
+    selectionEnd: end,
+    valueLength: length
+  })
+  it('keeps ←/→ for the caret inside the text', () => {
+    expect(textFieldKeepsKey('ArrowLeft', caret(3, 3, 8))).toBe(true)
+    expect(textFieldKeepsKey('ArrowRight', caret(3, 3, 8))).toBe(true)
+  })
+  it('lets ← leave the field from the start, → from the end', () => {
+    expect(textFieldKeepsKey('ArrowLeft', caret(0, 0, 8))).toBe(false)
+    expect(textFieldKeepsKey('ArrowRight', caret(8, 8, 8))).toBe(false)
+    expect(textFieldKeepsKey('ArrowRight', caret(0, 0, 0))).toBe(false)
+  })
+  it('keeps arrows while text is selected', () => {
+    expect(textFieldKeepsKey('ArrowLeft', caret(0, 4, 8))).toBe(true)
+  })
+  it('lets arrows leave a field without a caret (number input)', () => {
+    expect(textFieldKeepsKey('ArrowLeft', caret(null, null, 2))).toBe(false)
+  })
+  it('always keeps the editing keys', () => {
+    expect(textFieldKeepsKey('Backspace', caret(0, 0, 8))).toBe(true)
+    expect(textFieldKeepsKey('Home', caret(0, 0, 8))).toBe(true)
+    expect(textFieldKeepsKey('ArrowDown', caret(3, 3, 8))).toBe(false)
   })
 })

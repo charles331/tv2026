@@ -50,7 +50,7 @@ export function Button({
   return (
     <button
       ref={ref}
-      data-focused={itemProps['data-focused']}
+      data-remote-focus={itemProps['data-remote-focus']}
       onMouseDown={(e) => {
         itemProps.onMouseDown()
         onMouseDown?.(e)

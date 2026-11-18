@@ -52,3 +52,23 @@ export function isTextField(el: Element | null): boolean {
   if (tag === 'INPUT') return TEXT_INPUT_TYPES.has((node.type ?? 'text').toLowerCase())
   return false
 }
+
+const ALWAYS_EDITING = new Set(['Backspace', 'Delete', 'Home', 'End'])
+
+/**
+ * In a text field, does this key stay with the field (edit / move the caret)
+ * rather than go to the navigation? ←/→ move the caret, except at the edge of
+ * the text, where they leave the field like any other arrow (TV-style: the
+ * remote has no other way to reach the button next to a search box).
+ */
+export function textFieldKeepsKey(
+  key: string,
+  caret: { selectionStart: number | null; selectionEnd: number | null; valueLength: number }
+): boolean {
+  if (ALWAYS_EDITING.has(key)) return true
+  if (key !== 'ArrowLeft' && key !== 'ArrowRight') return false
+  const { selectionStart: start, selectionEnd: end, valueLength } = caret
+  if (start === null || end === null) return false // no caret (e.g. number input)
+  if (start !== end) return true // a selection: the arrow collapses it
+  return key === 'ArrowLeft' ? start > 0 : start < valueLength
+}

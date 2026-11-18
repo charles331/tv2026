@@ -15,8 +15,10 @@ import {
   IconFilm,
   LoadingState,
   EmptyState,
-  ErrorState
+  ErrorState,
+  SelectMenu
 } from '../../components/ui'
+import { FocusZone, useFocusWhenReady } from '../../lib/remote/focus'
 import { CategorySidebar } from './CategorySidebar'
 import { PosterGrid } from './PosterGrid'
 import { useStreamFeed } from './useStreamFeed'
@@ -84,6 +86,10 @@ export function CatalogScreen({
     sortDir
   })
 
+  // Remote control: once the first page is there, the grid takes the selection
+  // (unless the user is already somewhere else on the screen).
+  useFocusWhenReady('catalog-grid', !isPinned && feed.items.length > 0, 'screen-catalog')
+
   const isSearching = query.trim().length > 0
   const selectedCategoryName =
     categoryId == null
@@ -94,6 +100,8 @@ export function CatalogScreen({
   return (
     <div className="flex h-full">
       <CategorySidebar
+        focusKey="catalog-categories"
+        contentFocusKey="catalog-grid"
         categories={categoriesState.data ?? []}
         loading={categoriesState.loading}
         error={categoriesState.error}
@@ -109,7 +117,10 @@ export function CatalogScreen({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Toolbar */}
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-3">
+        <FocusZone
+          focusKey="catalog-toolbar"
+          className="flex items-center gap-3 border-b border-white/10 px-5 py-3"
+        >
           <div className="relative max-w-md flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
               <IconSearch size={16} />
@@ -122,20 +133,15 @@ export function CatalogScreen({
               disabled={isPinned}
             />
           </div>
-          <select
+          <SelectMenu
+            focusKey="catalog-sort"
             value={sort}
-            onChange={(e) => setSort(e.target.value as typeof sort)}
+            options={SORT_OPTIONS}
+            onChange={setSort}
             disabled={isPinned}
-            className="h-10 rounded-lg border border-white/10 bg-surface-sunken px-3 text-sm text-gray-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/70 disabled:opacity-40"
             title="Trier"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
+          />
+        </FocusZone>
 
         {/* Header line */}
         <div className="flex items-center justify-between px-5 pt-3 text-sm text-gray-400">
@@ -205,6 +211,7 @@ export function CatalogScreen({
               onLoadMore={feed.loadMore}
               onSelect={onSelectMovie}
               downloadedStreamIds={downloadedStreamIds}
+              focusKey="catalog-grid"
             />
           )}
         </div>

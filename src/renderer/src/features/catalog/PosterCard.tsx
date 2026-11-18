@@ -10,11 +10,17 @@ import { WatchProgressBar } from '../progress/ProgressBar'
 function PosterCardImpl({
   stream,
   downloaded,
-  onSelect
+  onSelect,
+  active = false,
+  onPointerSelect
 }: {
   stream: VodStream
   downloaded: boolean
   onSelect: (stream: VodStream) => void
+  /** Selected by the remote control (the grid owns the selection). */
+  active?: boolean
+  /** Mouse press: the grid moves its selection here. */
+  onPointerSelect?: () => void
 }): ReactElement {
   // A check made on the movie page this session wins over the list's data.
   const known = useFileCheck(stream.streamId)
@@ -26,7 +32,9 @@ function PosterCardImpl({
     <button
       type="button"
       onClick={() => onSelect(stream)}
-      className="group flex w-full min-w-0 flex-col text-left focus-visible:outline-none"
+      onMouseDown={onPointerSelect}
+      data-remote-focus={active}
+      className="remote-card group flex w-full min-w-0 flex-col rounded-lg text-left focus-visible:outline-none"
       title={stream.name}
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-poster ring-1 ring-white/5 transition-all duration-200 group-hover:-translate-y-1 group-hover:shadow-poster-hover group-hover:ring-accent/40 group-focus-visible:ring-2 group-focus-visible:ring-accent">
