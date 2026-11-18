@@ -1,5 +1,7 @@
 import type { InputHTMLAttributes, ReactElement, ReactNode } from 'react'
+import { navigateByDirection } from '@noriginmedia/norigin-spatial-navigation'
 import { cn } from './cn'
+import { useFocusItem } from '../../lib/remote/focus'
 
 export function Field({
   label,
@@ -27,11 +29,39 @@ export function Field({
 
 interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean
+  /** Stable key for the remote-control navigation (setFocus target). */
+  focusKey?: string
 }
 
-export function TextInput({ invalid, className, ...rest }: TextInputProps): ReactElement {
+export function TextInput({
+  invalid,
+  className,
+  focusKey,
+  disabled,
+  onMouseDown,
+  ...rest
+}: TextInputProps): ReactElement {
+  // OK in a field moves on to what is below it (usually the results).
+  const { ref, itemProps } = useFocusItem<HTMLInputElement>({
+    focusKey,
+    focusable: !disabled,
+    // In a form (Settings: credentials), OK submits it like Enter always did.
+    onEnter: () => {
+      const form = ref.current?.form
+      if (form) form.requestSubmit()
+      else void navigateByDirection('down')
+    }
+  })
   return (
     <input
+      ref={ref}
+      disabled={disabled}
+      data-remote-focus={itemProps['data-remote-focus']}
+      data-remote=""
+      onMouseDown={(e) => {
+        itemProps.onMouseDown()
+        onMouseDown?.(e)
+      }}
       className={cn(
         'h-10 w-full rounded-lg border bg-surface-sunken px-3 text-sm text-gray-100',
         'placeholder:text-gray-600 transition-colors',

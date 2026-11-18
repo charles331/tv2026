@@ -90,6 +90,8 @@ try {
   const page = await app.firstWindow()
   await page.waitForTimeout(2500)
   const body = () => page.locator('body').innerText()
+  // Visited screens stay mounted (hidden): only the visible search box counts.
+  const searchField = () => page.getByPlaceholder(/rechercher/i).filter({ visible: true }).first()
   // La barre de lecture se ferme par « Arrêter », ou « Fermer » si la lecture a échoué.
   const closePlayer = page.getByRole('button', { name: /^(Arrêter|Fermer)$/ })
   const playerStatus = async () => (await page.evaluate(() => window.api.player.status())).data
@@ -126,9 +128,109 @@ try {
   check('Journal : films mis à jour', /Catalogue des films mis à jour : 3 films/.test(journal))
   check('Journal : échec des séries', /Catalogue des séries non mis à jour/.test(journal))
 
+  // Télécommande : tout l'écran Films au clavier seul (flèches, Entrée, Échap).
+  await page.getByRole('button', { name: 'Accueil' }).first().click()
+  await page.waitForTimeout(800)
+  const focusInfo = () =>
+    page.evaluate(() => {
+      const a = document.activeElement
+      const card = document.querySelector('.remote-card[data-remote-focus="true"]')
+      return {
+        label: a?.getAttribute('aria-label') ?? a?.textContent?.trim() ?? '',
+        tag: a?.tagName,
+        value: a?.value,
+        zone: a?.closest('[data-focus-zone]')?.getAttribute('data-focus-zone') ?? null,
+        card: card?.getAttribute('title') ?? null,
+        input: document.documentElement.dataset.input
+      }
+    })
+  const key = async (k, times = 1) => {
+    for (let i = 0; i < times; i++) {
+      await page.keyboard.press(k)
+      await page.waitForTimeout(150)
+    }
+  }
+  let f = await focusInfo()
+  check('Clavier : au démarrage la grille des films a la sélection', f.zone === 'screen-catalog' && f.card != null, JSON.stringify(f))
+  await key('Escape', 2)
+  f = await focusInfo()
+  check('Clavier : Retour remonte jusqu’au menu (Catalogue)', f.zone === 'nav' && f.label === 'Catalogue', JSON.stringify(f))
+  await key('Escape')
+  f = await focusInfo()
+  check('Clavier : Retour dans le menu ne fait rien', f.zone === 'nav' && f.label === 'Catalogue' && (await page.getByRole('button', { name: 'Catalogue' }).first().isVisible()))
+  await key('ArrowRight') // into the screen: back to the categories
+  await key('ArrowRight') // categories → grid
+  await key('ArrowRight') // second poster
+  f = await focusInfo()
+  const opened = f.card
+  check('Clavier : → depuis les catégories va à la grille', f.zone === 'screen-catalog' && opened != null, JSON.stringify(f))
+  await key('Enter')
+  await page.getByRole('dialog').waitFor()
+  await page.waitForTimeout(300)
+  f = await focusInfo()
+  check(
+    'Clavier : Entrée ouvre la fiche, sélection sur Lire',
+    (await page.getByRole('dialog').innerText()).includes(opened.replace(/^FR - /, '').replace(/ \(\d{4}\).*$/, '')) &&
+      /^(Lire|Reprendre à)/.test(f.label),
+    JSON.stringify(f)
+  )
+  await key('Escape')
+  await page.waitForTimeout(300)
+  f = await focusInfo()
+  check('Clavier : Retour ferme la fiche, la sélection revient sur l’affiche', (await page.getByRole('dialog').count()) === 0 && f.card === opened, JSON.stringify(f))
+  await key('ArrowUp') // first row → search box
+  await page.keyboard.type('elephant')
+  await key('ArrowLeft')
+  await key('Backspace')
+  f = await focusInfo()
+  check('Clavier : dans la recherche, ← et Retour arrière éditent le texte', f.tag === 'INPUT' && f.value === 'elephat', JSON.stringify(f))
+  await page.keyboard.press('Control+a')
+  await page.keyboard.type('elephant')
+  await page.waitForTimeout(1200)
+  await key('ArrowDown')
+  f = await focusInfo()
+  const shown = await page.locator('.remote-card').filter({ visible: true }).count()
+  check('Clavier : ↓ quitte la recherche vers les résultats', f.card === 'FR - L’Éléphant bleu (2024)' && shown === 1, `${JSON.stringify(f)} · ${shown} affiche(s)`)
+  await key('ArrowUp')
+  await page.keyboard.press('Control+a')
+  await page.keyboard.press('Backspace')
+  await page.waitForTimeout(1200)
+  // Menu de tri : à la souris, un second clic sur le bouton le referme.
+  const sortButton = page.locator('button[title="Trier"]').filter({ visible: true })
+  await sortButton.click()
+  check('Tri : un clic ouvre la liste', (await page.getByRole('listbox').count()) === 1)
+  await sortButton.click()
+  await page.waitForTimeout(200)
+  check('Tri : un second clic referme la liste', (await page.getByRole('listbox').count()) === 0)
+  // Ouvert puis Ctrl+K : la liste ne reste pas ouverte dans l'écran caché.
+  await sortButton.click()
+  await page.keyboard.press('Control+k')
+  await page.waitForTimeout(300)
+  check('Tri : la liste se ferme quand on change d’écran', (await page.locator('[role=listbox]').count()) === 0)
+  await page.getByRole('button', { name: 'Catalogue' }).first().click()
+  await page.waitForTimeout(300)
+  // « Tout mettre à jour ? » au clavier : sélection sur Annuler, Retour referme.
+  await key('Escape', 2)
+  for (let i = 0; i < 8 && !/^Tout mettre à jour/.test((await focusInfo()).label); i++) await key('ArrowDown')
+  await key('Enter')
+  await page.waitForTimeout(300)
+  f = await focusInfo()
+  check('Clavier : « Tout mettre à jour ? » s’ouvre sur Annuler', f.label === 'Annuler' && (await page.getByText('Tout mettre à jour ?').count()) === 1, JSON.stringify(f))
+  await key('Escape')
+  f = await focusInfo()
+  check('Clavier : Retour referme la confirmation', (await page.getByText('Tout mettre à jour ?').count()) === 0 && /^Tout mettre à jour/.test(f.label), JSON.stringify(f))
+
+  // La souris reste maître : pas d'anneau de sélection après un clic.
+  await page.locator('.remote-card').filter({ visible: true }).first().click()
+  await page.getByRole('dialog').waitFor()
+  await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click()
+  await page.waitForTimeout(300)
+  f = await focusInfo()
+  check('Souris : après un clic, aucun anneau de sélection', f.input === 'pointer', JSON.stringify(f))
+
   // Fiche film : la taille vérifiée apparaît aussi sur l'affiche, sans recharger.
   await page.getByRole('button', { name: 'Accueil' }).first().click()
-  await page.getByPlaceholder(/rechercher/i).first().fill('Film Test')
+  await searchField().fill('Film Test')
   await page.waitForTimeout(1200)
   const poster = page.locator('button[title="FR - Le Film Test (2026)"]').first()
   check('Affiche sans taille avant la fiche', !/[GM]o/.test(await poster.innerText()))
@@ -148,7 +250,7 @@ try {
   check('Affiche : taille sans recharger', /[GM]o/.test(await poster.innerText()), (await poster.innerText()).replace(/\n/g, ' | '))
 
   // « Reprendre » dans la barre latérale : la liste, puis retirer un film.
-  await page.getByPlaceholder(/rechercher/i).first().fill('')
+  await searchField().fill('')
   await page.getByRole('button', { name: /^▶ Reprendre/ }).click()
   await page.getByText(/Arrêté à 43:12/).waitFor({ timeout: 5000 }).catch(() => undefined)
   check('Reprendre : le film commencé est listé', /Arrêté à 43:12 · reste 56 min/.test(await body()))
@@ -159,7 +261,7 @@ try {
 
   // Lecture réelle : la position est enregistrée à l'arrêt, puis la lecture reprend là.
   if (realPlayback) {
-    await page.getByPlaceholder(/rechercher/i).first().fill('Autre Film')
+    await searchField().fill('Autre Film')
     const other = page.locator('button[title="FR - Autre Film (2025) CAM"]').first()
     await other.click()
     await page.getByRole('dialog').getByRole('button', { name: /^Lire/ }).click()
@@ -189,7 +291,7 @@ try {
     await page.waitForFunction(() => !/Arrêter/.test(document.body.innerText), null, { timeout: 20_000 })
     const done = progressOf('movie', 43)
     check('Lecture réelle : film terminé marqué « vu »', done != null && done.watched === 1 && done.position_secs === 0)
-    await page.getByPlaceholder(/rechercher/i).first().fill('')
+    await searchField().fill('')
 
     // Épisode suivant : bouton dans la barre, et enchaînement en fin d'épisode.
     await page.getByRole('button', { name: 'Séries', exact: true }).click()
@@ -230,7 +332,7 @@ try {
   }
 
   // Recherche tolérante : sans accents, mots dans le désordre.
-  await page.getByPlaceholder(/rechercher/i).first().fill('bleu elephant')
+  await searchField().fill('bleu elephant')
   const elephant = page.locator('button[title="FR - L’Éléphant bleu (2024)"]').first()
   await elephant.waitFor({ timeout: 5000 }).catch(() => undefined)
   check('Recherche sans accents, mots dans le désordre', await elephant.isVisible())
@@ -275,7 +377,7 @@ try {
   // Direct, recherche dans les guides : la chaîne d'un programme à venir s'ouvre au clic.
   await page.getByRole('button', { name: 'Direct' }).first().click()
   await page.getByLabel('Chercher aussi dans les guides').check()
-  await page.getByPlaceholder(/rechercher/i).first().fill('Marathon')
+  await searchField().fill('Marathon')
   await page.getByText('Marathon solo').first().waitFor({ timeout: 20_000 })
   for (const name of ['Solo TV', 'Chaîne Test FHD']) {
     // « Chaîne Test FHD » : la variante du programme de demain (dernier bouton de ce nom).
@@ -294,7 +396,7 @@ try {
   }
 
   // Direct, liste des chaînes : cliquer sur la chaîne (logo ou nom) la lance.
-  await page.getByPlaceholder(/rechercher/i).first().fill('Solo')
+  await searchField().fill('Solo')
   const row = page.locator('button[title="Regarder Solo TV"]')
   await row.first().waitFor({ timeout: 10_000 }).catch(() => undefined)
   const rowClickable = (await row.count()) > 0
@@ -311,7 +413,7 @@ try {
   await page.waitForTimeout(600)
 
   // Zapping : chaîne suivante / précédente de la catégorie, puis chaînes récentes.
-  await page.getByPlaceholder(/rechercher/i).first().fill('')
+  await searchField().fill('')
   await page.locator('button[title="Regarder Solo TV"]').first().click()
   await page.locator('p[title="Solo TV"]').waitFor({ timeout: 5000 }).catch(() => undefined)
   await page.getByRole('button', { name: 'Chaîne suivante' }).click()

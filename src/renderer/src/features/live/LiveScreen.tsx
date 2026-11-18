@@ -143,6 +143,7 @@ export function LiveScreen({
   return (
     <div className="flex h-full">
       <CategorySidebar
+        focusKey="live-categories"
         categories={toSidebarCategories(categoriesState.data ?? [])}
         loading={categoriesState.loading}
         error={categoriesState.error}

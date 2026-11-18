@@ -103,6 +103,7 @@ export function SeriesScreen({
   return (
     <div className="flex h-full">
       <CategorySidebar
+        focusKey="series-categories"
         categories={toSidebarCategories(categoriesState.data ?? [])}
         loading={categoriesState.loading}
         error={categoriesState.error}

@@ -1,7 +1,16 @@
 import { type ReactElement } from 'react'
 import type { FavoriteItem, FavoriteKind } from '@shared/index'
 import { useFavorites } from '../../lib/favorites'
-import { Badge, Button, Poster, EmptyState, IconStar, IconPlay, IconTv } from '../../components/ui'
+import {
+  Badge,
+  Button,
+  FocusButton,
+  Poster,
+  EmptyState,
+  IconStar,
+  IconPlay,
+  IconTv
+} from '../../components/ui'
 import { FavoriteButton } from './FavoriteButton'
 
 /** Build the AddFavoriteRequest snapshot from a stored favorite (for the toggle). */
@@ -74,7 +83,7 @@ export function FavoritesView({
               className="flex items-center gap-3 rounded-lg border border-white/10 bg-surface-raised p-3"
             >
               {/* Logo + name: one click target that plays the channel. */}
-              <button
+              <FocusButton
                 type="button"
                 disabled={!f.available}
                 onClick={() => onActivate(f)}
@@ -94,7 +103,7 @@ export function FavoritesView({
                     </span>
                   )}
                 </span>
-              </button>
+              </FocusButton>
               {onOpenGuide && (
                 <Button
                   size="sm"
@@ -132,10 +141,10 @@ export function FavoritesView({
       >
         {items.map((f) => (
           <div key={f.itemId} className="group relative flex w-full min-w-0 flex-col">
-            <button
+            <FocusButton
               type="button"
               onClick={() => onActivate(f)}
-              className="flex w-full min-w-0 flex-col text-left focus-visible:outline-none"
+              className="remote-card flex w-full min-w-0 flex-col rounded-lg text-left focus-visible:outline-none"
               title={f.name}
             >
               <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-poster ring-1 ring-white/5 transition-all duration-200 group-hover:-translate-y-1 group-hover:ring-accent/40">
@@ -149,9 +158,9 @@ export function FavoritesView({
               <p className="mt-2 w-full min-w-0 truncate px-0.5 text-sm font-medium text-gray-100 group-hover:text-white">
                 {f.name}
               </p>
-            </button>
-            {/* Unpin (top-right, on hover). */}
-            <div className="absolute right-1 top-1 rounded-md bg-black/50 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+            </FocusButton>
+            {/* Unpin (top-right): on hover, or when the card is selected with the remote. */}
+            <div className="absolute right-1 top-1 rounded-md bg-black/50 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 group-has-[[data-remote-focus=true]]:opacity-100">
               <FavoriteButton req={reqOf(f)} variant="icon" />
             </div>
           </div>

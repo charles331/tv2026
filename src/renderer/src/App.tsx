@@ -20,6 +20,8 @@ import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { RemindersProvider, useReminders } from './lib/reminders'
 import { ProgressProvider, useProgress } from './lib/progress'
 import { AppNav, type Route } from './components/AppNav'
+import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { FocusZone, ScreenActiveContext, useBackHandler, useReturnFocus } from './lib/remote/focus'
 import { Button, LoadingState } from './components/ui'
 import { SearchScreen, type SearchTarget } from './features/search/SearchScreen'
 import { CatalogScreen } from './features/catalog/CatalogScreen'
@@ -77,6 +79,27 @@ function AppShell(): ReactElement {
     setRoute(target)
   }, [])
   const seedFor = (target: SearchTarget): string => (seed?.route === target ? seed.query : '')
+
+  // Browsing screens stay mounted (hidden) once visited, so category, scroll
+  // and selection are still there when coming back (remote-control memory).
+  const [visited, setVisited] = useState<ReadonlySet<Route>>(() => new Set<Route>(['catalog']))
+  useEffect(() => {
+    setVisited((v) => (v.has(route) ? v : new Set(v).add(route)))
+    // The newly shown screen takes the selection (its zone restores its last child).
+    setFocus(`screen-${route}`)
+  }, [route])
+
+  // Back at screen level: content → its categories → the main menu → nothing.
+  useBackHandler(() => {
+    const el = document.activeElement
+    if (el?.closest('[data-focus-zone="nav"]')) return
+    const categories = `${route}-categories`
+    if (!el?.closest(`[data-focus-zone="${categories}"]`) && doesFocusableExist(categories)) {
+      setFocus(categories)
+    } else {
+      setFocus(`nav-${route}`)
+    }
+  })
 
   // Ctrl+K (Cmd+K) opens the global search from anywhere.
   useEffect(() => {
@@ -457,50 +480,74 @@ function AppShell(): ReactElement {
           updatingAll={updatingAll}
         />
 
-        <main className="min-w-0 flex-1">
-          {route === 'search' && (
-            <SearchScreen
-              query={globalQuery}
-              onQueryChange={setGlobalQuery}
-              onSelectMovie={setSelected}
-              onSelectSeries={setSelectedSeries}
-              onPlayChannel={handlePlayChannel}
-              onPlayArchive={handlePlayArchive}
-              onSeeAll={seeAll}
-            />
+        <main className="relative min-w-0 flex-1">
+          {(route === 'search' || visited.has('search')) && (
+            <ScreenSlot id="search" active={route === 'search'}>
+              <SearchScreen
+                query={globalQuery}
+                onQueryChange={setGlobalQuery}
+                onSelectMovie={setSelected}
+                onSelectSeries={setSelectedSeries}
+                onPlayChannel={handlePlayChannel}
+                onPlayArchive={handlePlayArchive}
+                onSeeAll={seeAll}
+              />
+            </ScreenSlot>
           )}
-          {route === 'catalog' && (
-            <CatalogScreen
-              key={`${catalogEpoch}:${seedFor('catalog')}`}
-              initialQuery={seedFor('catalog')}
-              onSelectMovie={setSelected}
-              onResume={handleResume}
-              onGoToSettings={() => setRoute('settings')}
-            />
+          {(route === 'catalog' || visited.has('catalog')) && (
+            <ScreenSlot id="catalog" active={route === 'catalog'}>
+              <CatalogScreen
+                key={`${catalogEpoch}:${seedFor('catalog')}`}
+                initialQuery={seedFor('catalog')}
+                onSelectMovie={setSelected}
+                onResume={handleResume}
+                onGoToSettings={() => setRoute('settings')}
+              />
+            </ScreenSlot>
           )}
-          {route === 'series' && (
-            <SeriesScreen
-              key={`${catalogEpoch}:${seedFor('series')}`}
-              initialQuery={seedFor('series')}
-              onSelectSeries={setSelectedSeries}
-              onResume={handleResume}
-              onGoToSettings={() => setRoute('settings')}
-            />
+          {(route === 'series' || visited.has('series')) && (
+            <ScreenSlot id="series" active={route === 'series'}>
+              <SeriesScreen
+                key={`${catalogEpoch}:${seedFor('series')}`}
+                initialQuery={seedFor('series')}
+                onSelectSeries={setSelectedSeries}
+                onResume={handleResume}
+                onGoToSettings={() => setRoute('settings')}
+              />
+            </ScreenSlot>
           )}
-          {route === 'live' && (
-            <LiveScreen
-              key={`${catalogEpoch}:${seedFor('live')}`}
-              initialQuery={seedFor('live')}
-              onPlayChannel={handlePlayChannel}
-              onPlayArchive={handlePlayArchive}
-              onGoToSettings={() => setRoute('settings')}
-            />
+          {(route === 'live' || visited.has('live')) && (
+            <ScreenSlot id="live" active={route === 'live'}>
+              <LiveScreen
+                key={`${catalogEpoch}:${seedFor('live')}`}
+                initialQuery={seedFor('live')}
+                onPlayChannel={handlePlayChannel}
+                onPlayArchive={handlePlayArchive}
+                onGoToSettings={() => setRoute('settings')}
+              />
+            </ScreenSlot>
           )}
-          {route === 'scheduled' && <ScheduledScreen />}
+          {route === 'scheduled' && (
+            <ScreenSlot id="scheduled" active>
+              <ScheduledScreen />
+            </ScreenSlot>
+          )}
           {route === 'downloads' && (
-            <DownloadsScreen onOpenMovie={setSelected} onOpenSeries={setSelectedSeries} />
+            <ScreenSlot id="downloads" active>
+              <DownloadsScreen onOpenMovie={setSelected} onOpenSeries={setSelectedSeries} />
+            </ScreenSlot>
           )}
-          {route === 'settings' && <SettingsScreen onCatalogRefreshed={() => refreshCreds()} />}
+          {route === 'settings' && (
+            <ScreenSlot id="settings" active>
+              <SettingsScreen
+                onCatalogRefreshed={() => {
+                  refreshCreds()
+                  // Kept-alive screens hold the old data: remount them.
+                  setCatalogEpoch((n) => n + 1)
+                }}
+              />
+            </ScreenSlot>
+          )}
         </main>
       </div>
 
@@ -540,33 +587,82 @@ function AppShell(): ReactElement {
       )}
 
       {confirmUpdateAll && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
-          onClick={() => setConfirmUpdateAll(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="fade-in w-full max-w-md rounded-2xl border border-white/10 bg-surface-raised p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold text-white">Tout mettre à jour ?</h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Les catalogues <strong>films</strong>, <strong>séries</strong> et <strong>direct</strong>{' '}
-              seront re-téléchargés depuis le fournisseur vers le cache local. L’opération peut
-              durer plusieurs minutes.
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setConfirmUpdateAll(false)}>
-                Annuler
-              </Button>
-              <Button variant="primary" onClick={() => void runUpdateAll()}>
-                Tout mettre à jour
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ConfirmUpdateAll
+          onCancel={() => setConfirmUpdateAll(false)}
+          onConfirm={() => void runUpdateAll()}
+        />
       )}
+    </div>
+  )
+}
+
+/** One screen's slot in <main>: hidden (but kept) when inactive. */
+function ScreenSlot({
+  id,
+  active,
+  children
+}: {
+  id: Route
+  active: boolean
+  children: ReactElement
+}): ReactElement {
+  return (
+    <div className={active ? 'absolute inset-0' : 'invisible absolute inset-0'} inert={!active}>
+      <ScreenActiveContext.Provider value={active}>
+        <FocusZone
+          focusKey={`screen-${id}`}
+          focusable={active}
+          preferredChildFocusKey={`${id}-grid`}
+          className="h-full"
+        >
+          {children}
+        </FocusZone>
+      </ScreenActiveContext.Provider>
+    </div>
+  )
+}
+
+/** "Tout mettre à jour ?" — selection starts on Annuler; Back cancels. */
+function ConfirmUpdateAll({
+  onCancel,
+  onConfirm
+}: {
+  onCancel: () => void
+  onConfirm: () => void
+}): ReactElement {
+  useReturnFocus()
+  useBackHandler(onCancel)
+  useEffect(() => {
+    setFocus('confirm-update-all-cancel')
+  }, [])
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+      onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+    >
+      <FocusZone
+        focusKey="confirm-update-all"
+        boundary
+        className="fade-in w-full max-w-md rounded-2xl border border-white/10 bg-surface-raised p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-semibold text-white">Tout mettre à jour ?</h2>
+        <p className="mt-2 text-sm text-gray-400">
+          Les catalogues <strong>films</strong>, <strong>séries</strong> et <strong>direct</strong>{' '}
+          seront re-téléchargés depuis le fournisseur vers le cache local. L’opération peut durer
+          plusieurs minutes.
+        </p>
+        <div className="mt-5 flex justify-end gap-3">
+          <Button focusKey="confirm-update-all-cancel" variant="ghost" onClick={onCancel}>
+            Annuler
+          </Button>
+          <Button variant="primary" onClick={onConfirm}>
+            Tout mettre à jour
+          </Button>
+        </div>
+      </FocusZone>
     </div>
   )
 }

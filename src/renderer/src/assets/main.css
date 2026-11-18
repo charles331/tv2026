@@ -84,3 +84,17 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Remote-control selection ring: only after a navigation key (data-input is
+   set by lib/remote/RemoteRuntime), never while the mouse is in use. */
+html[data-input='keys'] [data-remote-focus='true'] {
+  outline: 3px solid rgb(99 102 241);
+  outline-offset: 2px;
+}
+html[data-input='keys'] [data-remote-focus='true'].remote-card {
+  transform: scale(1.04);
+  transition: transform 0.15s ease;
+}
+html[data-input='keys'] *:focus-visible:not([data-remote-focus='true']) {
+  outline: none;
+}

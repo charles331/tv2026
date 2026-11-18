@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import type { AddFavoriteRequest } from '@shared/index'
 import { useFavorites } from '../../lib/favorites'
-import { Button, IconStar, cn } from '../../components/ui'
+import { Button, FocusButton, IconStar, cn } from '../../components/ui'
 
 /**
  * Star toggle to pin/unpin a favorite. `variant`:
@@ -33,7 +33,8 @@ export function FavoriteButton({
 
   if (variant === 'icon') {
     return (
-      <button
+      <FocusButton
+        focusable
         type="button"
         onClick={onClick}
         disabled={busy}
@@ -47,7 +48,7 @@ export function FavoriteButton({
         )}
       >
         <IconStar size={18} />
-      </button>
+      </FocusButton>
     )
   }
 
