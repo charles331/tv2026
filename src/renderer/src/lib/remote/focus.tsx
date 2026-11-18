@@ -10,7 +10,7 @@
  * - useReturnFocus: an overlay gives the selection back to whatever had it
  *   before it opened.
  */
-import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, type HTMLAttributes, type ReactElement, type ReactNode } from 'react'
 import {
   FocusContext,
   useFocusable,
@@ -70,8 +70,9 @@ export function FocusZone({
   preferredChildFocusKey,
   focusable = true,
   className,
-  children
-}: {
+  children,
+  ...rest
+}: Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
   focusKey: string
   boundary?: boolean
   preferredChildFocusKey?: string
@@ -89,7 +90,7 @@ export function FocusZone({
   })
   return (
     <FocusContext.Provider value={focusKey}>
-      <div ref={ref} className={className} data-focus-zone={focusKey}>
+      <div {...rest} ref={ref} className={className} data-focus-zone={focusKey}>
         {children}
       </div>
     </FocusContext.Provider>
