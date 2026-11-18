@@ -298,6 +298,17 @@ try {
       resumed.positionSecs >= 95 && resumed.positionSecs < 115,
       `${Math.round(resumed.positionSecs)} s`
     )
+    // Télécommande : atteindre la barre de lecture au clavier, → avance de 10 s.
+    if ((await page.getByRole('dialog').count()) > 0) await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    for (let i = 0; i < 6 && (await focusInfo()).zone !== 'player-bar'; i++) await key('ArrowDown')
+    const onSlider = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Position')
+    for (let i = 0; i < 12 && !(await onSlider()); i++) await key('ArrowRight')
+    const before = (await playerStatus()).positionSecs
+    await key('ArrowRight')
+    await page.waitForTimeout(1200)
+    const after = (await playerStatus()).positionSecs
+    check('Clavier : la barre de lecture s’atteint et → avance', (await onSlider()) && after - before >= 8, `${Math.round(before)} s → ${Math.round(after)} s`)
     // Aller presque à la fin : le film passe en « vu » et quitte « Reprendre ».
     await page.evaluate(() => window.api.player.seek({ positionSecs: 197 }))
     await page.waitForFunction(() => !/Arrêter/.test(document.body.innerText), null, { timeout: 20_000 })
