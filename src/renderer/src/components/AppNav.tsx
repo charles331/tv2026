@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
+import { FocusZone, useFocusItem } from '../lib/remote/focus'
 import {
   cn,
   Spinner,
@@ -12,7 +13,8 @@ import {
   IconSettings
 } from './ui'
 
-export type Route = 'search' | 'catalog' | 'series' | 'live' | 'scheduled' | 'downloads' | 'settings'
+export type Route =
+  'search' | 'catalog' | 'series' | 'live' | 'scheduled' | 'downloads' | 'settings'
 
 export function AppNav({
   route,
@@ -38,89 +40,109 @@ export function AppNav({
   updatingAll?: boolean
 }): ReactElement {
   return (
-    <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-surface-sunken py-4">
-      <button
-        type="button"
-        onClick={() => onNavigate('catalog')}
-        title="Accueil (catalogue)"
-        aria-label="Accueil"
-        className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent-hover transition-colors hover:bg-accent/30"
-      >
-        <span className="text-sm font-bold leading-none tracking-tight">TV</span>
-      </button>
-      <NavButton
-        label="Recherche (films, séries, chaînes) — Ctrl+K"
-        active={route === 'search'}
-        onClick={() => onNavigate('search')}
-        icon={<IconSearch size={20} />}
-      />
-      <NavButton
-        label="Catalogue"
-        active={route === 'catalog'}
-        onClick={() => onNavigate('catalog')}
-        icon={<IconFilm size={20} />}
-      />
-      <NavButton
-        label="Séries"
-        active={route === 'series'}
-        onClick={() => onNavigate('series')}
-        icon={<IconTv size={20} />}
-      />
-      <NavButton
-        label="Direct"
-        active={route === 'live'}
-        onClick={() => onNavigate('live')}
-        icon={<IconBroadcast size={20} />}
-      />
-      <NavButton
-        label="Programmés (rappels & enregistrements)"
-        active={route === 'scheduled'}
-        onClick={() => onNavigate('scheduled')}
-        icon={<IconRecord size={20} />}
-        badge={scheduledCount && scheduledCount > 0 ? scheduledCount : undefined}
-      />
-      <NavButton
-        label="Téléchargements"
-        active={route === 'downloads'}
-        onClick={() => onNavigate('downloads')}
-        icon={<IconQueue size={20} />}
-        badge={activeDownloads > 0 ? activeDownloads : undefined}
-      />
-      <div className="mt-auto" />
-      {onUpdateAll && (
+    <FocusZone focusKey="nav" className="flex shrink-0">
+      <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-surface-sunken py-4">
+        <HomeButton onClick={() => onNavigate('catalog')} />
         <NavButton
-          label="Tout mettre à jour (films, séries, direct)"
-          active={false}
-          disabled={updatingAll}
-          onClick={onUpdateAll}
-          icon={updatingAll ? <Spinner size={18} /> : <IconRefresh size={18} />}
+          focusKey="nav-search"
+          label="Recherche (films, séries, chaînes) — Ctrl+K"
+          active={route === 'search'}
+          onClick={() => onNavigate('search')}
+          icon={<IconSearch size={20} />}
         />
-      )}
-      {busyReason && (
-        <span
-          className={cn(
-            'mb-1 h-2 w-2 rounded-full',
-            busyReason === 'playback' ? 'bg-amber-400' : 'bg-sky-400'
-          )}
-          title={
-            busyReason === 'playback'
-              ? 'Connexion : lecture en cours'
-              : 'Connexion : téléchargement'
-          }
+        <NavButton
+          focusKey="nav-catalog"
+          label="Catalogue"
+          active={route === 'catalog'}
+          onClick={() => onNavigate('catalog')}
+          icon={<IconFilm size={20} />}
         />
-      )}
-      <NavButton
-        label={settingsHasUnseen ? 'Réglages — nouveautés disponibles' : 'Réglages'}
-        active={route === 'settings'}
-        onClick={() => onNavigate('settings')}
-        icon={<IconSettings size={20} />}
-        dot={settingsHasUnseen}
-      />
-    </nav>
+        <NavButton
+          focusKey="nav-series"
+          label="Séries"
+          active={route === 'series'}
+          onClick={() => onNavigate('series')}
+          icon={<IconTv size={20} />}
+        />
+        <NavButton
+          focusKey="nav-live"
+          label="Direct"
+          active={route === 'live'}
+          onClick={() => onNavigate('live')}
+          icon={<IconBroadcast size={20} />}
+        />
+        <NavButton
+          focusKey="nav-scheduled"
+          label="Programmés (rappels & enregistrements)"
+          active={route === 'scheduled'}
+          onClick={() => onNavigate('scheduled')}
+          icon={<IconRecord size={20} />}
+          badge={scheduledCount && scheduledCount > 0 ? scheduledCount : undefined}
+        />
+        <NavButton
+          focusKey="nav-downloads"
+          label="Téléchargements"
+          active={route === 'downloads'}
+          onClick={() => onNavigate('downloads')}
+          icon={<IconQueue size={20} />}
+          badge={activeDownloads > 0 ? activeDownloads : undefined}
+        />
+        <div className="mt-auto" />
+        {onUpdateAll && (
+          <NavButton
+            focusKey="nav-update-all"
+            label="Tout mettre à jour (films, séries, direct)"
+            active={false}
+            disabled={updatingAll}
+            onClick={onUpdateAll}
+            icon={updatingAll ? <Spinner size={18} /> : <IconRefresh size={18} />}
+          />
+        )}
+        {busyReason && (
+          <span
+            className={cn(
+              'mb-1 h-2 w-2 rounded-full',
+              busyReason === 'playback' ? 'bg-amber-400' : 'bg-sky-400'
+            )}
+            title={
+              busyReason === 'playback'
+                ? 'Connexion : lecture en cours'
+                : 'Connexion : téléchargement'
+            }
+          />
+        )}
+        <NavButton
+          focusKey="nav-settings"
+          label={settingsHasUnseen ? 'Réglages — nouveautés disponibles' : 'Réglages'}
+          active={route === 'settings'}
+          onClick={() => onNavigate('settings')}
+          icon={<IconSettings size={20} />}
+          dot={settingsHasUnseen}
+        />
+      </nav>
+    </FocusZone>
+  )
+}
+
+function HomeButton({ onClick }: { onClick: () => void }): ReactElement {
+  const { ref, itemProps } = useFocusItem<HTMLButtonElement>({ focusKey: 'nav-home' })
+  return (
+    <button
+      ref={ref}
+      {...itemProps}
+      type="button"
+      onClick={onClick}
+      title="Accueil (catalogue)"
+      aria-label="Accueil"
+      className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent-hover transition-colors hover:bg-accent/30"
+    >
+      <span className="text-sm font-bold leading-none tracking-tight">TV</span>
+    </button>
   )
 }
 
 function NavButton({
+  focusKey,
   label,
   active,
   onClick,
@@ -129,6 +151,8 @@ function NavButton({
   dot,
   disabled
 }: {
+  /** Remote-control key: `nav-<route>`. */
+  focusKey: string
   label: string
   active: boolean
   onClick: () => void
@@ -138,8 +162,11 @@ function NavButton({
   dot?: boolean
   disabled?: boolean
 }): ReactElement {
+  const { ref, itemProps } = useFocusItem<HTMLButtonElement>({ focusKey, focusable: !disabled })
   return (
     <button
+      ref={ref}
+      {...itemProps}
       type="button"
       onClick={onClick}
       disabled={disabled}

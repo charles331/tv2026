@@ -17,6 +17,7 @@ import {
   getCurrentFocusKey,
   doesFocusableExist,
   setFocus,
+  ROOT_FOCUS_KEY,
   type Direction
 } from '@noriginmedia/norigin-spatial-navigation'
 import { backStack } from './backStack'
@@ -88,11 +89,32 @@ export function FocusZone({
   })
   return (
     <FocusContext.Provider value={focusKey}>
-      <div ref={ref} className={className}>
+      <div ref={ref} className={className} data-focus-zone={focusKey}>
         {children}
       </div>
     </FocusContext.Provider>
   )
+}
+
+/**
+ * Gives the selection to `target` once `ready` (e.g. the first page of a list
+ * arrived) — only if nothing better is selected: the selection is still on
+ * the screen zone itself (it had no children yet), on nothing, or on a
+ * focusable that no longer exists.
+ */
+export function useFocusWhenReady(target: string, ready: boolean, scope: string): void {
+  useEffect(() => {
+    if (!ready) return
+    const current = getCurrentFocusKey()
+    if (
+      !current ||
+      current === scope ||
+      current === ROOT_FOCUS_KEY ||
+      !doesFocusableExist(current)
+    ) {
+      setFocus(target)
+    }
+  }, [target, ready, scope])
 }
 
 export function useBackHandler(handler: () => void, active = true): void {
