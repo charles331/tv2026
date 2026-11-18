@@ -25,8 +25,12 @@ export function SeekBar({
   disabled: boolean
   onSeek: (secs: number) => void
 }): ReactElement {
-  // Remote control: ←/→ seek (onKeyDown below), ↑/↓ leave the bar.
-  const focus = useFocusItem<HTMLDivElement>({ onArrow: (dir) => dir === 'up' || dir === 'down' })
+  // Remote control: ←/→ seek (onKeyDown below), ↑/↓ leave the bar. Not
+  // selectable live (no slider is rendered then) nor while seeking is off.
+  const focus = useFocusItem<HTMLDivElement>({
+    focusable: !live && !disabled && (durationSecs ?? 0) > 0,
+    onArrow: (dir) => dir === 'up' || dir === 'down'
+  })
   const trackRef = focus.ref
   const [hoverSecs, setHoverSecs] = useState<number | null>(null)
   const [dragSecs, setDragSecs] = useState<number | null>(null)

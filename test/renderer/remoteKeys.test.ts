@@ -75,8 +75,10 @@ describe('textFieldKeepsKey', () => {
   it('keeps arrows while text is selected', () => {
     expect(textFieldKeepsKey('ArrowLeft', caret(0, 4, 8))).toBe(true)
   })
-  it('lets arrows leave a field without a caret (number input)', () => {
-    expect(textFieldKeepsKey('ArrowLeft', caret(null, null, 2))).toBe(false)
+  it('keeps ←/→ in a field whose caret is not readable (number input: Chromium gives null)', () => {
+    expect(textFieldKeepsKey('ArrowLeft', caret(null, null, 2))).toBe(true)
+    expect(textFieldKeepsKey('ArrowRight', caret(null, null, 2))).toBe(true)
+    expect(textFieldKeepsKey('ArrowDown', caret(null, null, 2))).toBe(false)
   })
   it('always keeps the editing keys', () => {
     expect(textFieldKeepsKey('Backspace', caret(0, 0, 8))).toBe(true)
