@@ -811,7 +811,7 @@ export const handlers: IpcHandlers = {
 
   [InvokeChannels.PLAYER_PAUSE]: async () => ok(await playerController.pause()),
   [InvokeChannels.PLAYER_RESUME]: async () => ok(await playerController.resume()),
-  [InvokeChannels.PLAYER_STOP]: async () => ok(await playerController.stop()),
+  [InvokeChannels.PLAYER_STOP]: async () => ok(await playerController.stopFromUser()),
 
   [InvokeChannels.PLAYER_SEEK]: async (req) => {
     assert(isObject(req), 'request must be an object')

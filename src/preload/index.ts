@@ -383,7 +383,8 @@ const api: RendererApi = {
         Result<IpcResponse<typeof InvokeChannels.PLAYER_STOP_RECORDING>>
       >,
     onPosition: (cb) => subscribe(EventChannels.PLAYER_POSITION, cb),
-    onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb)
+    onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb),
+    onRemote: (cb) => subscribe(EventChannels.PLAYER_REMOTE, cb)
   },
 
   connectionLock: {

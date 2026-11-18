@@ -273,6 +273,8 @@ export interface PlayerApi {
   stopRecording(): Promise<Result<PlayerStatus>>
   onPosition(cb: (e: PlayerPositionEvent) => void): Unsubscribe
   onState(cb: (e: PlayerStateEvent) => void): Unsubscribe
+  /** TV mode: previous / next pressed in the video window. */
+  onRemote(cb: (e: { action: 'next' | 'previous' }) => void): Unsubscribe
 }
 
 export interface ConnectionLockApi {

@@ -19,7 +19,7 @@ import { ToastProvider, useToast } from './lib/toast'
 import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { RemindersProvider, useReminders } from './lib/reminders'
 import { ProgressProvider, useProgress } from './lib/progress'
-import { TvModeProvider } from './lib/tvMode'
+import { TvModeProvider, useTvMode } from './lib/tvMode'
 import { AppNav, type Route } from './components/AppNav'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { setTypeToSearchHandler } from './lib/remote/RemoteRuntime'
@@ -142,6 +142,7 @@ function AppShell(): ReactElement {
     return () => window.removeEventListener('keydown', onKey)
   }, [navigate])
 
+  const tvMode = useTvMode()
   const { items } = useDownloads()
   const busy = useConnectionBusy()
   const toast = useToast()
@@ -432,6 +433,17 @@ function AppShell(): ReactElement {
   // Read by the "file ended" callback, which must see the latest lookup.
   const nextRef = useRef(neighbors.next)
   nextRef.current = neighbors.next
+  const previousRef = useRef(neighbors.previous)
+  previousRef.current = neighbors.previous
+  // TV mode: previous / next pressed in the video window (zapping, episodes).
+  useEffect(
+    () =>
+      api().player.onRemote(({ action }) => {
+        const target = action === 'next' ? nextRef.current : previousRef.current
+        target?.play()
+      }),
+    []
+  )
 
   // Refresh movies + series + live in one go (triggered from the nav, confirmed
   // by the user). Reports the outcome via a toast.
@@ -590,7 +602,11 @@ function AppShell(): ReactElement {
           onEnded={() => {
             // An episode ended: chain the next one (live never "ends").
             const following = playRequest.mediaKind === 'series' ? nextRef.current : null
-            if (!following) return false
+            if (!following) {
+              // TV mode: leave the finished video's black window, back to the app.
+              if (tvMode) void api().player.stop()
+              return false
+            }
             toast.show(`Épisode suivant : ${following.label}`, 'info')
             following.play()
             return true

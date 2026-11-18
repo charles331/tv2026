@@ -39,6 +39,7 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { mkdir } from 'fs/promises'
+import { writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 
@@ -59,6 +60,7 @@ import { getXtreamClient } from '../xtream'
 import { appLog } from '../log/logger'
 import { resolveMpvBinary } from './mpvBinary'
 import { mpvPlatformArgs } from './mpvPlatform'
+import { remoteBindings } from './remoteBindings'
 import { MpvIpc, type MpvEndFile, type MpvPropertyChange } from './mpvIpc'
 import type { PlaybackProgressSink } from './progressTracker'
 
@@ -144,6 +146,54 @@ export class PlayerController {
    */
   attach(emit: PlayerEventEmitter): void {
     this.emit = emit
+  }
+
+  // ------------------------------------------------------------- TV mode
+
+  private tvMode = false
+  private tvConfDir: string | null = null
+  private focusApp: () => void = () => {}
+
+  /**
+   * TV mode support: where to write mpv's remote-key file (the app's private
+   * folder, never the shared temp folder) and how to bring the app back.
+   */
+  attachTvSupport(opts: { confDir: string; focusApp: () => void }): void {
+    this.tvConfDir = opts.confDir
+    this.focusApp = opts.focusApp
+  }
+
+  /** Applies to the next mpv launch (the current video keeps its window). */
+  setTvMode(on: boolean): void {
+    this.tvMode = on
+  }
+
+  /** A key of the video window the app acts on (`script-message tv2026 <action>`). */
+  async handleRemote(action: string): Promise<void> {
+    appLog.info('player', `Télécommande : ${action}`)
+    if (action === 'back') await this.stopFromUser()
+    else if (action === 'next' || action === 'previous') {
+      this.emit(EventChannels.PLAYER_REMOTE, { action })
+    }
+  }
+
+  /** The user left the video: stop, and in TV mode give the screen back to the app. */
+  async stopFromUser(): Promise<PlayerStatus> {
+    const status = await this.stop()
+    if (this.tvMode) this.focusApp()
+    return status
+  }
+
+  private writeRemoteConf(live: boolean): string | null {
+    if (!this.tvConfDir) return null
+    const path = join(this.tvConfDir, `mpv-remote-${live ? 'live' : 'vod'}.conf`)
+    try {
+      writeFileSync(path, remoteBindings(live).join('\n') + '\n', 'utf8')
+      return path
+    } catch (e) {
+      appLog.warn('player', `Touches de la télécommande non écrites : ${String(e)}`)
+      return null
+    }
   }
 
   /** Wire the watch-progress store (resume positions, recent channels). */
@@ -426,6 +476,13 @@ export class PlayerController {
       args.push(`--start=${Math.floor(req.startSecs)}`)
     }
 
+    // TV mode: full screen in front, remote-control keys (see remoteBindings).
+    if (this.tvMode) {
+      args.push('--fullscreen=yes', '--ontop=yes')
+      const conf = this.writeRemoteConf(req.mediaKind === 'live')
+      if (conf) args.push(`--input-conf=${conf}`)
+    }
+
     args.push(url)
     return args
   }
@@ -448,6 +505,10 @@ export class PlayerController {
     })
     ipc.on('event', (msg: Record<string, unknown>) => {
       if (session !== this.sessionId) return
+      if (msg.event === 'client-message' && Array.isArray(msg.args) && msg.args[0] === 'tv2026') {
+        void this.handleRemote(String(msg.args[1]))
+        return
+      }
       // Once a file is loaded (first play, soft reload, or respawn), re-apply the
       // per-file selections a (re)load resets: chosen audio/subtitle track + pause.
       if (msg.event === 'file-loaded') void this.restorePrefs(ipc)
@@ -714,6 +775,7 @@ export class PlayerController {
     }
     this.retryAttempt++
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
+    if (this.tvMode) void this.ipc?.command(['show-text', 'Reconnexion…', '5000']).catch(() => undefined)
     const delay = liveReconnectDelay(this.retryAttempt)
     appLog.warn(
       'player',
@@ -998,6 +1060,11 @@ export class PlayerController {
 
   private toError(message: string): PlayerStatus {
     appLog.error('player', message)
+    // TV mode: the message is in the app, which mpv's window covers.
+    if (this.tvMode) {
+      void this.ipc?.setProperty('ontop', false).catch(() => undefined)
+      this.focusApp()
+    }
     this.status = { ...this.status, state: 'error', error: message }
     this.emit(EventChannels.PLAYER_STATE, {
       state: 'error',

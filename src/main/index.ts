@@ -196,7 +196,18 @@ if (!gotLock) {
     // TV mode (setting or --tv): full screen + renderer notified on every change.
     initTvMode(parseLaunchFlags(process.argv))
     const emitTv = makeEmitter(getWindows)
+    playerController.attachTvSupport({
+      confDir: app.getPath('userData'),
+      // Leaving the video (Back, end, error): the app comes back in front.
+      focusApp: () => {
+        if (!mainWindow) return
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    })
     onTvModeChange((on) => {
+      playerController.setTvMode(on)
       mainWindow?.setFullScreen(on)
       emitTv(EventChannels.APP_TV_MODE, { tvMode: on })
     })
