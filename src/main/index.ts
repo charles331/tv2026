@@ -203,7 +203,12 @@ if (!gotLock) {
         if (!mainWindow) return
         if (mainWindow.isMinimized()) mainWindow.restore()
         mainWindow.show()
+        // Windows may refuse focus() to a background window (it only flashes
+        // the taskbar): a moment always-on-top lifts it above mpv first.
+        mainWindow.setAlwaysOnTop(true)
         mainWindow.focus()
+        mainWindow.moveTop()
+        mainWindow.setAlwaysOnTop(false)
       }
     })
     // Remotes / mouse « back » button on Windows arrive as an app command.

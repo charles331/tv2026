@@ -42,8 +42,6 @@ export function ConflictDialog(): ReactElement | null {
 
   const decide = (resolution: ConflictResolution): void => {
     void api().reminders.resolveConflict({ reminderId: current.id, resolution })
-    // TV mode: the video goes on — back in front of the app.
-    if (resolution === 'keepPlayback') void api().player.videoFront()
     setQueue((q) => q.filter((r) => r.id !== current.id))
   }
 

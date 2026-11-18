@@ -182,4 +182,32 @@ describe('PlayerController — TV mode', () => {
     await player.stopFromUser()
     expect(focusApp).toHaveBeenCalledTimes(1)
   })
+
+  it('the status says whether the playing video was launched in TV mode', async () => {
+    player.setTvMode(true)
+    await player.play(MOVIE)
+    expect(player.getStatus().tvSession).toBe(true)
+    const states = events.filter((e) => e.channel === 'event:player:state')
+    expect((states[states.length - 1]!.payload as { tvSession?: boolean }).tvSession).toBe(true)
+  })
+
+  it('a video launched outside TV mode is not driven as TV when the mode turns on', async () => {
+    await player.play(MOVIE)
+    player.setTvMode(true)
+    await player.bringAppToFront()
+    expect(h.ipcs[0]!.commands.some((c) => c[0] === 'set_property' && c[1] === 'ontop')).toBe(false)
+    expect(focusApp).not.toHaveBeenCalled()
+    expect(player.getStatus().tvSession).toBe(false)
+  })
+
+  it('a stop while waiting for the connection gives it back once obtained', async () => {
+    const download = await connectionLock.acquire('download')
+    const playing = player.play(CHANNEL)
+    await Promise.resolve()
+    await player.stopFromUser()
+    connectionLock.release(download)
+    await playing.catch(() => undefined)
+    await Promise.resolve()
+    expect(connectionLock.isBusy()).toBe(false)
+  })
 })

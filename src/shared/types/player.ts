@@ -49,6 +49,8 @@ export type PlayerState = 'idle' | 'loading' | 'reconnecting' | 'playing' | 'pau
 
 export interface PlayerStatus {
   state: PlayerState
+  /** The current video was launched in TV mode (full screen, remote keys). */
+  tvSession?: boolean
   /** Current playback position in seconds. */
   positionSecs: number
   /** Total duration in seconds, or null if unknown. */
@@ -113,6 +115,8 @@ export interface PlayerPositionEvent {
 /** State-change event pushed main -> renderer. */
 export interface PlayerStateEvent {
   state: PlayerState
+  /** The current video was launched in TV mode (the remote drives it). */
+  tvSession?: boolean
   error?: string
   /** Current recording flag, so the UI stays in sync when playback ends/stops. */
   recording?: boolean

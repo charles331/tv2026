@@ -151,6 +151,8 @@ export class PlayerController {
   // ------------------------------------------------------------- TV mode
 
   private tvMode = false
+  /** TV mode of the current video (decided when it was launched). */
+  private sessionTv = false
   private tvConfDir: string | null = null
   private focusApp: () => void = () => {}
 
@@ -179,7 +181,7 @@ export class PlayerController {
 
   /** TV mode: an alert needs the user — the app goes in front of the video. */
   async bringAppToFront(): Promise<void> {
-    if (!this.tvMode) return
+    if (!this.sessionTv) return
     await this.ipc?.setProperty('ontop', false).catch(() => undefined)
     this.focusApp()
   }
@@ -190,7 +192,7 @@ export class PlayerController {
    * remote's keys, see relayKey.)
    */
   async restoreVideoToFront(): Promise<void> {
-    if (!this.tvMode) return
+    if (!this.sessionTv) return
     await this.ipc?.setProperty('ontop', true).catch(() => undefined)
   }
 
@@ -201,8 +203,9 @@ export class PlayerController {
 
   /** The user left the video: stop, and in TV mode give the screen back to the app. */
   async stopFromUser(): Promise<PlayerStatus> {
+    const tv = this.sessionTv
     const status = await this.stop()
-    if (this.tvMode) this.focusApp()
+    if (tv) this.focusApp()
     return status
   }
 
@@ -271,6 +274,9 @@ export class PlayerController {
     await this.stop()
 
     const session = ++this.sessionId
+    // TV mode is fixed for this video: switching the mode while it plays does
+    // not turn a desktop mpv window into a TV one (keys, on top, focus).
+    this.sessionTv = this.tvMode
     appLog.info(
       'player',
       `Lecture demandée : ${req.mediaKind ?? 'movie'} « ${req.title ?? '?'} » (${req.kind})`
@@ -300,13 +306,19 @@ export class PlayerController {
     })
 
     let url: string
+    let token: LockToken | null
     try {
-      url = await this.resolveSource(req)
+      ;({ url, token } = await this.resolveSource(req))
     } catch (e) {
       return this.toError(describeError(e))
     }
-    // A newer play() may have superseded us while resolving the URL.
-    if (session !== this.sessionId) return this.getStatus()
+    // A newer play() or a stop may have superseded us while waiting for the
+    // connection: give it back (else the download queue stays paused).
+    if (session !== this.sessionId) {
+      if (token) connectionLock.release(token)
+      return this.getStatus()
+    }
+    if (token) this.lockToken = token
 
     try {
       await this.spawnMpv(binary, url, req, session)
@@ -321,21 +333,21 @@ export class PlayerController {
    * Resolve the media URL/path for the request. For 'stream' this acquires the
    * connection lock (playback priority) before returning the provider URL.
    */
-  private async resolveSource(req: PlayRequest): Promise<string> {
+  private async resolveSource(req: PlayRequest): Promise<{ url: string; token: LockToken | null }> {
     if (req.kind === 'local') {
       if (!req.filePath || req.filePath.trim() === '') {
         throw new PlayerError('Aucun fichier local fourni pour la lecture.')
       }
       // Local playback consumes no provider connection — do NOT take the lock.
-      return req.filePath
+      return { url: req.filePath, token: null }
     }
 
     // stream: acquire the single connection BEFORE opening the provider URL.
     const url = this.streamUrl(req)
     // Playback priority: acquiring 'playback' makes download-engineer pause its
     // active transfer (it listens to the lock's busy changes).
-    this.lockToken = await connectionLock.acquire('playback')
-    return url
+    const token = await connectionLock.acquire('playback')
+    return { url, token }
   }
 
   /**
@@ -499,7 +511,7 @@ export class PlayerController {
     }
 
     // TV mode: full screen in front, remote-control keys (see remoteBindings).
-    if (this.tvMode) {
+    if (this.sessionTv) {
       args.push('--fullscreen=yes', '--ontop=yes')
       const conf = this.writeRemoteConf(req.mediaKind === 'live')
       if (conf) args.push(`--input-conf=${conf}`)
@@ -797,7 +809,7 @@ export class PlayerController {
     }
     this.retryAttempt++
     this.setState('reconnecting', { source: 'stream', title: req.title ?? null })
-    if (this.tvMode) void this.ipc?.command(['show-text', 'Reconnexion…', '5000']).catch(() => undefined)
+    if (this.sessionTv) void this.ipc?.command(['show-text', 'Reconnexion…', '5000']).catch(() => undefined)
     const delay = liveReconnectDelay(this.retryAttempt)
     appLog.warn(
       'player',
@@ -1067,14 +1079,15 @@ export class PlayerController {
   // ---------------------------------------------------------------- state/events
 
   private setState(state: PlayerState, patch?: Partial<PlayerStatus>): void {
-    this.status = { ...this.status, state, ...patch }
+    this.status = { ...this.status, state, ...patch, tvSession: this.sessionTv }
     if (state !== 'error') this.status.error = undefined
     this.emit(EventChannels.PLAYER_STATE, {
       state,
       error: state === 'error' ? this.status.error : undefined,
       recording: this.status.recording,
       // Surfaced only while reconnecting, so the bar can show "(tentative N)".
-      reconnectAttempt: state === 'reconnecting' ? this.retryAttempt : undefined
+      reconnectAttempt: state === 'reconnecting' ? this.retryAttempt : undefined,
+      tvSession: this.sessionTv
     })
     // Always push a position tick alongside a state change so the UI syncs.
     this.emitPosition(true)
@@ -1083,7 +1096,7 @@ export class PlayerController {
   private toError(message: string): PlayerStatus {
     appLog.error('player', message)
     // TV mode: the message is in the app, which mpv's window covers.
-    if (this.tvMode) {
+    if (this.sessionTv) {
       void this.ipc?.setProperty('ontop', false).catch(() => undefined)
       this.focusApp()
     }

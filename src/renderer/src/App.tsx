@@ -10,7 +10,7 @@ import type {
   VodStream,
   WatchProgress
 } from '@shared/index'
-import { isActiveReminderStatus, resumeStart, MPV_KEY_FOR_ACTION } from '@shared/index'
+import { isActiveReminderStatus, resumeStart, relayCommand, isRelayState } from '@shared/index'
 import { api, describeError, unwrap } from './lib/ipc'
 import { DownloadsProvider, useDownloads } from './lib/downloads'
 import { useConnectionBusy } from './lib/connectionLock'
@@ -440,17 +440,24 @@ function AppShell(): ReactElement {
   previousRef.current = neighbors.previous
   // Windows « back » command (some remotes, mouse back button) = Back.
   useEffect(() => api().app.onBack(() => dispatchBack('command')), [])
-  // TV mode, a video playing while the app is in front (an alert came up):
-  // the remote keeps driving the video.
-  const videoActive = playRequest != null
+  // A video launched in TV mode, on screen or coming, while the app has the
+  // keyboard (an alert came up, or mpv is still starting): the remote keeps
+  // driving the video. Back leaves it (a stop, which works before mpv is up).
+  // Not after an error or the end: the remote is the app's again.
   useEffect(() => {
-    setVideoRelay(
-      tvMode && videoActive
-        ? (action) => void api().player.remoteKey({ key: MPV_KEY_FOR_ACTION[action] })
-        : null
-    )
-    return () => setVideoRelay(null)
-  }, [tvMode, videoActive])
+    const relay = (action: Parameters<typeof relayCommand>[0]): void => {
+      const cmd = relayCommand(action)
+      if ('stop' in cmd) void api().player.stop()
+      else void api().player.remoteKey(cmd)
+    }
+    const off = api().player.onState((e) => {
+      setVideoRelay(e.tvSession && isRelayState(e.state) ? relay : null)
+    })
+    return () => {
+      off()
+      setVideoRelay(null)
+    }
+  }, [])
   // TV mode: previous / next pressed in the video window (zapping, episodes).
   useEffect(
     () =>

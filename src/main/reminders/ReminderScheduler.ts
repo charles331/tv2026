@@ -214,6 +214,8 @@ export class ReminderScheduler {
     this.awaitingConflict.add(r.id)
     try {
       const resolution = await this.askConflict(r)
+      // TV mode: the video goes on (answered or timed out) — back in front.
+      if (resolution === 'keepPlayback') void playerController.restoreVideoToFront()
       const fresh = remindersRepo.getReminder(r.id)
       if (!fresh || !isRestartableStatus(fresh.status)) return
       if (resolution === 'keepPlayback') {
