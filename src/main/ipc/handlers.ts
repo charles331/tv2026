@@ -13,6 +13,7 @@
  * registerIpcHandlers() applies validation + Result wrapping uniformly.
  */
 
+import { isTvMode, refreshTvMode } from '../app/tvMode'
 import { join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
@@ -108,6 +109,8 @@ function joinPath(dir: string, fileName: string): string {
 export const handlers: IpcHandlers = {
   // ---------------- app (real) ----------------
   [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion() }),
+
+  [InvokeChannels.APP_TV_MODE_GET]: () => ok({ tvMode: isTvMode() }),
 
   [InvokeChannels.APP_CHECK_UPDATES]: async () => ok(await checkForUpdatesNow()),
 
@@ -238,7 +241,14 @@ export const handlers: IpcHandlers = {
       assert(v === 'browser' || v === 'player', 'invalid downloadUserAgent')
       patch.downloadUserAgent = v
     }
-    return ok(settingsRepo.setSettings(patch))
+    if ('tvMode' in req) {
+      const v = optionalBoolean(req, 'tvMode')
+      assert(v !== undefined, 'tvMode must be a boolean')
+      patch.tvMode = v
+    }
+    const saved = settingsRepo.setSettings(patch)
+    refreshTvMode()
+    return ok(saved)
   },
 
   [InvokeChannels.PICK_DOWNLOAD_DIR]: async () => {

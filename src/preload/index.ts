@@ -60,7 +60,12 @@ const api: RendererApi = {
       invoke(InvokeChannels.APP_GET_UPDATE_STATE) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_GET_UPDATE_STATE>>
       >,
-    onUpdateStatus: (cb) => subscribe(EventChannels.UPDATE_STATUS, cb)
+    onUpdateStatus: (cb) => subscribe(EventChannels.UPDATE_STATUS, cb),
+    getTvMode: () =>
+      invoke(InvokeChannels.APP_TV_MODE_GET) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_TV_MODE_GET>>
+      >,
+    onTvMode: (cb) => subscribe(EventChannels.APP_TV_MODE, cb)
   },
 
   connection: {

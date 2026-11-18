@@ -19,6 +19,7 @@ import { ToastProvider, useToast } from './lib/toast'
 import { FavoritesProvider, useFavorites } from './lib/favorites'
 import { RemindersProvider, useReminders } from './lib/reminders'
 import { ProgressProvider, useProgress } from './lib/progress'
+import { TvModeProvider } from './lib/tvMode'
 import { AppNav, type Route } from './components/AppNav'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { setTypeToSearchHandler } from './lib/remote/RemoteRuntime'
@@ -43,15 +44,17 @@ const ARCHIVE_PAD_MIN = 5
 export function App(): ReactElement {
   return (
     <ToastProvider>
-      <FavoritesProvider>
-        <RemindersProvider>
-          <DownloadsProvider>
-            <ProgressProvider>
-              <AppShell />
-            </ProgressProvider>
-          </DownloadsProvider>
-        </RemindersProvider>
-      </FavoritesProvider>
+      <TvModeProvider>
+        <FavoritesProvider>
+          <RemindersProvider>
+            <DownloadsProvider>
+              <ProgressProvider>
+                <AppShell />
+              </ProgressProvider>
+            </DownloadsProvider>
+          </RemindersProvider>
+        </FavoritesProvider>
+      </TvModeProvider>
     </ToastProvider>
   )
 }

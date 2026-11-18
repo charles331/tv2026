@@ -288,6 +288,14 @@ export function SettingsScreen({
   }, [])
 
   const [qualityMessage, setQualityMessage] = useState<string | null>(null)
+  const handleToggleTvMode = useCallback(async (enabled: boolean) => {
+    try {
+      setSettings(unwrap(await api().settings.set({ tvMode: enabled })))
+    } catch (err) {
+      setQualityMessage(describeError(err))
+    }
+  }, [])
+
   const handleToggleQuality = useCallback(async (enabled: boolean) => {
     setQualityMessage(null)
     try {
@@ -1043,6 +1051,18 @@ export function SettingsScreen({
             Vérifiez ce que chaque touche de votre télécommande envoie et si l’application la
             reconnaît (flèches, OK, Retour).
           </p>
+          <label className="mt-4 flex cursor-pointer items-start gap-3">
+            <FocusCheckbox
+              className="mt-0.5 h-4 w-4 accent-accent"
+              checked={settings?.tvMode ?? false}
+              onChange={(e) => void handleToggleTvMode(e.target.checked)}
+            />
+            <span className="text-sm text-gray-300">
+              <span className="font-medium text-gray-100">Mode TV</span> — plein écran, textes
+              plus grands, vidéo plein écran pilotée à la télécommande. Le raccourci du mini PC
+              peut aussi le forcer avec l’option <code>--tv</code>.
+            </span>
+          </label>
           <Button className="mt-4" onClick={() => setTesterOpen(true)}>
             Tester la télécommande
           </Button>

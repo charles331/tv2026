@@ -99,6 +99,9 @@ export interface AppApi {
   getUpdateState(): Promise<Result<UpdateStatusEvent | null>>
   /** Subscribe to the app-update lifecycle (available/downloading/downloaded/error). */
   onUpdateStatus(cb: (e: UpdateStatusEvent) => void): Unsubscribe
+  /** Effective TV mode (setting, or launched with --tv). */
+  getTvMode(): Promise<Result<{ tvMode: boolean }>>
+  onTvMode(cb: (e: { tvMode: boolean }) => void): Unsubscribe
 }
 
 export interface ConnectionApi {

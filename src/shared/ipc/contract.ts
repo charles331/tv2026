@@ -101,6 +101,7 @@ export interface IpcContract {
   [InvokeChannels.APP_DOWNLOAD_UPDATE]: { request: void; response: { ok: true } }
   [InvokeChannels.APP_INSTALL_UPDATE]: { request: void; response: { ok: true } }
   [InvokeChannels.APP_GET_UPDATE_STATE]: { request: void; response: UpdateStatusEvent | null }
+  [InvokeChannels.APP_TV_MODE_GET]: { request: void; response: { tvMode: boolean } }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
@@ -230,6 +231,7 @@ export interface EventContract {
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
   [EventChannels.PROGRESS_CHANGED]: Record<string, never>
+  [EventChannels.APP_TV_MODE]: { tvMode: boolean }
   [EventChannels.UPDATE_STATUS]: UpdateStatusEvent
 }
 

@@ -25,6 +25,16 @@ import { typedSearchChar } from './typing'
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
+let tvMode = false
+
+/**
+ * TV mode: the selection ring is always drawn (an air mouse moves the pointer
+ * all the time) and the mouse cursor hides after a few seconds still.
+ */
+export function setTvModeForRemote(on: boolean): void {
+  tvMode = on
+  if (on) setModality('keys')
+}
 let typeToSearch: ((char: string) => void) | null = null
 
 /** What typing a letter outside a text field does (null = nothing). */
@@ -33,6 +43,7 @@ export function setTypeToSearchHandler(fn: ((char: string) => void) | null): voi
 }
 
 function setModality(mode: 'keys' | 'pointer'): void {
+  if (tvMode && mode === 'pointer') return
   const root = document.documentElement
   if (root.dataset.input !== mode) root.dataset.input = mode
 }

@@ -26,6 +26,9 @@ import { createProgressSink } from './player/progressTracker'
 import { reminderScheduler } from './reminders/ReminderScheduler'
 import { initAutoUpdates } from './updater'
 import { appLog } from './log/logger'
+import { EventChannels } from '@shared/index'
+import { parseLaunchFlags } from './app/launchFlags'
+import { initTvMode, forceTvModeForSession, onTvModeChange, refreshTvMode } from './app/tvMode'
 
 let mainWindow: BrowserWindow | null = null
 let unwireLock: (() => void) | null = null
@@ -123,7 +126,9 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    // The mini PC's shortcut (--tv) launched while the app already runs.
+    if (parseLaunchFlags(argv).tv) forceTvModeForSession()
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
@@ -187,6 +192,15 @@ if (!gotLock) {
     })
 
     createWindow()
+
+    // TV mode (setting or --tv): full screen + renderer notified on every change.
+    initTvMode(parseLaunchFlags(process.argv))
+    const emitTv = makeEmitter(getWindows)
+    onTvModeChange((on) => {
+      mainWindow?.setFullScreen(on)
+      emitTv(EventChannels.APP_TV_MODE, { tvMode: on })
+    })
+    refreshTvMode()
 
     // Check GitHub Releases for a newer version (packaged builds only). The
     // check only DETECTS: download + visible install are user-driven, and the

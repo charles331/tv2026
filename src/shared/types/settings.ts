@@ -101,6 +101,11 @@ export interface AppSettings {
    * flag low-quality copies before downloading. Off → only on explicit request.
    */
   qualityCheck: boolean
+  /**
+   * TV mode (mini PC on the TV, remote control): full screen, larger text,
+   * video full screen with remote keys. Also forced by launching with --tv.
+   */
+  tvMode: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -118,7 +123,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   downloadConnections: 1, // opt-in: raising this uses several provider connections
   downloadBlockBytes: 2 * 1024 * 1024, // small on purpose: more per-connection bursts
   downloadUserAgent: 'browser',
-  qualityCheck: true
+  qualityCheck: true,
+  tvMode: false
 }
 
 /** Whether a TMDB API key is stored (without revealing it). */

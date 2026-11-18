@@ -17,6 +17,7 @@ export const InvokeChannels = {
   APP_DOWNLOAD_UPDATE: 'app:downloadUpdate', // user accepted → download (progress events)
   APP_INSTALL_UPDATE: 'app:installUpdate', // quit + run the visible installer
   APP_GET_UPDATE_STATE: 'app:getUpdateState', // pull the last update status (mount-time sync)
+  APP_TV_MODE_GET: 'app:tvMode:get', // effective TV mode (setting or --tv)
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',
@@ -131,7 +132,9 @@ export const EventChannels = {
   /** A watch-progress row changed for good (playback stopped, channel started). */
   PROGRESS_CHANGED: 'event:progress:changed',
   /** App-update lifecycle: available / downloading (progress) / downloaded / error. */
-  UPDATE_STATUS: 'event:update:status'
+  UPDATE_STATUS: 'event:update:status',
+  /** The effective TV mode changed (setting toggled, or a launch with --tv). */
+  APP_TV_MODE: 'event:app:tvMode'
 } as const
 
 export type InvokeChannel = (typeof InvokeChannels)[keyof typeof InvokeChannels]
