@@ -98,3 +98,51 @@ html[data-input='keys'] [data-remote-focus='true'].remote-card {
 html[data-input='keys'] *:focus-visible:not([data-remote-focus='true']) {
   outline: none;
 }
+
+/* TV mode (lib/tvMode.tsx puts `tv` on <html>): readable from the sofa. Every
+   size is in rem, so a larger root font scales the whole interface; the root
+   gets safe margins for TVs that crop the picture edges (overscan). */
+html.tv {
+  font-size: 150%;
+}
+html.tv #root {
+  box-sizing: border-box;
+  padding: 3vh 3vw;
+}
+html.tv.cursor-hidden,
+html.tv.cursor-hidden * {
+  cursor: none !important;
+}
+html.tv .resize-handle {
+  display: none;
+}
+/* The main menu shows its labels while it has the selection. */
+.nav-label {
+  display: none;
+}
+html.tv [data-focus-zone='nav']:has([data-remote-focus='true']) .nav-label {
+  display: inline;
+}
+html.tv [data-focus-zone='nav']:has([data-remote-focus='true']) .nav-button {
+  width: auto;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0 0.75rem;
+}
+/* The expanded menu floats over the screen instead of pushing it aside: a
+   layout shift would leave the navigation measuring stale positions (→ from
+   the menu then found nothing on its right). */
+html.tv [data-focus-zone='nav'] {
+  position: relative;
+  width: 4rem;
+}
+html.tv [data-focus-zone='nav']:has([data-remote-focus='true']) nav {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  width: auto;
+  align-items: stretch;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}

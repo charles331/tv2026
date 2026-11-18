@@ -84,7 +84,7 @@ export function SeriesGrid({
       ref={scrollRef}
       tabIndex={-1}
       data-remote=""
-      className="h-full overflow-y-auto px-1 py-1 outline-none"
+      className="h-full overflow-y-auto p-2 outline-none"
     >
       <div
         className="grid gap-4"

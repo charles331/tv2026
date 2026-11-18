@@ -33,7 +33,20 @@ let tvMode = false
  */
 export function setTvModeForRemote(on: boolean): void {
   tvMode = on
-  if (on) setModality('keys')
+  if (on) {
+    setModality('keys')
+    showCursorForAWhile()
+  } else document.documentElement.classList.remove('cursor-hidden')
+}
+
+const CURSOR_HIDE_MS = 3000
+let cursorTimer: ReturnType<typeof setTimeout> | null = null
+function showCursorForAWhile(): void {
+  document.documentElement.classList.remove('cursor-hidden')
+  if (cursorTimer) clearTimeout(cursorTimer)
+  cursorTimer = setTimeout(() => {
+    if (tvMode) document.documentElement.classList.add('cursor-hidden')
+  }, CURSOR_HIDE_MS)
 }
 let typeToSearch: ((char: string) => void) | null = null
 
@@ -110,6 +123,7 @@ export function startRemote(): void {
 
   let last: { x: number; y: number } | null = null
   window.addEventListener('mousemove', (e) => {
+    if (tvMode) showCursorForAWhile()
     if (
       last &&
       (Math.abs(e.clientX - last.x) > POINTER_MOVE_THRESHOLD ||

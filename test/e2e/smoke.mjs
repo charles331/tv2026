@@ -497,6 +497,29 @@ try {
   await page.waitForTimeout(600)
   const news = await body()
   check('Nouveautés : versions précédentes repliées', /Afficher les versions précédentes \(\d+\)/.test(news))
+
+  // Mode TV : lancement avec --tv (raccourci du mini PC).
+  await app.close()
+  app = await electron.launch({
+    args: ['out/main/index.js', `--user-data-dir=${profile}`, '--tv'],
+    env
+  })
+  const tv = await app.firstWindow()
+  await tv.waitForTimeout(2500)
+  const tvState = () =>
+    tv.evaluate(() => ({
+      tv: document.documentElement.classList.contains('tv'),
+      input: document.documentElement.dataset.input,
+      selected: document.querySelectorAll('[data-remote-focus="true"]').length
+    }))
+  const fullScreen = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isFullScreen())
+  let st = await tvState()
+  check('Mode TV : --tv met l’interface en mode TV et en plein écran', st.tv && fullScreen === true, JSON.stringify({ ...st, fullScreen }))
+  await tv.mouse.move(200, 200)
+  await tv.mouse.move(400, 300)
+  await tv.waitForTimeout(200)
+  st = await tvState()
+  check('Mode TV : la sélection reste visible quand la souris bouge', st.input === 'keys' && st.selected > 0, JSON.stringify(st))
 } catch (e) {
   check(
     'scénario terminé sans exception',

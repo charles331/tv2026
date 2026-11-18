@@ -173,13 +173,15 @@ function NavButton({
       title={label}
       aria-label={label}
       className={cn(
-        'relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors disabled:opacity-50',
+        'nav-button relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors disabled:opacity-50',
         active
           ? 'bg-accent/20 text-accent-hover'
           : 'text-gray-500 hover:bg-white/[0.06] hover:text-gray-200'
       )}
     >
       {icon}
+      {/* TV mode: visible while the menu has the selection (tooltips need a mouse). */}
+      <span className="nav-label whitespace-nowrap text-sm">{label.split(/ [—(]/)[0]}</span>
       {badge != null && (
         <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
           {badge}

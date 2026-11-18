@@ -192,7 +192,7 @@ export function CategorySidebar({
         <div
           onMouseDown={startResize}
           title="Redimensionner la colonne"
-          className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40"
+          className="resize-handle absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40"
         />
       </aside>
     </FocusZone>
