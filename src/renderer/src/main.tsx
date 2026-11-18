@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { api } from './lib/ipc'
+import { startRemote } from './lib/remote/RemoteRuntime'
 import './assets/main.css'
 
 // Global renderer error traps → the app journal (visible in Réglages). The
@@ -20,6 +21,9 @@ window.addEventListener('unhandledrejection', (e) => {
     // preload bridge unavailable
   }
 })
+
+// Remote-control navigation must be running before any focusable mounts.
+startRemote()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root element not found')
