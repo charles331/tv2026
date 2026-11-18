@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { Episode, SeriesInfo, SeriesStream } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
+import { useBackHandler } from '../../lib/remote/focus'
 import { useDownloads } from '../../lib/downloads'
 import { useToast } from '../../lib/toast'
 import { useProgress } from '../../lib/progress'
@@ -67,13 +68,8 @@ export function SeriesDetail({
     load()
   }, [load])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  // Back (Escape, remote) closes: the remote-control runtime handles the key.
+  useBackHandler(onClose)
 
   const title = info?.name || series.name
   const rating = info?.rating ?? series.rating
