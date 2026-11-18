@@ -1,0 +1,54 @@
+/**
+ * Remote-control key map: turns a keyboard event into one of the six actions a
+ * TV remote offers (arrows, OK, Back). Pure — no DOM listener here; the
+ * runtime (RemoteRuntime) owns the listener and decides what each action does.
+ *
+ * Remotes differ on the Back key: Escape, Backspace, the browser "back" key
+ * (key "BrowserBack", keyCode 166) — all are accepted. Inside a text field,
+ * Backspace and ←/→ keep their editing meaning.
+ */
+
+export type RemoteAction = 'up' | 'down' | 'left' | 'right' | 'ok' | 'back'
+
+/** The parts of a KeyboardEvent the map reads (easy to fake in tests). */
+export interface KeyLike {
+  key: string
+  keyCode?: number
+}
+
+const BROWSER_BACK_KEYCODE = 166
+
+const ARROWS: Record<string, RemoteAction> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right'
+}
+
+export function keyToAction(e: KeyLike, ctx: { inTextField: boolean }): RemoteAction | null {
+  const arrow = ARROWS[e.key]
+  if (arrow) {
+    // ←/→ move the caret in a text field; ↑/↓ leave it.
+    if (ctx.inTextField && (arrow === 'left' || arrow === 'right')) return null
+    return arrow
+  }
+  if (e.key === 'Enter') return 'ok'
+  if (e.key === 'Escape' || e.key === 'BrowserBack' || e.keyCode === BROWSER_BACK_KEYCODE) {
+    return 'back'
+  }
+  if (e.key === 'Backspace') return ctx.inTextField ? null : 'back'
+  return null
+}
+
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'password', 'number', 'url', 'email', 'tel'])
+
+/** True for an element where typed keys edit text (Backspace, ←/→ must stay native). */
+export function isTextField(el: Element | null): boolean {
+  if (!el) return false
+  const node = el as Element & { type?: string; isContentEditable?: boolean }
+  if (node.isContentEditable) return true
+  const tag = node.tagName?.toUpperCase()
+  if (tag === 'TEXTAREA') return true
+  if (tag === 'INPUT') return TEXT_INPUT_TYPES.has((node.type ?? 'text').toLowerCase())
+  return false
+}
