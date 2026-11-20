@@ -97,6 +97,13 @@ export const IconSettings = (p: IconProps): ReactElement => (
   </svg>
 )
 
+export const IconPower = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <path d="M12 3v9" />
+    <path d="M6.3 6.3a8 8 0 1 0 11.4 0" />
+  </svg>
+)
+
 export const IconFilm = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <rect x="3" y="4" width="18" height="16" rx="2" />

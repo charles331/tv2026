@@ -6,6 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
+import { displayName } from '@shared/displayName'
 import type { VodCategory } from '@shared/index'
 import { cn, Spinner, TextInput, IconSearch, FocusButton } from '../../components/ui'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
@@ -102,12 +103,14 @@ export function CategorySidebar({
     <FocusZone
       focusKey={focusKey}
       preferredChildFocusKey={keyOf(selectedId)}
-      className="flex shrink-0"
+      // The zone keeps the column's place; while it has the remote selection
+      // the column floats wider over the screen (main.css, .category-sidebar).
+      className="category-sidebar relative flex shrink-0"
+      style={{ width }}
     >
       <aside
         ref={asideRef}
-        style={{ width }}
-        className="relative flex shrink-0 flex-col border-r border-white/10 bg-surface-raised/60"
+        className="relative flex w-full flex-col border-r border-white/10 bg-surface-raised/60"
       >
         <div className="px-3 pb-2 pt-3">
           <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -119,6 +122,7 @@ export function CategorySidebar({
             </span>
             <TextInput
               className="h-8 pl-7 text-xs"
+              clearOnBack
               placeholder="Filtrer…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -175,7 +179,7 @@ export function CategorySidebar({
                   <CategoryButton
                     onArrow={toContent}
                     focusKey={keyOf(cat.categoryId)}
-                    label={cat.categoryName}
+                    label={displayName(cat.categoryName)}
                     count={cat.streamCount}
                     active={selectedId === cat.categoryId}
                     onClick={() => onSelect(cat.categoryId)}
@@ -192,7 +196,7 @@ export function CategorySidebar({
         <div
           onMouseDown={startResize}
           title="Redimensionner la colonne"
-          className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40"
+          className="resize-handle absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40"
         />
       </aside>
     </FocusZone>

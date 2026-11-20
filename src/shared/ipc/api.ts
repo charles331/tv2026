@@ -8,6 +8,7 @@
  * over the channels in channels.ts.
  */
 
+import type { MpvRemoteKey } from '../mpvRemoteKey'
 import type { Result } from '../types/common'
 import type { Page } from '../types/common'
 import type {
@@ -99,6 +100,16 @@ export interface AppApi {
   getUpdateState(): Promise<Result<UpdateStatusEvent | null>>
   /** Subscribe to the app-update lifecycle (available/downloading/downloaded/error). */
   onUpdateStatus(cb: (e: UpdateStatusEvent) => void): Unsubscribe
+  /** Effective TV mode (setting, or launched with --tv). */
+  getTvMode(): Promise<Result<{ tvMode: boolean }>>
+  /** TV mode « Éteindre » menu (sleep / shutdown: Windows only). */
+  power(req: { action: 'quit' | 'sleep' | 'shutdown' }): Promise<Result<{ ok: true }>>
+  /** Start TV2026 (in TV mode) with Windows. */
+  getLoginItem(): Promise<Result<{ enabled: boolean }>>
+  setLoginItem(req: { enabled: boolean }): Promise<Result<{ enabled: boolean }>>
+  onTvMode(cb: (e: { tvMode: boolean }) => void): Unsubscribe
+  /** Windows « back » command (remote / mouse back button) → Back. */
+  onBack(cb: () => void): Unsubscribe
 }
 
 export interface ConnectionApi {
@@ -200,6 +211,8 @@ export interface RemindersApi {
   onUpdated(cb: (e: ReminderUpdatedEvent) => void): Unsubscribe
   /** Subscribe to "open this channel" requests from a clicked notification. */
   onOpenChannel(cb: (e: ReminderOpenChannelEvent) => void): Unsubscribe
+  /** TV mode: a reminder is due, to show inside the app. */
+  onPrompt(cb: (e: { reminder: Reminder }) => void): Unsubscribe
   /** Subscribe to recording-vs-playback conflicts that need a user decision. */
   onConflict(cb: (e: RecordingConflictEvent) => void): Unsubscribe
   /** Subscribe to "conflict prompt resolved/closed" (dismiss the dialog). */
@@ -268,8 +281,14 @@ export interface PlayerApi {
   startRecording(req: StartRecordingRequest): Promise<Result<PlayerStatus>>
   /** Stop the current recording. */
   stopRecording(): Promise<Result<PlayerStatus>>
+  /** TV mode: relay a remote key to the video (closed list, see mpvRemoteKey). */
+  remoteKey(req: { key: MpvRemoteKey }): Promise<Result<{ ok: true }>>
+  /** TV mode: put the video back in front once an alert was answered. */
+  videoFront(): Promise<Result<{ ok: true }>>
   onPosition(cb: (e: PlayerPositionEvent) => void): Unsubscribe
   onState(cb: (e: PlayerStateEvent) => void): Unsubscribe
+  /** TV mode: previous / next pressed in the video window. */
+  onRemote(cb: (e: { action: 'next' | 'previous' }) => void): Unsubscribe
 }
 
 export interface ConnectionLockApi {

@@ -60,7 +60,25 @@ const api: RendererApi = {
       invoke(InvokeChannels.APP_GET_UPDATE_STATE) as Promise<
         Result<IpcResponse<typeof InvokeChannels.APP_GET_UPDATE_STATE>>
       >,
-    onUpdateStatus: (cb) => subscribe(EventChannels.UPDATE_STATUS, cb)
+    onUpdateStatus: (cb) => subscribe(EventChannels.UPDATE_STATUS, cb),
+    power: (req) =>
+      invoke(InvokeChannels.APP_POWER, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_POWER>>
+      >,
+    getLoginItem: () =>
+      invoke(InvokeChannels.APP_LOGIN_ITEM_GET) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_LOGIN_ITEM_GET>>
+      >,
+    setLoginItem: (req) =>
+      invoke(InvokeChannels.APP_LOGIN_ITEM_SET, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_LOGIN_ITEM_SET>>
+      >,
+    getTvMode: () =>
+      invoke(InvokeChannels.APP_TV_MODE_GET) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.APP_TV_MODE_GET>>
+      >,
+    onTvMode: (cb) => subscribe(EventChannels.APP_TV_MODE, cb),
+    onBack: (cb) => subscribe(EventChannels.APP_BACK, () => cb())
   },
 
   connection: {
@@ -252,6 +270,7 @@ const api: RendererApi = {
       >,
     onUpdated: (cb) => subscribe(EventChannels.REMINDER_UPDATED, cb),
     onOpenChannel: (cb) => subscribe(EventChannels.REMINDER_OPEN_CHANNEL, cb),
+    onPrompt: (cb) => subscribe(EventChannels.REMINDER_PROMPT, cb),
     onConflict: (cb) => subscribe(EventChannels.RECORDING_CONFLICT, cb),
     onConflictResolved: (cb) => subscribe(EventChannels.RECORDING_CONFLICT_RESOLVED, cb)
   },
@@ -377,8 +396,17 @@ const api: RendererApi = {
       invoke(InvokeChannels.PLAYER_STOP_RECORDING) as Promise<
         Result<IpcResponse<typeof InvokeChannels.PLAYER_STOP_RECORDING>>
       >,
+    videoFront: () =>
+      invoke(InvokeChannels.PLAYER_VIDEO_FRONT) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_VIDEO_FRONT>>
+      >,
+    remoteKey: (req) =>
+      invoke(InvokeChannels.PLAYER_REMOTE_KEY, req) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.PLAYER_REMOTE_KEY>>
+      >,
     onPosition: (cb) => subscribe(EventChannels.PLAYER_POSITION, cb),
-    onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb)
+    onState: (cb) => subscribe(EventChannels.PLAYER_STATE, cb),
+    onRemote: (cb) => subscribe(EventChannels.PLAYER_REMOTE, cb)
   },
 
   connectionLock: {

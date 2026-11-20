@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
 import type { FileCheckResult, VodInfo, VodStream } from '@shared/index'
@@ -222,12 +223,12 @@ export function MovieDetail({
           <div className="-mt-20 flex gap-5">
             <div className="hidden w-32 shrink-0 sm:block">
               <div className="aspect-[2/3] overflow-hidden rounded-lg shadow-poster ring-1 ring-white/10">
-                <Poster src={poster} alt={title} className="h-full w-full" />
+                <Poster src={poster} alt={displayName(title)} className="h-full w-full" />
               </div>
             </div>
 
             <div className="min-w-0 flex-1 pt-16 sm:pt-20">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">{displayName(title)}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                 {year != null && <span>{year}</span>}
                 <FocusButton

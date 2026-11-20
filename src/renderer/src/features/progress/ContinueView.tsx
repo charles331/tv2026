@@ -3,6 +3,7 @@
  * One click resumes where the user stopped.
  */
 import type { ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { WatchProgress } from '@shared/index'
 import { useProgress } from '../../lib/progress'
 import { formatClock, formatDuration } from '../../lib/format'
@@ -49,15 +50,15 @@ export function ContinueView({
               <button
                 type="button"
                 onClick={() => onResume(p)}
-                title={`Reprendre ${p.name}`}
+                title={`Reprendre ${displayName(p.name)}`}
                 className="group flex min-w-0 flex-1 items-center gap-3 text-left"
               >
                 <span className="block h-16 w-11 shrink-0 overflow-hidden rounded bg-surface-sunken">
-                  <Poster src={p.image} alt={p.name} className="h-full w-full" />
+                  <Poster src={p.image} alt={displayName(p.name)} className="h-full w-full" />
                 </span>
                 <span className="block min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-gray-100 group-hover:text-white group-hover:underline">
-                    {p.name}
+                    {displayName(p.name)}
                   </span>
                   <span className="mt-0.5 block text-xs text-gray-500">
                     Arrêté à {formatClock(p.positionSecs)}

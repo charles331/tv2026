@@ -1,4 +1,5 @@
 import { useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { FavoriteItem, VodCategory, VodStream, WatchProgress } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
@@ -106,7 +107,11 @@ export function CatalogScreen({
         loading={categoriesState.loading}
         error={categoriesState.error}
         selectedId={categoryId}
-        onSelect={setCategoryId}
+        onSelect={(id) => {
+          // Picking a category starts a new browse: drop the search text.
+          setCategoryId(id)
+          setRawQuery('')
+        }}
         favoritesCount={favorites.count('movie')}
         pinned={
           inProgressCount > 0 || isContinue
@@ -127,6 +132,7 @@ export function CatalogScreen({
             </span>
             <TextInput
               className="pl-9"
+              clearOnBack
               placeholder="Rechercher un film…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
@@ -161,7 +167,7 @@ export function CatalogScreen({
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
               </>
             ) : (
-              <span className="text-gray-200">{selectedCategoryName}</span>
+              <span className="text-gray-200">{displayName(selectedCategoryName)}</span>
             )}
             {!isPinned && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} films</span>

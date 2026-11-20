@@ -108,6 +108,7 @@ export function SearchScreen({
           <TextInput
             focusKey="search-field"
             className="pl-9"
+            clearOnBack
             placeholder="Rechercher partout : films, séries, chaînes…"
             value={rawQuery}
             onChange={(e) => onQueryChange(e.target.value)}

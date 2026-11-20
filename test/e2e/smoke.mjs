@@ -190,11 +190,41 @@ try {
   await key('ArrowDown')
   f = await focusInfo()
   const shown = await page.locator('.remote-card').filter({ visible: true }).count()
-  check('Clavier : ↓ quitte la recherche vers les résultats', f.card === 'FR - L’Éléphant bleu (2024)' && shown === 1, `${JSON.stringify(f)} · ${shown} affiche(s)`)
+  check('Clavier : ↓ quitte la recherche vers les résultats', f.card === 'L’Éléphant bleu (2024)' && shown === 1, `${JSON.stringify(f)} · ${shown} affiche(s)`)
+  const caption = await page.evaluate(() => {
+    const card = document.querySelector('.remote-card[data-remote-focus="true"]')
+    const t = card?.querySelector('.card-title')
+    return { text: t?.textContent, clamp: t && window.getComputedStyle(t).webkitLineClamp }
+  })
+  check('Affiches : titre sans « FR - », affiché en entier sur l’affiche sélectionnée', caption.text === 'L’Éléphant bleu (2024)' && caption.clamp === 'none', JSON.stringify(caption))
+  const catLabel = await page.locator('.category-sidebar:not([inert] *) nav li').filter({ hasText: 'Films test' }).first().innerText()
+  check('Catégories : préfixe « |FR| » masqué', !catLabel.includes('|FR|'), catLabel)
   await key('ArrowUp')
-  await page.keyboard.press('Control+a')
-  await page.keyboard.press('Backspace')
+  await key('Escape')
+  f = await focusInfo()
+  check('Clavier : Retour dans une recherche remplie la vide sans quitter le champ', f.tag === 'INPUT' && f.value === '' && f.zone === 'catalog-toolbar', JSON.stringify(f))
+  // Choisir une catégorie efface la recherche ; la colonne s'élargit tant
+  // qu'elle a la sélection.
+  await page.keyboard.type('elephant')
   await page.waitForTimeout(1200)
+  await key('Home')
+  await key('ArrowLeft') // bord gauche du texte → colonne des catégories
+  const sidebar = () =>
+    page.evaluate(() => {
+      const zone = document.querySelector('.category-sidebar:not([inert] *)')
+      const aside = zone?.querySelector('aside')
+      return { position: aside && window.getComputedStyle(aside).position, zoneW: zone?.offsetWidth, asideW: aside?.offsetWidth }
+    })
+  for (let i = 0; i < 6 && !/^Tous les films/.test((await focusInfo()).label ?? ''); i++) await key('ArrowDown')
+  f = await focusInfo()
+  let side = await sidebar()
+  check('Catégories : la colonne flotte par-dessus l’écran quand elle a la sélection', f.zone === 'catalog-categories' && side.position === 'absolute' && side.asideW >= side.zoneW, `${JSON.stringify(f)} ${JSON.stringify(side)}`)
+  await key('Enter')
+  await page.waitForTimeout(1200)
+  check('Catégories : choisir une catégorie vide la recherche', (await searchField().inputValue()) === '' && (await page.locator('.remote-card').filter({ visible: true }).count()) > 1)
+  await key('ArrowRight')
+  side = await sidebar()
+  check('Catégories : la colonne reprend sa place en quittant', side.position === 'relative', JSON.stringify(side))
   // Menu de tri : à la souris, un second clic sur le bouton le referme.
   const sortButton = page.locator('button[title="Trier"]').filter({ visible: true })
   await sortButton.click()
@@ -244,7 +274,7 @@ try {
   await page.getByRole('button', { name: 'Accueil' }).first().click()
   await searchField().fill('Film Test')
   await page.waitForTimeout(1200)
-  const poster = page.locator('button[title="FR - Le Film Test (2026)"]').first()
+  const poster = page.locator('button[title="Le Film Test (2026)"]').first()
   check('Affiche sans taille avant la fiche', !/[GM]o/.test(await poster.innerText()))
   await poster.click()
   await page.getByRole('dialog').waitFor()
@@ -274,7 +304,7 @@ try {
   // Lecture réelle : la position est enregistrée à l'arrêt, puis la lecture reprend là.
   if (realPlayback) {
     await searchField().fill('Autre Film')
-    const other = page.locator('button[title="FR - Autre Film (2025) CAM"]').first()
+    const other = page.locator('button[title="Autre Film (2025) CAM"]').first()
     await other.click()
     await page.getByRole('dialog').getByRole('button', { name: /^Lire/ }).click()
     await waitPlaying()
@@ -356,7 +386,7 @@ try {
 
   // Recherche tolérante : sans accents, mots dans le désordre.
   await searchField().fill('bleu elephant')
-  const elephant = page.locator('button[title="FR - L’Éléphant bleu (2024)"]').first()
+  const elephant = page.locator('button[title="L’Éléphant bleu (2024)"]').first()
   await elephant.waitFor({ timeout: 5000 }).catch(() => undefined)
   check('Recherche sans accents, mots dans le désordre', await elephant.isVisible())
 
@@ -383,7 +413,7 @@ try {
   // Téléchargements : le titre ouvre la fiche (film, série, ou message).
   await page.getByRole('button', { name: 'Téléchargements' }).first().click()
   await page.waitForTimeout(800)
-  await page.getByRole('button', { name: 'FR - Le Film Test (2026)' }).click()
+  await page.getByRole('button', { name: 'Le Film Test (2026)' }).click()
   await page.getByRole('dialog').waitFor()
   check('Téléchargement → fiche du film', /Le Film Test/.test(await page.getByRole('dialog').innerText()))
   await page.keyboard.press('Escape')
@@ -497,6 +527,47 @@ try {
   await page.waitForTimeout(600)
   const news = await body()
   check('Nouveautés : versions précédentes repliées', /Afficher les versions précédentes \(\d+\)/.test(news))
+
+  // Mode TV : lancement avec --tv (raccourci du mini PC).
+  await app.close()
+  app = await electron.launch({
+    args: ['out/main/index.js', `--user-data-dir=${profile}`, '--tv'],
+    env
+  })
+  const tv = await app.firstWindow()
+  await tv.waitForTimeout(2500)
+  const tvState = () =>
+    tv.evaluate(() => ({
+      tv: document.documentElement.classList.contains('tv'),
+      input: document.documentElement.dataset.input,
+      selected: document.querySelectorAll('[data-remote-focus="true"]').length
+    }))
+  const fullScreen = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isFullScreen())
+  let st = await tvState()
+  check('Mode TV : --tv met l’interface en mode TV et en plein écran', st.tv && fullScreen === true, JSON.stringify({ ...st, fullScreen }))
+  await tv.mouse.move(200, 200)
+  await tv.mouse.move(400, 300)
+  await tv.waitForTimeout(200)
+  st = await tvState()
+  check('Mode TV : la sélection reste visible quand la souris bouge', st.input === 'keys' && st.selected > 0, JSON.stringify(st))
+  // Menu « Éteindre » : chaque action demande confirmation, Annuler sélectionné.
+  const tvLabel = () =>
+    tv.evaluate(() => (document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '').trim())
+  const tvKey = async (k) => {
+    await tv.keyboard.press(k)
+    await tv.waitForTimeout(200)
+  }
+  await tvKey('Escape')
+  await tvKey('Escape')
+  for (let i = 0; i < 10 && (await tvLabel()) !== 'Éteindre'; i++) await tvKey('ArrowDown')
+  await tvKey('Enter')
+  const menuLabel = await tvLabel()
+  await tvKey('Enter')
+  const confirmLabel = await tvLabel()
+  check('Mode TV : Éteindre → Quitter demande confirmation, Annuler sélectionné', menuLabel === 'Quitter TV2026' && confirmLabel === 'Annuler', `${menuLabel} → ${confirmLabel}`)
+  await tvKey('Escape')
+  await tvKey('Escape')
+  check('Mode TV : Retour referme le menu Éteindre', (await tv.getByText('Quitter TV2026').count()) === 0 && (await tvLabel()) === 'Éteindre')
 } catch (e) {
   check(
     'scénario terminé sans exception',

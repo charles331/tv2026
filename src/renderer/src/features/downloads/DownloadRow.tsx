@@ -1,4 +1,5 @@
 import { type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { DownloadItem, DownloadProgressEvent } from '@shared/index'
 import {
   Badge,
@@ -101,7 +102,7 @@ export function DownloadRow({
               className="min-w-0 truncate text-left text-sm font-medium text-gray-100 hover:text-accent-hover hover:underline focus-visible:underline focus-visible:outline-none"
               title={`${item.fileName}\nOuvrir la fiche ${item.kind === 'series' ? 'de la série' : 'du film'}`}
             >
-              {item.name}
+              {displayName(item.name)}
             </FocusButton>
             <Badge tone={meta.tone}>
               {pausedForPlayback ? 'En pause pour lecture' : meta.label}

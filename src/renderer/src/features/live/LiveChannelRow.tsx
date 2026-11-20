@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { EpgEntry, LiveStream } from '@shared/index'
 import { api } from '../../lib/ipc'
 import { formatClockFromEpochSecs } from '../../lib/format'
@@ -55,16 +56,16 @@ function LiveChannelRowImpl({
       <FocusButton
         type="button"
         onClick={() => onPlay(channel)}
-        title={`Regarder ${channel.name}`}
+        title={`Regarder ${displayName(channel.name)}`}
         className="group flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         <span className="block h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-          <Poster src={channel.icon} alt={channel.name} className="h-full w-full object-contain" />
+          <Poster src={channel.icon} alt={displayName(channel.name)} className="h-full w-full object-contain" />
         </span>
         <span className="block min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-gray-100 group-hover:text-white group-hover:underline">
             {channel.number != null && <span className="text-gray-500">{channel.number} · </span>}
-            {channel.name}
+            {displayName(channel.name)}
           </span>
           {now ? (
             <span className="block truncate text-xs text-gray-400">

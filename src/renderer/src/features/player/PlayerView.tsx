@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { PlayRequest } from '@shared/index'
 import {
   Button,
@@ -186,7 +187,7 @@ export function PlayerView({
   // While reconnecting, mpv may be momentarily gone — its controls would no-op,
   // so disable them rather than look broken.
   const controlsDisabled = isReconnecting
-  const title = status.title ?? request.title ?? 'Lecture'
+  const title = displayName(status.title ?? request.title ?? 'Lecture')
   const isError = status.state === 'error'
 
   const attempt = status.reconnectAttempt ?? 0

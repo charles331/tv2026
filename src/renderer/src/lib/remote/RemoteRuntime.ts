@@ -17,14 +17,74 @@
  * is being used.
  */
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from './keys'
+import {
+  keyToAction,
+  isTextField,
+  textFieldKeepsKey,
+  isUnmanagedFocus,
+  backClearsField
+} from './keys'
 import { backStack } from './backStack'
 import { zoneKeys } from './focus'
 import { typedSearchChar } from './typing'
+import type { RemoteAction } from './keys'
 
 const POINTER_MOVE_THRESHOLD = 2 // px; an idle mouse sends tiny moves
 
 let started = false
+let videoRelay: ((action: RemoteAction) => void) | null = null
+let lastBack: { at: number; source: BackSource } | null = null
+const BACK_DEDUPE_MS = 200
+type BackSource = 'key' | 'mouse' | 'command'
+
+/**
+ * TV mode, video playing while the app has the keyboard (after an alert came
+ * in front): the remote keys go to the video instead of the interface, as
+ * long as no page or dialog is open (back stack = the shell's handler only).
+ */
+export function setVideoRelay(fn: ((action: RemoteAction) => void) | null): void {
+  videoRelay = fn
+}
+
+/**
+ * Back from any source (key, mouse « back » button, Windows app command). One
+ * press of some remotes produces two of them (a key AND the app command): the
+ * second, from another source within 200 ms, is ignored. Quick presses of the
+ * same key all count.
+ */
+export function dispatchBack(source: BackSource = 'key'): void {
+  const now = Date.now()
+  if (lastBack && lastBack.source !== source && now - lastBack.at < BACK_DEDUPE_MS) return
+  lastBack = { at: now, source }
+  if (videoRelay && backStack.size() <= 1) {
+    videoRelay('back')
+    return
+  }
+  backStack.dispatch()
+}
+let tvMode = false
+
+/**
+ * TV mode: the selection ring is always drawn (an air mouse moves the pointer
+ * all the time) and the mouse cursor hides after a few seconds still.
+ */
+export function setTvModeForRemote(on: boolean): void {
+  tvMode = on
+  if (on) {
+    setModality('keys')
+    showCursorForAWhile()
+  } else document.documentElement.classList.remove('cursor-hidden')
+}
+
+const CURSOR_HIDE_MS = 3000
+let cursorTimer: ReturnType<typeof setTimeout> | null = null
+function showCursorForAWhile(): void {
+  document.documentElement.classList.remove('cursor-hidden')
+  if (cursorTimer) clearTimeout(cursorTimer)
+  cursorTimer = setTimeout(() => {
+    if (tvMode) document.documentElement.classList.add('cursor-hidden')
+  }, CURSOR_HIDE_MS)
+}
 let typeToSearch: ((char: string) => void) | null = null
 
 /** What typing a letter outside a text field does (null = nothing). */
@@ -33,6 +93,7 @@ export function setTypeToSearchHandler(fn: ((char: string) => void) | null): voi
 }
 
 function setModality(mode: 'keys' | 'pointer'): void {
+  if (tvMode && mode === 'pointer') return
   const root = document.documentElement
   if (root.dataset.input !== mode) root.dataset.input = mode
 }
@@ -57,7 +118,17 @@ export function startRemote(): void {
         e.preventDefault()
         e.stopPropagation()
         setModality('keys')
-        backStack.dispatch()
+        if (backClearsField(document.activeElement)) {
+          clearField(document.activeElement as HTMLInputElement)
+          return
+        }
+        dispatchBack()
+        return
+      }
+      if (action && videoRelay && backStack.size() <= 1) {
+        e.preventDefault()
+        e.stopPropagation()
+        videoRelay(action)
         return
       }
       const typed = typeToSearch ? typedSearchChar(e, { inTextField }) : null
@@ -99,6 +170,7 @@ export function startRemote(): void {
 
   let last: { x: number; y: number } | null = null
   window.addEventListener('mousemove', (e) => {
+    if (tvMode) showCursorForAWhile()
     if (
       last &&
       (Math.abs(e.clientX - last.x) > POINTER_MOVE_THRESHOLD ||
@@ -113,7 +185,17 @@ export function startRemote(): void {
   window.addEventListener('mouseup', (e) => {
     if (e.button === 3) {
       e.preventDefault()
-      backStack.dispatch()
+      dispatchBack('mouse')
     }
   })
+}
+
+/**
+ * Empties a React-controlled input: set the value through the native setter
+ * (React ignores a plain `.value =`) and fire `input` so its onChange runs.
+ */
+function clearField(input: HTMLInputElement): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, '')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
 }

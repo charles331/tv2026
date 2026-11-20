@@ -1,4 +1,6 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
+import { useTvMode } from '../lib/tvMode'
+import { PowerMenu } from '../features/power/PowerMenu'
 import { FocusZone, useFocusItem } from '../lib/remote/focus'
 import {
   cn,
@@ -10,7 +12,8 @@ import {
   IconQueue,
   IconRecord,
   IconRefresh,
-  IconSettings
+  IconSettings,
+  IconPower
 } from './ui'
 
 export type Route =
@@ -39,6 +42,9 @@ export function AppNav({
   /** True while the global refresh is running (shows a spinner). */
   updatingAll?: boolean
 }): ReactElement {
+  // TV mode: no window frame, so the menu offers to quit / sleep / shut down.
+  const tvMode = useTvMode()
+  const [powerOpen, setPowerOpen] = useState(false)
   return (
     <FocusZone focusKey="nav" className="flex shrink-0">
       <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-white/10 bg-surface-sunken py-4">
@@ -111,6 +117,16 @@ export function AppNav({
             }
           />
         )}
+        {tvMode && (
+          <NavButton
+            focusKey="nav-power"
+            label="Éteindre"
+            active={false}
+            onClick={() => setPowerOpen(true)}
+            icon={<IconPower size={20} />}
+          />
+        )}
+        {powerOpen && <PowerMenu onClose={() => setPowerOpen(false)} />}
         <NavButton
           focusKey="nav-settings"
           label={settingsHasUnseen ? 'Réglages — nouveautés disponibles' : 'Réglages'}
@@ -173,13 +189,15 @@ function NavButton({
       title={label}
       aria-label={label}
       className={cn(
-        'relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors disabled:opacity-50',
+        'nav-button relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors disabled:opacity-50',
         active
           ? 'bg-accent/20 text-accent-hover'
           : 'text-gray-500 hover:bg-white/[0.06] hover:text-gray-200'
       )}
     >
       {icon}
+      {/* TV mode: visible while the menu has the selection (tooltips need a mouse). */}
+      <span className="nav-label whitespace-nowrap text-sm">{label.split(/ [—(]/)[0]}</span>
       {badge != null && (
         <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
           {badge}

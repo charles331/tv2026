@@ -17,6 +17,10 @@ export const InvokeChannels = {
   APP_DOWNLOAD_UPDATE: 'app:downloadUpdate', // user accepted → download (progress events)
   APP_INSTALL_UPDATE: 'app:installUpdate', // quit + run the visible installer
   APP_GET_UPDATE_STATE: 'app:getUpdateState', // pull the last update status (mount-time sync)
+  APP_TV_MODE_GET: 'app:tvMode:get', // effective TV mode (setting or --tv)
+  APP_POWER: 'app:power', // TV mode « Éteindre » menu: quit / sleep / shutdown
+  APP_LOGIN_ITEM_GET: 'app:loginItem:get', // start with Windows (in TV mode)?
+  APP_LOGIN_ITEM_SET: 'app:loginItem:set',
 
   // --- connection / settings ---
   CONNECTION_TEST: 'connection:test',
@@ -109,7 +113,11 @@ export const InvokeChannels = {
   PLAYER_CYCLE_AUDIO: 'player:cycleAudio',
   PLAYER_SET_SUBTITLE_VISIBLE: 'player:setSubtitleVisible',
   PLAYER_START_RECORDING: 'player:startRecording', // dump the playing stream to disk (live)
-  PLAYER_STOP_RECORDING: 'player:stopRecording'
+  PLAYER_STOP_RECORDING: 'player:stopRecording',
+  /** TV mode: a remote key relayed to mpv while the app has the focus. */
+  PLAYER_REMOTE_KEY: 'player:remoteKey',
+  /** TV mode: the video goes back in front after an alert was answered. */
+  PLAYER_VIDEO_FRONT: 'player:videoFront'
 } as const
 
 /** One-way event channels (main -> renderer). */
@@ -118,12 +126,18 @@ export const EventChannels = {
   DOWNLOAD_STATE: 'event:download:state',
   PLAYER_POSITION: 'event:player:position',
   PLAYER_STATE: 'event:player:state',
+  /** TV mode: previous / next pressed in the video window (zapping, episodes). */
+  PLAYER_REMOTE: 'event:player:remote',
+  /** Windows « back » command (app-command browser-backward) → Back. */
+  APP_BACK: 'event:app:back',
   /** Connection lock state changed (e.g. download paused for playback). */
   CONNECTION_BUSY: 'event:connection:busy',
   /** A reminder/recording row changed (status / filePath). */
   REMINDER_UPDATED: 'event:reminder:updated',
   /** A reminder notification was clicked → open/play the channel. */
   REMINDER_OPEN_CHANNEL: 'event:reminder:openChannel',
+  /** TV mode: a reminder is due — ask in the app (no Windows notification). */
+  REMINDER_PROMPT: 'event:reminder:prompt',
   /** A scheduled recording conflicts with current playback (ASK the user). */
   RECORDING_CONFLICT: 'event:recording:conflict',
   /** A conflict prompt was resolved/closed (user choice, timeout, or cancel). */
@@ -131,7 +145,9 @@ export const EventChannels = {
   /** A watch-progress row changed for good (playback stopped, channel started). */
   PROGRESS_CHANGED: 'event:progress:changed',
   /** App-update lifecycle: available / downloading (progress) / downloaded / error. */
-  UPDATE_STATUS: 'event:update:status'
+  UPDATE_STATUS: 'event:update:status',
+  /** The effective TV mode changed (setting toggled, or a launch with --tv). */
+  APP_TV_MODE: 'event:app:tvMode'
 } as const
 
 export type InvokeChannel = (typeof InvokeChannels)[keyof typeof InvokeChannels]

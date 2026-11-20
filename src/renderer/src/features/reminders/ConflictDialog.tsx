@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
 import type {
@@ -80,7 +81,7 @@ function ConflictPrompt({
         <h2 className="text-lg font-semibold text-white">Enregistrement programmé</h2>
         <p className="mt-2 text-sm text-gray-400">
           L’enregistrement de <strong className="text-gray-200">« {reminder.title} »</strong> (
-          {reminder.channelName}) doit démarrer, mais une lecture est en cours et la connexion est
+          {displayName(reminder.channelName)}) doit démarrer, mais une lecture est en cours et la connexion est
           unique. Que faire ?
         </p>
         <p className="mt-2 text-xs text-gray-600">
