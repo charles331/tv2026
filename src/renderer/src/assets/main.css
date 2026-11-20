@@ -160,3 +160,37 @@ html[data-input='keys'] .category-sidebar:has([data-remote-focus='true']) > asid
   background-color: #171a21;
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
 }
+
+/* Poster card caption (components/CardCaption): title on two lines at most;
+   the card selected with the remote shows it in full, floating over the row
+   below (the grid keeps its geometry). */
+.card-caption {
+  position: relative;
+  height: 3.5rem;
+}
+.card-caption-inner {
+  position: absolute;
+  inset: 0 0 auto 0;
+}
+.card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+html[data-input='keys'] .remote-card[data-remote-focus='true'] {
+  position: relative;
+  z-index: 10;
+}
+html[data-input='keys'] .remote-card[data-remote-focus='true'] .card-caption-inner {
+  z-index: 10;
+  padding-bottom: 0.35rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background-color: rgba(11, 13, 18, 0.95);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+html[data-input='keys'] .remote-card[data-remote-focus='true'] .card-title {
+  display: block;
+  -webkit-line-clamp: unset;
+}

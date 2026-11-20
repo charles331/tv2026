@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { CARD_CAPTION_REM } from '../../components/CardCaption'
 import type { VodStream } from '@shared/index'
 import { PosterCard } from './PosterCard'
 import { useGridNavigation } from '../../lib/remote/useGridNavigation'
@@ -14,7 +15,6 @@ import { useGridNavigation } from '../../lib/remote/useGridNavigation'
 const MIN_CARD_WIDTH = 168 // px; controls responsive column count
 const GAP = 16 // px gap between cards
 const ASPECT = 3 / 2 // poster height = width * 3/2
-const CAPTION_HEIGHT = 56 // px reserved for title/meta under the poster
 const ROW_OVERSCAN = 2
 
 export function PosterGrid({
@@ -43,7 +43,11 @@ export function PosterGrid({
   const columns = Math.max(1, Math.floor((viewport.width + GAP) / (MIN_CARD_WIDTH + GAP)))
   const cardWidth =
     columns > 0 ? Math.floor((viewport.width - GAP * (columns - 1)) / columns) : MIN_CARD_WIDTH
-  const rowHeight = Math.round(cardWidth * ASPECT) + CAPTION_HEIGHT + GAP
+  // Caption sized in rem: TV mode enlarges the root font (re-measured on the
+  // resize that comes with it).
+  const rootFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const captionHeight = Math.ceil(CARD_CAPTION_REM * rootFontPx)
+  const rowHeight = Math.round(cardWidth * ASPECT) + captionHeight + GAP
   const rowCount = Math.ceil(items.length / columns)
 
   // Remote control: arrows move an index over ALL loaded items (most cards are

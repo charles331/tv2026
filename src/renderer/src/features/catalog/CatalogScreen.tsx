@@ -1,4 +1,5 @@
 import { useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { FavoriteItem, VodCategory, VodStream, WatchProgress } from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
@@ -166,7 +167,7 @@ export function CatalogScreen({
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
               </>
             ) : (
-              <span className="text-gray-200">{selectedCategoryName}</span>
+              <span className="text-gray-200">{displayName(selectedCategoryName)}</span>
             )}
             {!isPinned && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} films</span>

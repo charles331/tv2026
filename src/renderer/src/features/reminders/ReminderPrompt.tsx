@@ -4,6 +4,7 @@
  * brought the app in front of the video; "Ignorer" puts the video back.
  */
 import { useEffect, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import type { Reminder } from '@shared/index'
 import { api } from '../../lib/ipc'
@@ -71,7 +72,7 @@ function PromptCard({
         <h2 className="text-lg font-semibold text-white">Rappel</h2>
         <p className="mt-2 text-sm text-gray-300">
           <strong className="text-white">« {reminder.title} »</strong> commence sur{' '}
-          {reminder.channelName} à {formatClockFromEpochSecs(reminder.startSecs)}.
+          {displayName(reminder.channelName)} à {formatClockFromEpochSecs(reminder.startSecs)}.
         </p>
         <div className="mt-5 flex justify-end gap-3">
           <Button variant="ghost" onClick={onIgnore}>

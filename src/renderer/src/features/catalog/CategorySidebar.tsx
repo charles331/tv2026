@@ -6,6 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
+import { displayName } from '@shared/displayName'
 import type { VodCategory } from '@shared/index'
 import { cn, Spinner, TextInput, IconSearch, FocusButton } from '../../components/ui'
 import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
@@ -178,7 +179,7 @@ export function CategorySidebar({
                   <CategoryButton
                     onArrow={toContent}
                     focusKey={keyOf(cat.categoryId)}
-                    label={cat.categoryName}
+                    label={displayName(cat.categoryName)}
                     count={cat.streamCount}
                     active={selectedId === cat.categoryId}
                     onClick={() => onSelect(cat.categoryId)}

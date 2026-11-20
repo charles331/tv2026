@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
 import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
 import type { EpgEntry, LiveStream, ReminderMode } from '@shared/index'
@@ -163,12 +164,12 @@ export function ChannelGuide({
           <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
             <Poster
               src={channel.icon}
-              alt={channel.name}
+              alt={displayName(channel.name)}
               className="h-full w-full object-contain"
             />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold text-white">{channel.name}</h2>
+            <h2 className="truncate text-base font-semibold text-white">{displayName(channel.name)}</h2>
             <p className="text-xs text-gray-500">Guide des programmes</p>
           </div>
           <Button

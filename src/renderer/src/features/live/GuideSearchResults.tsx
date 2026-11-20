@@ -4,6 +4,7 @@
  * Rappel / Enregistrer. HD/FHD/4K variants sharing one guide are shown as chips.
  */
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { GuideSearchHit, GuideSearchResult, LiveStream, ReminderMode } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useReminders } from '../../lib/reminders'
@@ -215,7 +216,7 @@ export function GuideSearchResults({
                       >
                         <Poster
                           src={channel.icon}
-                          alt={channel.name}
+                          alt={displayName(channel.name)}
                           className="h-full w-full object-contain"
                         />
                       </button>
@@ -233,7 +234,7 @@ export function GuideSearchResults({
                             title={watchTitle(channel.name)}
                             className="hover:text-white hover:underline"
                           >
-                            {channel.name}
+                            {displayName(channel.name)}
                           </FocusButton>
                           {h.channels.length > 1 && (
                             <span className="text-gray-600">
@@ -260,7 +261,7 @@ export function GuideSearchResults({
                                 title={watchTitle(c.name)}
                                 className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-white/10 hover:text-white"
                               >
-                                {c.name}
+                                {displayName(c.name)}
                               </FocusButton>
                             ))}
                           </div>

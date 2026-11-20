@@ -1,4 +1,6 @@
 import { type ReactElement } from 'react'
+import { CardCaption } from '../../components/CardCaption'
+import { displayName } from '@shared/displayName'
 import type { FavoriteItem, FavoriteKind } from '@shared/index'
 import { useFavorites } from '../../lib/favorites'
 import {
@@ -87,15 +89,15 @@ export function FavoritesView({
                 type="button"
                 disabled={!f.available}
                 onClick={() => onActivate(f)}
-                title={f.available ? `Regarder ${f.name}` : undefined}
+                title={f.available ? `Regarder ${displayName(f.name)}` : undefined}
                 className="group flex min-w-0 flex-1 items-center gap-3 text-left"
               >
                 <span className="block h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-                  <Poster src={f.image} alt={f.name} className="h-full w-full object-contain" />
+                  <Poster src={f.image} alt={displayName(f.name)} className="h-full w-full object-contain" />
                 </span>
                 <span className="block min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-gray-100 group-enabled:group-hover:text-white group-enabled:group-hover:underline">
-                    {f.name}
+                    {displayName(f.name)}
                   </span>
                   {!f.available && (
                     <span className="mt-1 block">
@@ -145,19 +147,17 @@ export function FavoritesView({
               type="button"
               onClick={() => onActivate(f)}
               className="remote-card flex w-full min-w-0 flex-col rounded-lg text-left focus-visible:outline-none"
-              title={f.name}
+              title={displayName(f.name)}
             >
               <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-poster ring-1 ring-white/5 transition-all duration-200 group-hover:-translate-y-1 group-hover:ring-accent/40">
-                <Poster src={f.image} alt={f.name} className="h-full w-full" />
+                <Poster src={f.image} alt={displayName(f.name)} className="h-full w-full" />
                 {!f.available && (
                   <div className="absolute inset-x-0 bottom-0 flex justify-center bg-black/60 py-1 backdrop-blur">
                     <OfflineBadge />
                   </div>
                 )}
               </div>
-              <p className="mt-2 w-full min-w-0 truncate px-0.5 text-sm font-medium text-gray-100 group-hover:text-white">
-                {f.name}
-              </p>
+              <CardCaption title={displayName(f.name)} />
             </FocusButton>
             {/* Unpin (top-right): on hover, or when the card is selected with the remote. */}
             <div className="absolute right-1 top-1 rounded-md bg-black/50 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 group-has-[[data-remote-focus=true]]:opacity-100">

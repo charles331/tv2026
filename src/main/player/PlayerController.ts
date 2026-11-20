@@ -38,6 +38,7 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process'
+import { displayName } from '@shared/displayName'
 import { mkdir } from 'fs/promises'
 import { writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -459,7 +460,7 @@ export class PlayerController {
    * etc., directly — while the app chrome drives the same actions over IPC.
    */
   private buildMpvArgs(ipcPath: string, url: string, req: PlayRequest): string[] {
-    const winTitle = req.title ? `TV2026 — ${req.title}` : 'TV2026'
+    const winTitle = req.title ? `TV2026 — ${displayName(req.title)}` : 'TV2026'
     const args = [
       `--input-ipc-server=${ipcPath}`,
       '--idle=yes', // stay alive between files / after end-file

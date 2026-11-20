@@ -17,6 +17,7 @@
  */
 
 import { app, Notification, type BrowserWindow } from 'electron'
+import { displayName } from '@shared/displayName'
 
 import type { ConflictResolution, EventEmitterFn, Reminder } from '@shared/index'
 import { EventChannels } from '@shared/index'
@@ -160,7 +161,7 @@ export class ReminderScheduler {
     try {
       const n = new Notification({
         title: `Bientôt : ${r.title}`,
-        body: `${r.channelName} — ${formatClock(r.startSecs)}`
+        body: `${displayName(r.channelName)} — ${formatClock(r.startSecs)}`
       })
       n.on('click', () => {
         this.focusWindow()
