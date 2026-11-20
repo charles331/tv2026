@@ -3,7 +3,8 @@ import {
   keyToAction,
   isTextField,
   textFieldKeepsKey,
-  isUnmanagedFocus
+  isUnmanagedFocus,
+  backClearsField
 } from '../../src/renderer/src/lib/remote/keys'
 
 describe('keyToAction', () => {
@@ -98,5 +99,24 @@ describe('isUnmanagedFocus', () => {
     expect(isUnmanagedFocus(el('BUTTON', true))).toBe(false)
     expect(isUnmanagedFocus(el('BODY', false))).toBe(false)
     expect(isUnmanagedFocus(null)).toBe(false)
+  })
+})
+
+describe('backClearsField', () => {
+  const field = (marked: boolean, value: string): Element =>
+    ({
+      tagName: 'INPUT',
+      value,
+      hasAttribute: (n: string) => marked && n === 'data-clear-on-back'
+    }) as unknown as Element
+  it('is true for a marked search field that holds text', () => {
+    expect(backClearsField(field(true, 'tf1'))).toBe(true)
+  })
+  it('is false once the field is empty: Back then goes back', () => {
+    expect(backClearsField(field(true, ''))).toBe(false)
+  })
+  it('is false for unmarked fields (credentials, settings) and for no focus', () => {
+    expect(backClearsField(field(false, 'secret'))).toBe(false)
+    expect(backClearsField(null)).toBe(false)
   })
 })

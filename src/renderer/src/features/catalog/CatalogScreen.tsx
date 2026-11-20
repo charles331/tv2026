@@ -106,7 +106,11 @@ export function CatalogScreen({
         loading={categoriesState.loading}
         error={categoriesState.error}
         selectedId={categoryId}
-        onSelect={setCategoryId}
+        onSelect={(id) => {
+          // Picking a category starts a new browse: drop the search text.
+          setCategoryId(id)
+          setRawQuery('')
+        }}
         favoritesCount={favorites.count('movie')}
         pinned={
           inProgressCount > 0 || isContinue
@@ -127,6 +131,7 @@ export function CatalogScreen({
             </span>
             <TextInput
               className="pl-9"
+              clearOnBack
               placeholder="Rechercher un film…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}

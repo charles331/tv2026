@@ -158,7 +158,11 @@ export function LiveScreen({
         loading={categoriesState.loading}
         error={categoriesState.error}
         selectedId={categoryId}
-        onSelect={setCategoryId}
+        onSelect={(id) => {
+          // Picking a category starts a new browse: drop the search text.
+          setCategoryId(id)
+          setRawQuery('')
+        }}
         allLabel="Toutes les chaînes"
         favoritesCount={favorites.count('live')}
         pinned={
@@ -179,6 +183,7 @@ export function LiveScreen({
             </span>
             <TextInput
               className="pl-9"
+              clearOnBack
               placeholder={
                 searchGuides ? 'Rechercher une chaîne ou un programme…' : 'Rechercher une chaîne…'
               }

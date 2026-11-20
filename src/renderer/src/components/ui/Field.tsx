@@ -31,12 +31,15 @@ interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean
   /** Stable key for the remote-control navigation (setFocus target). */
   focusKey?: string
+  /** Search/filter field: Back empties it before going back (remote control). */
+  clearOnBack?: boolean
 }
 
 export function TextInput({
   invalid,
   className,
   focusKey,
+  clearOnBack,
   disabled,
   onMouseDown,
   ...rest
@@ -58,6 +61,7 @@ export function TextInput({
       disabled={disabled}
       data-remote-focus={itemProps['data-remote-focus']}
       data-remote=""
+      data-clear-on-back={clearOnBack ? '' : undefined}
       onMouseDown={(e) => {
         itemProps.onMouseDown()
         onMouseDown?.(e)

@@ -120,7 +120,11 @@ export function SeriesScreen({
         loading={categoriesState.loading}
         error={categoriesState.error}
         selectedId={categoryId}
-        onSelect={setCategoryId}
+        onSelect={(id) => {
+          // Picking a category starts a new browse: drop the search text.
+          setCategoryId(id)
+          setRawQuery('')
+        }}
         allLabel="Toutes les séries"
         favoritesCount={favorites.count('series')}
         pinned={
@@ -141,6 +145,7 @@ export function SeriesScreen({
             </span>
             <TextInput
               className="pl-9"
+              clearOnBack
               placeholder="Rechercher une série…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}

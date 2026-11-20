@@ -87,3 +87,14 @@ export function isUnmanagedFocus(el: Element | null): boolean {
   if (tag === 'BODY' || tag === 'HTML') return false
   return !el.hasAttribute('data-remote')
 }
+
+/**
+ * Back in a search field that holds text empties it first (a remote has no
+ * other way to clear it); a second Back, on the empty field, goes back.
+ * Only fields marked `data-clear-on-back` (searches, filters): never a
+ * credential or a setting.
+ */
+export function backClearsField(el: Element | null): boolean {
+  if (!el || !el.hasAttribute('data-clear-on-back')) return false
+  return ((el as Element & { value?: string }).value ?? '') !== ''
+}

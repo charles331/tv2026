@@ -17,7 +17,13 @@
  * is being used.
  */
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation'
-import { keyToAction, isTextField, textFieldKeepsKey, isUnmanagedFocus } from './keys'
+import {
+  keyToAction,
+  isTextField,
+  textFieldKeepsKey,
+  isUnmanagedFocus,
+  backClearsField
+} from './keys'
 import { backStack } from './backStack'
 import { zoneKeys } from './focus'
 import { typedSearchChar } from './typing'
@@ -112,6 +118,10 @@ export function startRemote(): void {
         e.preventDefault()
         e.stopPropagation()
         setModality('keys')
+        if (backClearsField(document.activeElement)) {
+          clearField(document.activeElement as HTMLInputElement)
+          return
+        }
         dispatchBack()
         return
       }
@@ -178,4 +188,14 @@ export function startRemote(): void {
       dispatchBack('mouse')
     }
   })
+}
+
+/**
+ * Empties a React-controlled input: set the value through the native setter
+ * (React ignores a plain `.value =`) and fire `input` so its onChange runs.
+ */
+function clearField(input: HTMLInputElement): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, '')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
 }

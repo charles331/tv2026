@@ -192,9 +192,31 @@ try {
   const shown = await page.locator('.remote-card').filter({ visible: true }).count()
   check('Clavier : ↓ quitte la recherche vers les résultats', f.card === 'FR - L’Éléphant bleu (2024)' && shown === 1, `${JSON.stringify(f)} · ${shown} affiche(s)`)
   await key('ArrowUp')
-  await page.keyboard.press('Control+a')
-  await page.keyboard.press('Backspace')
+  await key('Escape')
+  f = await focusInfo()
+  check('Clavier : Retour dans une recherche remplie la vide sans quitter le champ', f.tag === 'INPUT' && f.value === '' && f.zone === 'catalog-toolbar', JSON.stringify(f))
+  // Choisir une catégorie efface la recherche ; la colonne s'élargit tant
+  // qu'elle a la sélection.
+  await page.keyboard.type('elephant')
   await page.waitForTimeout(1200)
+  await key('Home')
+  await key('ArrowLeft') // bord gauche du texte → colonne des catégories
+  const sidebar = () =>
+    page.evaluate(() => {
+      const zone = document.querySelector('.category-sidebar:not([inert] *)')
+      const aside = zone?.querySelector('aside')
+      return { position: aside && getComputedStyle(aside).position, zoneW: zone?.offsetWidth, asideW: aside?.offsetWidth }
+    })
+  for (let i = 0; i < 6 && !/^Tous les films/.test((await focusInfo()).label ?? ''); i++) await key('ArrowDown')
+  f = await focusInfo()
+  let side = await sidebar()
+  check('Catégories : la colonne flotte par-dessus l’écran quand elle a la sélection', f.zone === 'catalog-categories' && side.position === 'absolute' && side.asideW >= side.zoneW, `${JSON.stringify(f)} ${JSON.stringify(side)}`)
+  await key('Enter')
+  await page.waitForTimeout(1200)
+  check('Catégories : choisir une catégorie vide la recherche', (await searchField().inputValue()) === '' && (await page.locator('.remote-card').filter({ visible: true }).count()) > 1)
+  await key('ArrowRight')
+  side = await sidebar()
+  check('Catégories : la colonne reprend sa place en quittant', side.position === 'relative', JSON.stringify(side))
   // Menu de tri : à la souris, un second clic sur le bouton le referme.
   const sortButton = page.locator('button[title="Trier"]').filter({ visible: true })
   await sortButton.click()

@@ -102,12 +102,14 @@ export function CategorySidebar({
     <FocusZone
       focusKey={focusKey}
       preferredChildFocusKey={keyOf(selectedId)}
-      className="flex shrink-0"
+      // The zone keeps the column's place; while it has the remote selection
+      // the column floats wider over the screen (main.css, .category-sidebar).
+      className="category-sidebar relative flex shrink-0"
+      style={{ width }}
     >
       <aside
         ref={asideRef}
-        style={{ width }}
-        className="relative flex shrink-0 flex-col border-r border-white/10 bg-surface-raised/60"
+        className="relative flex w-full flex-col border-r border-white/10 bg-surface-raised/60"
       >
         <div className="px-3 pb-2 pt-3">
           <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -119,6 +121,7 @@ export function CategorySidebar({
             </span>
             <TextInput
               className="h-8 pl-7 text-xs"
+              clearOnBack
               placeholder="Filtrer…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
