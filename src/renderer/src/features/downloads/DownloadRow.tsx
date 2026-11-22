@@ -1,8 +1,10 @@
 import { type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { DownloadItem, DownloadProgressEvent } from '@shared/index'
 import {
   Badge,
   Button,
+  FocusButton,
   ProgressBar,
   IconPause,
   IconResume,
@@ -69,7 +71,7 @@ export function DownloadRow({
       <div className="flex items-start gap-3">
         {(isQueued || isPaused) && (
           <div className="flex flex-col gap-0.5 pt-0.5 text-gray-600">
-            <button
+            <FocusButton
               type="button"
               disabled={!canMoveUp}
               onClick={() => onMoveUp(item.id)}
@@ -78,8 +80,8 @@ export function DownloadRow({
               aria-label="Monter dans la file"
             >
               <IconGrip size={12} />
-            </button>
-            <button
+            </FocusButton>
+            <FocusButton
               type="button"
               disabled={!canMoveDown}
               onClick={() => onMoveDown(item.id)}
@@ -88,20 +90,20 @@ export function DownloadRow({
               aria-label="Descendre dans la file"
             >
               <IconGrip size={12} />
-            </button>
+            </FocusButton>
           </div>
         )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <button
+            <FocusButton
               type="button"
               onClick={() => onOpen(item)}
               className="min-w-0 truncate text-left text-sm font-medium text-gray-100 hover:text-accent-hover hover:underline focus-visible:underline focus-visible:outline-none"
               title={`${item.fileName}\nOuvrir la fiche ${item.kind === 'series' ? 'de la série' : 'du film'}`}
             >
-              {item.name}
-            </button>
+              {displayName(item.name)}
+            </FocusButton>
             <Badge tone={meta.tone}>
               {pausedForPlayback ? 'En pause pour lecture' : meta.label}
             </Badge>

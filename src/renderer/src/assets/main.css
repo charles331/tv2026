@@ -84,3 +84,113 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Remote-control selection ring: only after a navigation key (data-input is
+   set by lib/remote/RemoteRuntime), never while the mouse is in use. */
+html[data-input='keys'] [data-remote-focus='true'] {
+  outline: 3px solid rgb(99 102 241);
+  outline-offset: 2px;
+}
+html[data-input='keys'] [data-remote-focus='true'].remote-card {
+  transform: scale(1.04);
+  transition: transform 0.15s ease;
+}
+html[data-input='keys'] *:focus-visible:not([data-remote-focus='true']) {
+  outline: none;
+}
+
+/* TV mode (lib/tvMode.tsx puts `tv` on <html>): readable from the sofa. Every
+   size is in rem, so a larger root font scales the whole interface; the root
+   gets safe margins for TVs that crop the picture edges (overscan). */
+html.tv {
+  font-size: 150%;
+}
+html.tv #root {
+  box-sizing: border-box;
+  padding: 3vh 3vw;
+}
+html.tv.cursor-hidden,
+html.tv.cursor-hidden * {
+  cursor: none !important;
+}
+html.tv .resize-handle {
+  display: none;
+}
+/* The main menu shows its labels while it has the selection. */
+.nav-label {
+  display: none;
+}
+html.tv [data-focus-zone='nav']:has([data-remote-focus='true']) .nav-label {
+  display: inline;
+}
+html.tv [data-focus-zone='nav']:has([data-remote-focus='true']) .nav-button {
+  width: auto;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  padding: 0 0.75rem;
+}
+/* The expanded menu floats over the screen instead of pushing it aside: a
+   layout shift would leave the navigation measuring stale positions (→ from
+   the menu then found nothing on its right). */
+html.tv [data-focus-zone='nav'] {
+  position: relative;
+  width: 4rem;
+}
+html.tv [data-focus-zone='nav']:has([data-remote-focus='true']) nav {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  width: auto;
+  align-items: stretch;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Category column (Films, Séries, Direct): while it has the remote selection
+   it floats wider over the screen so long names are readable, then folds back.
+   Floating, not pushing: the grid next to it keeps its measured positions. */
+html[data-input='keys'] .category-sidebar:has([data-remote-focus='true']) > aside {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 30;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(40rem, 70vw);
+  background-color: #171a21;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Poster card caption (components/CardCaption): title on two lines at most;
+   the card selected with the remote shows it in full, floating over the row
+   below (the grid keeps its geometry). */
+.card-caption {
+  position: relative;
+  height: 3.5rem;
+}
+.card-caption-inner {
+  position: absolute;
+  inset: 0 0 auto 0;
+}
+.card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+html[data-input='keys'] .remote-card[data-remote-focus='true'] {
+  position: relative;
+  z-index: 10;
+}
+html[data-input='keys'] .remote-card[data-remote-focus='true'] .card-caption-inner {
+  z-index: 10;
+  padding-bottom: 0.35rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background-color: rgba(11, 13, 18, 0.95);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+}
+html[data-input='keys'] .remote-card[data-remote-focus='true'] .card-title {
+  display: block;
+  -webkit-line-clamp: unset;
+}

@@ -17,6 +17,7 @@
  */
 
 import { app, Notification, type BrowserWindow } from 'electron'
+import { displayName } from '@shared/displayName'
 
 import type { ConflictResolution, EventEmitterFn, Reminder } from '@shared/index'
 import { EventChannels } from '@shared/index'
@@ -27,6 +28,8 @@ import { buildLiveRecordingPath } from '../downloads/helpers'
 import { playerController } from '../player/PlayerController'
 import { recordingController, RecordingError } from '../player/RecordingController'
 import { computeDueActions } from './schedulerLogic'
+import { alertChannel } from './alertChannel'
+import { isTvMode } from '../app/tvMode'
 
 /** Typed emitter shape (matches makeEmitter() in ipc/register.ts). */
 type Emitter = EventEmitterFn
@@ -142,6 +145,13 @@ export class ReminderScheduler {
   // ------------------------------------------------------------ notifications
 
   private fireNotification(r: Reminder): void {
+    // TV mode: ask inside the app, brought in front of a playing video.
+    if (alertChannel(isTvMode()) === 'prompt') {
+      this.emit(EventChannels.REMINDER_PROMPT, { reminder: r })
+      void playerController.bringAppToFront()
+      this.markStatus(r.id, 'notified')
+      return
+    }
     if (!Notification.isSupported()) {
       // No native notifications on this OS — still advance status so we don't
       // re-evaluate the same reminder forever.
@@ -151,7 +161,7 @@ export class ReminderScheduler {
     try {
       const n = new Notification({
         title: `Bientôt : ${r.title}`,
-        body: `${r.channelName} — ${formatClock(r.startSecs)}`
+        body: `${displayName(r.channelName)} — ${formatClock(r.startSecs)}`
       })
       n.on('click', () => {
         this.focusWindow()
@@ -205,6 +215,8 @@ export class ReminderScheduler {
     this.awaitingConflict.add(r.id)
     try {
       const resolution = await this.askConflict(r)
+      // TV mode: the video goes on (answered or timed out) — back in front.
+      if (resolution === 'keepPlayback') void playerController.restoreVideoToFront()
       const fresh = remindersRepo.getReminder(r.id)
       if (!fresh || !isRestartableStatus(fresh.status)) return
       if (resolution === 'keepPlayback') {
@@ -287,6 +299,7 @@ export class ReminderScheduler {
    */
   private askConflict(r: Reminder): Promise<ConflictResolution> {
     this.emit(EventChannels.RECORDING_CONFLICT, { reminder: r })
+    void playerController.bringAppToFront() // TV mode: the dialog must be seen
     return new Promise<ConflictResolution>((resolve) => {
       const timeout = setTimeout(() => {
         this.conflictResolvers.delete(r.id)

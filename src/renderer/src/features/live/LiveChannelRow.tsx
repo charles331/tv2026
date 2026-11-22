@@ -1,8 +1,9 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { EpgEntry, LiveStream } from '@shared/index'
 import { api } from '../../lib/ipc'
 import { formatClockFromEpochSecs } from '../../lib/format'
-import { Button, Poster, IconPlay, IconTv } from '../../components/ui'
+import { Button, FocusButton, Poster, IconPlay, IconTv } from '../../components/ui'
 import { FavoriteButton } from '../favorites/FavoriteButton'
 
 /**
@@ -44,7 +45,7 @@ function LiveChannelRowImpl({
   }, [channel.streamId])
 
   const now = epg?.find((e) => e.nowPlaying) ?? epg?.[0] ?? null
-  const next = epg && now ? epg.find((e) => e !== now) ?? null : null
+  const next = epg && now ? (epg.find((e) => e !== now) ?? null) : null
 
   return (
     <div
@@ -52,34 +53,39 @@ function LiveChannelRowImpl({
       className="flex items-center gap-3 rounded-lg border border-white/10 bg-surface-raised p-3"
     >
       {/* Logo + name + programme: one click target that plays the channel. */}
-      <button
+      <FocusButton
         type="button"
         onClick={() => onPlay(channel)}
-        title={`Regarder ${channel.name}`}
+        title={`Regarder ${displayName(channel.name)}`}
         className="group flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         <span className="block h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-          <Poster src={channel.icon} alt={channel.name} className="h-full w-full object-contain" />
+          <Poster src={channel.icon} alt={displayName(channel.name)} className="h-full w-full object-contain" />
         </span>
         <span className="block min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-gray-100 group-hover:text-white group-hover:underline">
             {channel.number != null && <span className="text-gray-500">{channel.number} · </span>}
-            {channel.name}
+            {displayName(channel.name)}
           </span>
           {now ? (
             <span className="block truncate text-xs text-gray-400">
               <span className="text-emerald-400">● </span>
               {now.title}
               {now.endSecs != null && (
-                <span className="text-gray-600"> · jusqu’à {formatClockFromEpochSecs(now.endSecs)}</span>
+                <span className="text-gray-600">
+                  {' '}
+                  · jusqu’à {formatClockFromEpochSecs(now.endSecs)}
+                </span>
               )}
               {next && <span className="text-gray-600"> — puis {next.title}</span>}
             </span>
           ) : (
-            <span className="block text-xs text-gray-600">{epg === null ? 'Programme…' : 'Pas de guide'}</span>
+            <span className="block text-xs text-gray-600">
+              {epg === null ? 'Programme…' : 'Pas de guide'}
+            </span>
           )}
         </span>
-      </button>
+      </FocusButton>
       <Button
         size="sm"
         variant="ghost"
@@ -89,7 +95,12 @@ function LiveChannelRowImpl({
       >
         Guide
       </Button>
-      <Button size="sm" variant="secondary" icon={<IconPlay size={14} />} onClick={() => onPlay(channel)}>
+      <Button
+        size="sm"
+        variant="secondary"
+        icon={<IconPlay size={14} />}
+        onClick={() => onPlay(channel)}
+      >
         Regarder
       </Button>
       <FavoriteButton

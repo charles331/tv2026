@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { PlayRequest } from '@shared/index'
 import {
   Button,
+  FocusButton,
   Spinner,
   cn,
   IconPlay,
@@ -23,6 +25,7 @@ import { SeekBar } from './SeekBar'
 import { VolumeSlider } from './VolumeSlider'
 import { useToast } from '../../lib/toast'
 import { usePlayer } from './usePlayer'
+import { FocusZone } from '../../lib/remote/focus'
 
 /**
  * Player transport bar (docked at the bottom of the app).
@@ -184,7 +187,7 @@ export function PlayerView({
   // While reconnecting, mpv may be momentarily gone — its controls would no-op,
   // so disable them rather than look broken.
   const controlsDisabled = isReconnecting
-  const title = status.title ?? request.title ?? 'Lecture'
+  const title = displayName(status.title ?? request.title ?? 'Lecture')
   const isError = status.state === 'error'
 
   const attempt = status.reconnectAttempt ?? 0
@@ -217,7 +220,10 @@ export function PlayerView({
   }
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 bg-surface-sunken px-4 py-2.5">
+    <FocusZone
+      focusKey="player-bar"
+      className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 bg-surface-sunken px-4 py-2.5"
+    >
       {/* Title + state */}
       <div className="flex min-w-0 items-center gap-3" style={{ width: 220 }}>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
@@ -256,7 +262,7 @@ export function PlayerView({
           {/* Transport + seek */}
           <div className="flex min-w-[260px] flex-1 items-center gap-3">
             {(previous || next) && (
-              <button
+              <FocusButton
                 type="button"
                 disabled={!previous}
                 onClick={() => previous?.play()}
@@ -265,9 +271,9 @@ export function PlayerView({
                 className="shrink-0 text-gray-300 transition-colors hover:text-white disabled:opacity-30"
               >
                 <IconPrevious size={18} />
-              </button>
+              </FocusButton>
             )}
-            <button
+            <FocusButton
               type="button"
               disabled={isLoading}
               onClick={() => void player.togglePlay()}
@@ -275,9 +281,9 @@ export function PlayerView({
               aria-label={isPlaying ? 'Pause' : 'Lecture'}
             >
               {isLoading ? <Spinner size={16} /> : isPlaying ? <IconPause size={18} /> : <IconPlay size={18} />}
-            </button>
+            </FocusButton>
             {(previous || next) && (
-              <button
+              <FocusButton
                 type="button"
                 disabled={!next}
                 onClick={() => next?.play()}
@@ -286,7 +292,7 @@ export function PlayerView({
                 className="shrink-0 text-gray-300 transition-colors hover:text-white disabled:opacity-30"
               >
                 <IconNext size={18} />
-              </button>
+              </FocusButton>
             )}
             {!isLive && (
               <span className="shrink-0 text-right text-xs tabular-nums text-gray-300">
@@ -302,7 +308,7 @@ export function PlayerView({
               onSeek={(secs) => void player.seek(secs)}
             />
             {!isLive && (
-              <button
+              <FocusButton
                 type="button"
                 onClick={() => toggleRemaining()}
                 title={showRemaining ? 'Afficher la durée totale' : 'Afficher le temps restant'}
@@ -313,14 +319,14 @@ export function PlayerView({
                     ? formatClock(-(duration - status.positionSecs), duration)
                     : formatClock(duration, duration)
                   : '—'}
-              </button>
+              </FocusButton>
             )}
           </div>
 
           {/* Right controls */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <button
+              <FocusButton
                 type="button"
                 disabled={controlsDisabled}
                 onClick={() => void player.toggleMute()}
@@ -328,7 +334,7 @@ export function PlayerView({
                 aria-label={status.muted ? 'Réactiver le son' : 'Couper le son'}
               >
                 {status.muted ? <IconVolumeMute size={18} /> : <IconVolume size={18} />}
-              </button>
+              </FocusButton>
               <VolumeSlider
                 volume={status.volume}
                 muted={status.muted}
@@ -336,7 +342,7 @@ export function PlayerView({
                 onChange={(v) => void player.setVolume(v, false)}
               />
             </div>
-            <button
+            <FocusButton
               type="button"
               disabled={controlsDisabled}
               onClick={() => void player.cycleSubtitle()}
@@ -345,8 +351,8 @@ export function PlayerView({
               aria-label="Changer de sous-titres"
             >
               <IconSubtitles size={18} />
-            </button>
-            <button
+            </FocusButton>
+            <FocusButton
               type="button"
               disabled={controlsDisabled}
               onClick={() => void player.cycleAudio()}
@@ -355,9 +361,9 @@ export function PlayerView({
               aria-label="Changer de piste audio"
             >
               <IconAudioTrack size={18} />
-            </button>
+            </FocusButton>
             {isLive && (
-              <button
+              <FocusButton
                 type="button"
                 disabled={controlsDisabled}
                 onClick={() => void toggleRecord()}
@@ -372,9 +378,9 @@ export function PlayerView({
               >
                 <IconRecord size={14} />
                 {recording ? 'REC' : ''}
-              </button>
+              </FocusButton>
             )}
-            <button
+            <FocusButton
               type="button"
               disabled={controlsDisabled}
               onClick={() => void player.setFullscreen(!status.fullscreen)}
@@ -383,13 +389,13 @@ export function PlayerView({
               aria-label="Plein écran"
             >
               <IconFullscreen size={18} />
-            </button>
+            </FocusButton>
             <Button variant="ghost" size="sm" icon={<IconStop size={16} />} onClick={close}>
               Arrêter
             </Button>
           </div>
         </>
       )}
-    </div>
+    </FocusZone>
   )
 }

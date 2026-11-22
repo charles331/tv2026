@@ -1,5 +1,12 @@
 import { useState, type ReactElement } from 'react'
-import type { FavoriteItem, SeriesCategory, SeriesStream, VodCategory, WatchProgress } from '@shared/index'
+import { displayName } from '@shared/displayName'
+import type {
+  FavoriteItem,
+  SeriesCategory,
+  SeriesStream,
+  VodCategory,
+  WatchProgress
+} from '@shared/index'
 import { api, unwrap } from '../../lib/ipc'
 import { useAsync, useDebounced } from '../../lib/hooks'
 import { useFavorites, FAVORITES_CATEGORY_ID } from '../../lib/favorites'
@@ -14,8 +21,10 @@ import {
   IconTv,
   LoadingState,
   EmptyState,
-  ErrorState
+  ErrorState,
+  SelectMenu
 } from '../../components/ui'
+import { FocusZone, useFocusWhenReady } from '../../lib/remote/focus'
 import { CategorySidebar } from '../catalog/CategorySidebar'
 import { SeriesGrid } from './SeriesGrid'
 import { useSeriesFeed } from './useSeriesFeed'
@@ -93,6 +102,9 @@ export function SeriesScreen({
     sortDir
   })
 
+  // Remote control: once the first page is there, the grid takes the selection.
+  useFocusWhenReady('series-grid', !isPinned && feed.items.length > 0, 'screen-series')
+
   const isSearching = query.trim().length > 0
   const selectedCategoryName =
     categoryId == null
@@ -103,11 +115,17 @@ export function SeriesScreen({
   return (
     <div className="flex h-full">
       <CategorySidebar
+        focusKey="series-categories"
+        contentFocusKey="series-grid"
         categories={toSidebarCategories(categoriesState.data ?? [])}
         loading={categoriesState.loading}
         error={categoriesState.error}
         selectedId={categoryId}
-        onSelect={setCategoryId}
+        onSelect={(id) => {
+          // Picking a category starts a new browse: drop the search text.
+          setCategoryId(id)
+          setRawQuery('')
+        }}
         allLabel="Toutes les séries"
         favoritesCount={favorites.count('series')}
         pinned={
@@ -118,33 +136,32 @@ export function SeriesScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-3">
+        <FocusZone
+          focusKey="series-toolbar"
+          className="flex items-center gap-3 border-b border-white/10 px-5 py-3"
+        >
           <div className="relative max-w-md flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
               <IconSearch size={16} />
             </span>
             <TextInput
               className="pl-9"
+              clearOnBack
               placeholder="Rechercher une série…"
               value={rawQuery}
               onChange={(e) => setRawQuery(e.target.value)}
               disabled={isPinned}
             />
           </div>
-          <select
+          <SelectMenu
+            focusKey="series-sort"
             value={sort}
-            onChange={(e) => setSort(e.target.value as typeof sort)}
+            options={SORT_OPTIONS}
+            onChange={setSort}
             disabled={isPinned}
-            className="h-10 rounded-lg border border-white/10 bg-surface-sunken px-3 text-sm text-gray-200 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/70 disabled:opacity-40"
             title="Trier"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
+          />
+        </FocusZone>
 
         <div className="flex items-center justify-between px-5 pt-3 text-sm text-gray-400">
           <span>
@@ -163,7 +180,7 @@ export function SeriesScreen({
                 Résultats pour « <span className="text-gray-200">{query.trim()}</span> »
               </>
             ) : (
-              <span className="text-gray-200">{selectedCategoryName}</span>
+              <span className="text-gray-200">{displayName(selectedCategoryName)}</span>
             )}
             {!isPinned && !feed.loading && !feed.error && (
               <span className="ml-2 text-gray-600">· {feed.total} séries</span>
@@ -193,7 +210,11 @@ export function SeriesScreen({
                 title="Aucune série"
                 description="Le cache local est vide. Lancez un rafraîchissement des séries depuis les Réglages."
                 action={
-                  <Button variant="primary" icon={<IconRefresh size={16} />} onClick={onGoToSettings}>
+                  <Button
+                    variant="primary"
+                    icon={<IconRefresh size={16} />}
+                    onClick={onGoToSettings}
+                  >
                     Aller aux Réglages
                   </Button>
                 }
@@ -207,6 +228,7 @@ export function SeriesScreen({
               hasMore={feed.hasMore}
               onLoadMore={feed.loadMore}
               onSelect={onSelectSeries}
+              focusKey="series-grid"
             />
           )}
         </div>

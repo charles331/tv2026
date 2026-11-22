@@ -12,6 +12,7 @@
  * never thrown across the boundary.
  */
 
+import type { MpvRemoteKey } from '../mpvRemoteKey'
 import type { Result } from '../types/common'
 import type {
   AppInfo,
@@ -101,6 +102,10 @@ export interface IpcContract {
   [InvokeChannels.APP_DOWNLOAD_UPDATE]: { request: void; response: { ok: true } }
   [InvokeChannels.APP_INSTALL_UPDATE]: { request: void; response: { ok: true } }
   [InvokeChannels.APP_GET_UPDATE_STATE]: { request: void; response: UpdateStatusEvent | null }
+  [InvokeChannels.APP_TV_MODE_GET]: { request: void; response: { tvMode: boolean } }
+  [InvokeChannels.APP_POWER]: { request: { action: 'quit' | 'sleep' | 'shutdown' }; response: { ok: true } }
+  [InvokeChannels.APP_LOGIN_ITEM_GET]: { request: void; response: { enabled: boolean } }
+  [InvokeChannels.APP_LOGIN_ITEM_SET]: { request: { enabled: boolean }; response: { enabled: boolean } }
 
   // connection / settings
   [InvokeChannels.CONNECTION_TEST]: { request: void; response: ConnectionTestResult }
@@ -216,6 +221,8 @@ export interface IpcContract {
     response: PlayerStatus
   }
   [InvokeChannels.PLAYER_STOP_RECORDING]: { request: void; response: PlayerStatus }
+  [InvokeChannels.PLAYER_REMOTE_KEY]: { request: { key: MpvRemoteKey }; response: { ok: true } }
+  [InvokeChannels.PLAYER_VIDEO_FRONT]: { request: void; response: { ok: true } }
 }
 
 /** Map of event channel -> payload pushed from main to renderer. */
@@ -224,12 +231,16 @@ export interface EventContract {
   [EventChannels.DOWNLOAD_STATE]: DownloadStateEvent
   [EventChannels.PLAYER_POSITION]: PlayerPositionEvent
   [EventChannels.PLAYER_STATE]: PlayerStateEvent
+  [EventChannels.PLAYER_REMOTE]: { action: 'next' | 'previous' }
+  [EventChannels.APP_BACK]: Record<string, never>
   [EventChannels.CONNECTION_BUSY]: { busy: boolean; reason: 'download' | 'playback' | null }
   [EventChannels.REMINDER_UPDATED]: ReminderUpdatedEvent
   [EventChannels.REMINDER_OPEN_CHANNEL]: ReminderOpenChannelEvent
+  [EventChannels.REMINDER_PROMPT]: { reminder: Reminder }
   [EventChannels.RECORDING_CONFLICT]: RecordingConflictEvent
   [EventChannels.RECORDING_CONFLICT_RESOLVED]: RecordingConflictResolvedEvent
   [EventChannels.PROGRESS_CHANGED]: Record<string, never>
+  [EventChannels.APP_TV_MODE]: { tvMode: boolean }
   [EventChannels.UPDATE_STATUS]: UpdateStatusEvent
 }
 

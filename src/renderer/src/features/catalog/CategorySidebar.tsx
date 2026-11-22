@@ -6,8 +6,11 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
+import { displayName } from '@shared/displayName'
 import type { VodCategory } from '@shared/index'
-import { cn, Spinner, TextInput, IconSearch } from '../../components/ui'
+import { cn, Spinner, TextInput, IconSearch, FocusButton } from '../../components/ui'
+import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { FocusZone } from '../../lib/remote/focus'
 import { FAVORITES_CATEGORY_ID } from '../../lib/favorites'
 
 const WIDTH_KEY = 'tv2026.categorySidebarWidth'
@@ -21,6 +24,8 @@ function readStoredWidth(): number {
 }
 
 export function CategorySidebar({
+  focusKey,
+  contentFocusKey,
   categories,
   loading,
   error,
@@ -31,6 +36,10 @@ export function CategorySidebar({
   favoritesCount,
   pinned = []
 }: {
+  /** Remote-control zone key, unique per screen (e.g. `catalog-categories`). */
+  focusKey: string
+  /** Where → goes from a category (the list it filters), when it exists. */
+  contentFocusKey?: string
   categories: VodCategory[]
   loading: boolean
   error: string | null
@@ -81,104 +90,138 @@ export function CategorySidebar({
     ? categories.filter((c) => c.categoryName.toLowerCase().includes(q))
     : categories
 
+  const keyOf = (id: string | null): string => `${focusKey}-${id ?? 'all'}`
+  // → from a category goes to the list it filters, not to whatever is nearest
+  // (the search box above the list is closer to the top categories).
+  const toContent = (dir: string): boolean => {
+    if (dir !== 'right' || !contentFocusKey || !doesFocusableExist(contentFocusKey)) return true
+    setFocus(contentFocusKey)
+    return false
+  }
+
   return (
-    <aside
-      ref={asideRef}
+    <FocusZone
+      focusKey={focusKey}
+      preferredChildFocusKey={keyOf(selectedId)}
+      // The zone keeps the column's place; while it has the remote selection
+      // the column floats wider over the screen (main.css, .category-sidebar).
+      className="category-sidebar relative flex shrink-0"
       style={{ width }}
-      className="relative flex shrink-0 flex-col border-r border-white/10 bg-surface-raised/60"
     >
-      <div className="px-3 pb-2 pt-3">
-        <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</h2>
-        <div className="relative mt-2">
-          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
-            <IconSearch size={14} />
-          </span>
-          <TextInput
-            className="h-8 pl-7 text-xs"
-            placeholder="Filtrer…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-        </div>
-      </div>
-      <nav className="flex-1 overflow-y-auto px-2 pb-3">
-        {loading ? (
-          <div className="flex justify-center py-6 text-gray-500">
-            <Spinner size={18} />
+      <aside
+        ref={asideRef}
+        className="relative flex w-full flex-col border-r border-white/10 bg-surface-raised/60"
+      >
+        <div className="px-3 pb-2 pt-3">
+          <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            {title}
+          </h2>
+          <div className="relative mt-2">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
+              <IconSearch size={14} />
+            </span>
+            <TextInput
+              className="h-8 pl-7 text-xs"
+              clearOnBack
+              placeholder="Filtrer…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
           </div>
-        ) : error ? (
-          <p className="px-2 py-3 text-xs text-red-300">{error}</p>
-        ) : (
-          <ul className="space-y-0.5">
-            {/* Pinned, always first, even while filtering. */}
-            {favoritesCount !== undefined && (
-              <li>
-                <CategoryButton
-                  label="★ Favoris"
-                  count={favoritesCount}
-                  active={selectedId === FAVORITES_CATEGORY_ID}
-                  onClick={() => onSelect(FAVORITES_CATEGORY_ID)}
-                />
-              </li>
-            )}
-            {pinned.map((entry) => (
-              <li key={entry.id}>
-                <CategoryButton
-                  label={entry.label}
-                  count={entry.count}
-                  active={selectedId === entry.id}
-                  onClick={() => onSelect(entry.id)}
-                />
-              </li>
-            ))}
-            {q === '' && (
-              <li>
-                <CategoryButton
-                  label={allLabel}
-                  active={selectedId === null}
-                  onClick={() => onSelect(null)}
-                />
-              </li>
-            )}
-            {filtered.map((cat) => (
-              <li key={cat.categoryId}>
-                <CategoryButton
-                  label={cat.categoryName}
-                  count={cat.streamCount}
-                  active={selectedId === cat.categoryId}
-                  onClick={() => onSelect(cat.categoryId)}
-                />
-              </li>
-            ))}
-            {filtered.length === 0 && (
-              <li className="px-3 py-3 text-xs text-gray-600">Aucune catégorie.</li>
-            )}
-          </ul>
-        )}
-      </nav>
-      {/* Drag handle to resize the column width. */}
-      <div
-        onMouseDown={startResize}
-        title="Redimensionner la colonne"
-        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40"
-      />
-    </aside>
+        </div>
+        <nav className="flex-1 overflow-y-auto px-2 pb-3">
+          {loading ? (
+            <div className="flex justify-center py-6 text-gray-500">
+              <Spinner size={18} />
+            </div>
+          ) : error ? (
+            <p className="px-2 py-3 text-xs text-red-300">{error}</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {/* Pinned, always first, even while filtering. */}
+              {favoritesCount !== undefined && (
+                <li>
+                  <CategoryButton
+                    onArrow={toContent}
+                    focusKey={keyOf(FAVORITES_CATEGORY_ID)}
+                    label="★ Favoris"
+                    count={favoritesCount}
+                    active={selectedId === FAVORITES_CATEGORY_ID}
+                    onClick={() => onSelect(FAVORITES_CATEGORY_ID)}
+                  />
+                </li>
+              )}
+              {pinned.map((entry) => (
+                <li key={entry.id}>
+                  <CategoryButton
+                    onArrow={toContent}
+                    focusKey={keyOf(entry.id)}
+                    label={entry.label}
+                    count={entry.count}
+                    active={selectedId === entry.id}
+                    onClick={() => onSelect(entry.id)}
+                  />
+                </li>
+              ))}
+              {q === '' && (
+                <li>
+                  <CategoryButton
+                    onArrow={toContent}
+                    focusKey={keyOf(null)}
+                    label={allLabel}
+                    active={selectedId === null}
+                    onClick={() => onSelect(null)}
+                  />
+                </li>
+              )}
+              {filtered.map((cat) => (
+                <li key={cat.categoryId}>
+                  <CategoryButton
+                    onArrow={toContent}
+                    focusKey={keyOf(cat.categoryId)}
+                    label={displayName(cat.categoryName)}
+                    count={cat.streamCount}
+                    active={selectedId === cat.categoryId}
+                    onClick={() => onSelect(cat.categoryId)}
+                  />
+                </li>
+              ))}
+              {filtered.length === 0 && (
+                <li className="px-3 py-3 text-xs text-gray-600">Aucune catégorie.</li>
+              )}
+            </ul>
+          )}
+        </nav>
+        {/* Drag handle to resize the column width. */}
+        <div
+          onMouseDown={startResize}
+          title="Redimensionner la colonne"
+          className="resize-handle absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40"
+        />
+      </aside>
+    </FocusZone>
   )
 }
 
 function CategoryButton({
+  focusKey,
+  onArrow,
   label,
   count,
   active,
   onClick
 }: {
+  focusKey: string
+  onArrow: (dir: string) => boolean
   label: string
   count?: number
   active: boolean
   onClick: () => void
 }): ReactElement {
   return (
-    <button
+    <FocusButton
+      focusKey={focusKey}
+      onArrow={onArrow}
       type="button"
       onClick={onClick}
       className={cn(
@@ -194,6 +237,6 @@ function CategoryButton({
           {count}
         </span>
       )}
-    </button>
+    </FocusButton>
   )
 }

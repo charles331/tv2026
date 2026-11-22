@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react'
 import { cn } from './cn'
 import { Spinner } from './Spinner'
+import { useFocusItem } from '../../lib/remote/focus'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
@@ -11,6 +12,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean
   icon?: ReactNode
   children?: ReactNode
+  /** Stable key for the remote-control navigation (setFocus target). */
+  focusKey?: string
 }
 
 const VARIANTS: Record<Variant, string> = {
@@ -36,10 +39,23 @@ export function Button({
   children,
   className,
   disabled,
+  focusKey,
+  onMouseDown,
   ...rest
 }: ButtonProps): ReactElement {
+  const { ref, itemProps } = useFocusItem<HTMLButtonElement>({
+    focusKey,
+    focusable: !(disabled || loading)
+  })
   return (
     <button
+      ref={ref}
+      data-remote-focus={itemProps['data-remote-focus']}
+      data-remote=""
+      onMouseDown={(e) => {
+        itemProps.onMouseDown()
+        onMouseDown?.(e)
+      }}
       className={cn(
         'inline-flex select-none items-center justify-center font-medium transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70',

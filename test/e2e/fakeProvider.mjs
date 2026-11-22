@@ -101,7 +101,7 @@ export function startFakeProvider({ fail = [], videos = {} } = {}) {
             server_info: { url: '127.0.0.1', timezone: 'Europe/Brussels' }
           })
         case 'get_vod_categories':
-          return json(res, [{ category_id: 1, category_name: 'Films test', parent_id: 0 }])
+          return json(res, [{ category_id: 1, category_name: '|FR| Films test', parent_id: 0 }])
         case 'get_vod_streams':
           return json(
             res,

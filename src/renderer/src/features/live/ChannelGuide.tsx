@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
+import { setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
 import type { EpgEntry, LiveStream, ReminderMode } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
 import { useReminders } from '../../lib/reminders'
@@ -99,6 +102,13 @@ export function ChannelGuide({
   // Once the guide loads, jump to the programme on air so the user doesn't have
   // to scroll past hours of earlier listings.
   const nowRef = useRef<HTMLDivElement>(null)
+  // Remote control: Back closes; the selection starts on "Regarder" (the
+  // current programme rarely has an action of its own) and returns on close.
+  useReturnFocus()
+  useBackHandler(onClose)
+  useEffect(() => {
+    setFocus('channel-guide-watch')
+  }, [])
   useEffect(() => {
     if (epg && epg.length > 0) {
       nowRef.current?.scrollIntoView({ block: 'center' })
@@ -143,23 +153,41 @@ export function ChannelGuide({
       role="dialog"
       aria-modal="true"
     >
-      <div
+      <FocusZone
+        focusKey="channel-guide"
+        boundary
         className="fade-in flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface-raised shadow-2xl"
         onClick={(ev) => ev.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center gap-3 border-b border-white/10 p-4">
           <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-            <Poster src={channel.icon} alt={channel.name} className="h-full w-full object-contain" />
+            <Poster
+              src={channel.icon}
+              alt={displayName(channel.name)}
+              className="h-full w-full object-contain"
+            />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold text-white">{channel.name}</h2>
+            <h2 className="truncate text-base font-semibold text-white">{displayName(channel.name)}</h2>
             <p className="text-xs text-gray-500">Guide des programmes</p>
           </div>
-          <Button size="sm" variant="secondary" icon={<IconPlay size={14} />} onClick={() => onPlay(channel)}>
+          <Button
+            focusKey="channel-guide-watch"
+            size="sm"
+            variant="secondary"
+            icon={<IconPlay size={14} />}
+            onClick={() => onPlay(channel)}
+          >
             Regarder
           </Button>
-          <Button size="sm" variant="ghost" icon={<IconX size={16} />} onClick={onClose} aria-label="Fermer">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<IconX size={16} />}
+            onClick={onClose}
+            aria-label="Fermer"
+          >
             <span className="sr-only">Fermer</span>
           </Button>
         </div>
@@ -251,7 +279,9 @@ export function ChannelGuide({
                             <div className="flex shrink-0 items-center gap-1">
                               <Button
                                 size="sm"
-                                variant={reminded && reminded.mode !== 'record' ? 'primary' : 'ghost'}
+                                variant={
+                                  reminded && reminded.mode !== 'record' ? 'primary' : 'ghost'
+                                }
                                 title="Rappel à l’approche du programme"
                                 onClick={() => void handleAdd(e, 'notify')}
                               >
@@ -279,7 +309,7 @@ export function ChannelGuide({
             </div>
           )}
         </div>
-      </div>
+      </FocusZone>
     </div>
   )
 }

@@ -1,6 +1,10 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { SeriesStream } from '@shared/index'
 import { SeriesCard } from './SeriesCard'
+import { useGridNavigation } from '../../lib/remote/useGridNavigation'
+
+const MIN_CARD_WIDTH = 168 // px, as in gridTemplateColumns below
+const GAP = 16 // px, Tailwind gap-4
 
 /**
  * Responsive series grid with sentinel-based infinite scroll. Series catalogues
@@ -13,7 +17,8 @@ export function SeriesGrid({
   loadingMore,
   hasMore,
   onLoadMore,
-  onSelect
+  onSelect,
+  focusKey
 }: {
   items: SeriesStream[]
   total: number
@@ -21,8 +26,45 @@ export function SeriesGrid({
   hasMore: boolean
   onLoadMore: () => void
   onSelect: (series: SeriesStream) => void
+  /** Remote-control key of the grid (one focusable for the whole grid). */
+  focusKey: string
 }): ReactElement {
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+  const columns = Math.max(1, Math.floor((width + GAP) / (MIN_CARD_WIDTH + GAP)))
+
+  // Remote control: arrows move an index, OK opens the active series.
+  const nav = useGridNavigation<HTMLDivElement>({
+    count: items.length,
+    columns,
+    hasMore: hasMore && !loadingMore,
+    onLoadMore,
+    onActivate: (i) => {
+      const series = items[i]
+      if (series) onSelect(series)
+    },
+    focusKey
+  })
+  const { activeIndex, focused } = nav
+  const scrollRef = nav.ref
+
+  // Columns follow the width (the CSS grid is auto-fill).
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
+    ro.observe(el)
+    setWidth(el.clientWidth)
+    return () => ro.disconnect()
+  }, [scrollRef])
+
+  // Keep the active card in view.
+  useEffect(() => {
+    if (!focused) return
+    scrollRef.current
+      ?.querySelector(`[data-index="${activeIndex}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex, focused, scrollRef])
 
   useEffect(() => {
     const el = sentinelRef.current
@@ -38,13 +80,28 @@ export function SeriesGrid({
   }, [hasMore, loadingMore, onLoadMore])
 
   return (
-    <div className="h-full overflow-y-auto px-1 py-1">
+    <div
+      ref={scrollRef}
+      tabIndex={-1}
+      data-remote=""
+      className="h-full overflow-y-auto p-2 outline-none"
+    >
       <div
         className="grid gap-4"
         style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))' }}
       >
-        {items.map((s) => (
-          <SeriesCard key={s.seriesId} series={s} onSelect={onSelect} />
+        {items.map((s, i) => (
+          <SeriesCard
+            key={s.seriesId}
+            index={i}
+            series={s}
+            onSelect={onSelect}
+            active={focused && i === activeIndex}
+            onPointerSelect={() => {
+              nav.setActiveIndex(i)
+              nav.focusSelf()
+            }}
+          />
         ))}
       </div>
       <div ref={sentinelRef} />

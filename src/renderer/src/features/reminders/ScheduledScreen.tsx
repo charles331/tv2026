@@ -1,4 +1,5 @@
 import { useMemo, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
 import type { Reminder, ReminderStatus } from '@shared/index'
 import { isActiveReminderStatus } from '@shared/index'
 import { useReminders } from '../../lib/reminders'
@@ -39,7 +40,7 @@ function ReminderCard({ r }: { r: Reminder }): ReactElement {
   return (
     <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-surface-raised p-3">
       <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-surface-sunken">
-        <Poster src={r.channelIcon} alt={r.channelName} className="h-full w-full object-contain" />
+        <Poster src={r.channelIcon} alt={displayName(r.channelName)} className="h-full w-full object-contain" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-sm font-medium text-gray-100">
@@ -47,7 +48,7 @@ function ReminderCard({ r }: { r: Reminder }): ReactElement {
           <Badge tone={meta.tone}>{meta.label}</Badge>
         </p>
         <p className="mt-0.5 truncate text-xs text-gray-400">
-          {r.channelName} · {formatDateTimeFromEpochSecs(r.startSecs)}
+          {displayName(r.channelName)} · {formatDateTimeFromEpochSecs(r.startSecs)}
         </p>
         <p className="mt-0.5 text-xs text-gray-600">{MODE_LABEL[r.mode]}</p>
         {r.filePath && (

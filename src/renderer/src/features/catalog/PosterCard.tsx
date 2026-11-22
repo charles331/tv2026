@@ -1,4 +1,6 @@
 import { memo, type ReactElement } from 'react'
+import { CardCaption } from '../../components/CardCaption'
+import { displayName } from '@shared/displayName'
 import type { VodStream } from '@shared/index'
 import { Poster, Badge, IconStar, IconCheck } from '../../components/ui'
 import { formatRating } from '../../lib/format'
@@ -10,11 +12,17 @@ import { WatchProgressBar } from '../progress/ProgressBar'
 function PosterCardImpl({
   stream,
   downloaded,
-  onSelect
+  onSelect,
+  active = false,
+  onPointerSelect
 }: {
   stream: VodStream
   downloaded: boolean
   onSelect: (stream: VodStream) => void
+  /** Selected by the remote control (the grid owns the selection). */
+  active?: boolean
+  /** Mouse press: the grid moves its selection here. */
+  onPointerSelect?: () => void
 }): ReactElement {
   // A check made on the movie page this session wins over the list's data.
   const known = useFileCheck(stream.streamId)
@@ -26,11 +34,14 @@ function PosterCardImpl({
     <button
       type="button"
       onClick={() => onSelect(stream)}
-      className="group flex w-full min-w-0 flex-col text-left focus-visible:outline-none"
-      title={stream.name}
+      onMouseDown={onPointerSelect}
+      data-remote-focus={active}
+      data-remote=""
+      className="remote-card group flex w-full min-w-0 flex-col rounded-lg text-left focus-visible:outline-none"
+      title={displayName(stream.name)}
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg shadow-poster ring-1 ring-white/5 transition-all duration-200 group-hover:-translate-y-1 group-hover:shadow-poster-hover group-hover:ring-accent/40 group-focus-visible:ring-2 group-focus-visible:ring-accent">
-        <Poster src={stream.streamIcon} alt={stream.name} className="h-full w-full" />
+        <Poster src={stream.streamIcon} alt={displayName(stream.name)} className="h-full w-full" />
         {/* Top gradient + badges */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-1.5">
           {stream.rating != null && stream.rating > 0 ? (
@@ -64,12 +75,7 @@ function PosterCardImpl({
           className="pointer-events-none absolute inset-x-0 bottom-0 rounded-none bg-black/60"
         />
       </div>
-      <div className="mt-2 w-full min-w-0 px-0.5">
-        <p className="truncate text-sm font-medium text-gray-100 group-hover:text-white">
-          {stream.name}
-        </p>
-        <p className="truncate text-xs text-gray-500">{stream.year ?? '—'}</p>
-      </div>
+      <CardCaption title={displayName(stream.name)} meta={stream.year ?? '—'} />
     </button>
   )
 }

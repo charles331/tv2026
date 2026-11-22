@@ -13,6 +13,7 @@ import { PosterCard } from '../catalog/PosterCard'
 import { SeriesCard } from '../series/SeriesCard'
 import { LiveChannelRow } from '../live/LiveChannelRow'
 import { ChannelGuide } from '../live/ChannelGuide'
+import { CardGrid } from '../../components/CardGrid'
 
 /** Where "Tout voir" can lead. */
 export type SearchTarget = 'catalog' | 'series' | 'live'
@@ -96,8 +97,6 @@ export function SearchScreen({
   const data = active ? results.data : null
   const nothing =
     data != null && data.movies.total + data.series.total + data.channels.total === 0
-  const posterGrid = 'grid gap-4'
-  const posterColumns = { gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }
 
   return (
     <div className="flex h-full flex-col">
@@ -107,8 +106,9 @@ export function SearchScreen({
             <IconSearch size={16} />
           </span>
           <TextInput
-            autoFocus
+            focusKey="search-field"
             className="pl-9"
+            clearOnBack
             placeholder="Rechercher partout : films, séries, chaînes…"
             value={rawQuery}
             onChange={(e) => onQueryChange(e.target.value)}
@@ -141,16 +141,22 @@ export function SearchScreen({
               shown={data.movies.items.length}
               onSeeAll={() => onSeeAll('catalog', query)}
             >
-              <div className={posterGrid} style={posterColumns}>
-                {data.movies.items.map((m) => (
+              <CardGrid
+                items={data.movies.items}
+                focusKey="search-movies"
+                minCardWidth={150}
+                onActivate={onSelectMovie}
+                renderCard={(m, _i, active, onPointerSelect) => (
                   <PosterCard
                     key={m.streamId}
                     stream={m}
                     downloaded={downloadedStreamIds.has(m.streamId)}
                     onSelect={onSelectMovie}
+                    active={active}
+                    onPointerSelect={onPointerSelect}
                   />
-                ))}
-              </div>
+                )}
+              />
             </Section>
             <Section
               title="Séries"
@@ -158,11 +164,21 @@ export function SearchScreen({
               shown={data.series.items.length}
               onSeeAll={() => onSeeAll('series', query)}
             >
-              <div className={posterGrid} style={posterColumns}>
-                {data.series.items.map((s) => (
-                  <SeriesCard key={s.seriesId} series={s} onSelect={onSelectSeries} />
-                ))}
-              </div>
+              <CardGrid
+                items={data.series.items}
+                focusKey="search-series"
+                minCardWidth={150}
+                onActivate={onSelectSeries}
+                renderCard={(s, _i, active, onPointerSelect) => (
+                  <SeriesCard
+                    key={s.seriesId}
+                    series={s}
+                    onSelect={onSelectSeries}
+                    active={active}
+                    onPointerSelect={onPointerSelect}
+                  />
+                )}
+              />
             </Section>
             <Section
               title="Chaînes"

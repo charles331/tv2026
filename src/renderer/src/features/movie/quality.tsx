@@ -11,7 +11,7 @@ import {
   type VideoInfo
 } from '@shared/index'
 import { formatBytes, formatDuration } from '../../lib/format'
-import { Spinner } from '../../components/ui'
+import { FocusButton, Spinner } from '../../components/ui'
 
 const LEVEL: Record<QualityLevel, { label: string; dot: string; pill: string; text: string }> = {
   low: {
@@ -133,14 +133,14 @@ export function FileQualityPill({
     ) : onAnalyze ? (
       <>
         <span className="text-gray-400">·</span>
-        <button
+        <FocusButton
           type="button"
           onClick={onAnalyze}
           title="Lit le début du fichier (quelques secondes, utilise la connexion) pour connaître sa vraie résolution et son codec, et affiner le verdict"
           className="text-gray-300 underline decoration-dotted underline-offset-2 hover:text-white"
         >
           analyser
-        </button>
+        </FocusButton>
         {analyzeError && (
           <span className="text-red-300" title={analyzeError}>
             (échec)
@@ -176,7 +176,8 @@ export function FileQualityPill({
     state.kind === 'busy'
       ? {
           label: 'Taille inconnue',
-          title: 'La connexion est utilisée par un téléchargement ou une lecture : la vérification se fera dès qu’elle se libère',
+          title:
+            'La connexion est utilisée par un téléchargement ou une lecture : la vérification se fera dès qu’elle se libère',
           canCheck: false
         }
       : state.kind === 'disabled'
@@ -190,14 +191,14 @@ export function FileQualityPill({
     <span className={`${PILL_BASE} bg-white/5 text-gray-400 ring-white/10`} title={title}>
       <span className="h-1.5 w-1.5 rounded-full bg-gray-500" />
       {label} ·
-      <button
+      <FocusButton
         type="button"
         onClick={onCheck}
         disabled={!canCheck}
         className="underline decoration-dotted underline-offset-2 hover:text-white disabled:cursor-not-allowed disabled:text-gray-600 disabled:no-underline"
       >
         vérifier
-      </button>
+      </FocusButton>
     </span>
   )
 }

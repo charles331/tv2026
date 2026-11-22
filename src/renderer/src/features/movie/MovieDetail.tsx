@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { displayName } from '@shared/displayName'
+import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation'
+import { FocusZone, useBackHandler, useReturnFocus } from '../../lib/remote/focus'
 import type { FileCheckResult, VodInfo, VodStream } from '@shared/index'
 import { detectLowQualityTag, fileQuality, resumeStart } from '@shared/index'
 import { api, describeError, unwrap } from '../../lib/ipc'
@@ -7,6 +10,7 @@ import { useDownloads } from '../../lib/downloads'
 import { useProgress } from '../../lib/progress'
 import {
   Button,
+  FocusButton,
   Badge,
   Poster,
   Spinner,
@@ -125,14 +129,23 @@ export function MovieDetail({
     load()
   }, [load])
 
-  // Close on Escape.
+  // Remote control / keyboard: Back closes (the low-quality prompt first, when
+  // open); the selection starts on the main action and goes back to the poster
+  // that opened the page.
+  useReturnFocus()
+  useBackHandler(onClose)
+  useBackHandler(() => setConfirmLowQuality(false), confirmLowQuality)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+    setFocus('movie-detail-primary')
+  }, [])
+  const promptWasOpen = useRef(false)
+  useEffect(() => {
+    if (confirmLowQuality) setFocus('movie-detail-cancel')
+    else if (promptWasOpen.current && doesFocusableExist('movie-detail-download')) {
+      setFocus('movie-detail-download')
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    promptWasOpen.current = confirmLowQuality
+  }, [confirmLowQuality])
 
   const lowQualityTag = detectLowQualityTag(stream.name) ?? detectLowQualityTag(info?.name)
   const fileVerdict =
@@ -177,7 +190,9 @@ export function MovieDetail({
       role="dialog"
       aria-modal="true"
     >
-      <div
+      <FocusZone
+        focusKey="movie-detail"
+        boundary
         className="fade-in relative h-full w-full max-w-4xl overflow-hidden rounded-none bg-surface-raised shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -194,29 +209,29 @@ export function MovieDetail({
             <div className="h-full w-full bg-gradient-to-br from-surface-overlay to-surface" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-surface-raised via-surface-raised/40 to-transparent" />
-          <button
+          <FocusButton
             type="button"
             onClick={onClose}
             className="absolute right-3 top-3 rounded-full bg-black/50 p-2 text-gray-200 backdrop-blur transition-colors hover:bg-black/70 hover:text-white"
             aria-label="Fermer"
           >
             <IconX size={18} />
-          </button>
+          </FocusButton>
         </div>
 
         <div className="max-h-[calc(90vh-14rem)] overflow-y-auto p-5 sm:p-6">
           <div className="-mt-20 flex gap-5">
             <div className="hidden w-32 shrink-0 sm:block">
               <div className="aspect-[2/3] overflow-hidden rounded-lg shadow-poster ring-1 ring-white/10">
-                <Poster src={poster} alt={title} className="h-full w-full" />
+                <Poster src={poster} alt={displayName(title)} className="h-full w-full" />
               </div>
             </div>
 
             <div className="min-w-0 flex-1 pt-16 sm:pt-20">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">{displayName(title)}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                 {year != null && <span>{year}</span>}
-                <button
+                <FocusButton
                   type="button"
                   onClick={() =>
                     void progressStore.setWatched({
@@ -237,7 +252,7 @@ export function MovieDetail({
                   }
                 >
                   {watchProgress?.watched ? '✓ Vu' : 'Marquer comme vu'}
-                </button>
+                </FocusButton>
                 {rating != null && rating > 0 && (
                   <span
                     className="flex items-center gap-1 text-amber-300"
@@ -299,6 +314,7 @@ export function MovieDetail({
               {/* Actions */}
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <Button
+                  focusKey="movie-detail-primary"
                   variant="primary"
                   size="lg"
                   icon={<IconPlay size={18} />}
@@ -321,6 +337,7 @@ export function MovieDetail({
                   </Button>
                 )}
                 <Button
+                  focusKey="movie-detail-download"
                   variant="secondary"
                   size="lg"
                   icon={<IconDownload size={18} />}
@@ -402,7 +419,9 @@ export function MovieDetail({
             className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4"
             onClick={() => setConfirmLowQuality(false)}
           >
-            <div
+            <FocusZone
+              focusKey="movie-detail-confirm"
+              boundary
               role="alertdialog"
               aria-modal="true"
               className="w-full max-w-md rounded-xl bg-surface-overlay p-5 shadow-2xl ring-1 ring-white/10"
@@ -436,17 +455,21 @@ export function MovieDetail({
                 </div>
               </div>
               <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setConfirmLowQuality(false)}>
+                <Button
+                  focusKey="movie-detail-cancel"
+                  variant="ghost"
+                  onClick={() => setConfirmLowQuality(false)}
+                >
                   Annuler
                 </Button>
                 <Button variant="danger" onClick={() => void handleDownload()}>
                   Télécharger quand même
                 </Button>
               </div>
-            </div>
+            </FocusZone>
           </div>
         )}
-      </div>
+      </FocusZone>
     </div>
   )
 }

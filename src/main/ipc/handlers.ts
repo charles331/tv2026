@@ -13,6 +13,10 @@
  * registerIpcHandlers() applies validation + Result wrapping uniformly.
  */
 
+import { execFile } from 'child_process'
+import { isPowerAction, powerCommand } from '../app/power'
+import { isMpvRemoteKey } from '@shared/mpvRemoteKey'
+import { isTvMode, refreshTvMode } from '../app/tvMode'
 import { join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
@@ -107,7 +111,35 @@ function joinPath(dir: string, fileName: string): string {
  */
 export const handlers: IpcHandlers = {
   // ---------------- app (real) ----------------
-  [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion() }),
+  [InvokeChannels.APP_INFO]: () => ok({ version: app.getVersion(), platform: process.platform }),
+
+  [InvokeChannels.APP_TV_MODE_GET]: () => ok({ tvMode: isTvMode() }),
+
+  [InvokeChannels.APP_POWER]: (req) => {
+    assert(isObject(req) && isPowerAction(req.action), 'invalid power action')
+    if (req.action === 'quit') {
+      app.quit()
+      return ok({ ok: true as const })
+    }
+    const cmd = powerCommand(req.action, process.platform)
+    assert(cmd !== null, 'not available on this system')
+    appLog.info('app', `Alimentation : ${req.action}`)
+    execFile(cmd.file, cmd.args, (err) => {
+      if (err) appLog.error('app', `Commande d’alimentation en échec : ${err.message}`)
+    })
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.APP_LOGIN_ITEM_GET]: () =>
+    ok({ enabled: app.getLoginItemSettings({ args: ['--tv'] }).openAtLogin }),
+
+  [InvokeChannels.APP_LOGIN_ITEM_SET]: (req) => {
+    assert(isObject(req) && typeof req.enabled === 'boolean', 'enabled must be a boolean')
+    assert(process.platform === 'win32', 'only on Windows')
+    // Started by Windows: straight into TV mode (the mini PC on the TV).
+    app.setLoginItemSettings({ openAtLogin: req.enabled, args: ['--tv'] })
+    return ok({ enabled: app.getLoginItemSettings({ args: ['--tv'] }).openAtLogin })
+  },
 
   [InvokeChannels.APP_CHECK_UPDATES]: async () => ok(await checkForUpdatesNow()),
 
@@ -238,7 +270,14 @@ export const handlers: IpcHandlers = {
       assert(v === 'browser' || v === 'player', 'invalid downloadUserAgent')
       patch.downloadUserAgent = v
     }
-    return ok(settingsRepo.setSettings(patch))
+    if ('tvMode' in req) {
+      const v = optionalBoolean(req, 'tvMode')
+      assert(v !== undefined, 'tvMode must be a boolean')
+      patch.tvMode = v
+    }
+    const saved = settingsRepo.setSettings(patch)
+    refreshTvMode()
+    return ok(saved)
   },
 
   [InvokeChannels.PICK_DOWNLOAD_DIR]: async () => {
@@ -801,7 +840,7 @@ export const handlers: IpcHandlers = {
 
   [InvokeChannels.PLAYER_PAUSE]: async () => ok(await playerController.pause()),
   [InvokeChannels.PLAYER_RESUME]: async () => ok(await playerController.resume()),
-  [InvokeChannels.PLAYER_STOP]: async () => ok(await playerController.stop()),
+  [InvokeChannels.PLAYER_STOP]: async () => ok(await playerController.stopFromUser()),
 
   [InvokeChannels.PLAYER_SEEK]: async (req) => {
     assert(isObject(req), 'request must be an object')
@@ -827,6 +866,18 @@ export const handlers: IpcHandlers = {
 
   [InvokeChannels.PLAYER_CYCLE_SUBTITLE]: async () => ok(await playerController.cycleSubtitle()),
   [InvokeChannels.PLAYER_CYCLE_AUDIO]: async () => ok(await playerController.cycleAudio()),
+
+  [InvokeChannels.PLAYER_VIDEO_FRONT]: async () => {
+    await playerController.restoreVideoToFront()
+    return ok({ ok: true as const })
+  },
+
+  [InvokeChannels.PLAYER_REMOTE_KEY]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    assert(isMpvRemoteKey(req.key), 'invalid remote key')
+    await playerController.relayKey(req.key)
+    return ok({ ok: true as const })
+  },
 
   [InvokeChannels.PLAYER_SET_SUBTITLE_VISIBLE]: async (req) => {
     assert(isObject(req), 'request must be an object')
