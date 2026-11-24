@@ -77,7 +77,7 @@ Alimentation :
 - **Migration** : reprise des lignes `download_history` terminées dont le fichier existe encore (si plusieurs lignes ont le même chemin, la plus récente). Films : affiche retrouvée dans `vod_streams` par `stream_id`. Épisodes : série retrouvée dans `series_info_cache` quand l'épisode y figure ; sinon, série et `SxxEyy` lus dans le nom (les noms sont de la forme « Série S01E02 ») → groupés sous ce nom de série, vignette par défaut. Seuls les épisodes dont le nom ne donne rien vont dans « Autres fichiers ».
 - **Actualiser** (voir plus bas) → insertion `scan`.
 - À chaque ouverture de l'onglet et à chaque actualisation, les entrées dont le fichier n'existe plus sont **retirées** (pas d'entrée fantôme) — **sauf si le dossier qui les contient est lui-même introuvable** (disque débranché) : on n'efface rien et l'écran l'indique (« Dossier de téléchargement introuvable »).
-- **Dossier changé dans les Réglages** : les entrées de l'ancien dossier restent listées et restent lisibles et supprimables. La lecture et la suppression acceptent donc un chemin s'il est dans le dossier actuel **ou** s'il est enregistré dans `library_items` (que seule l'application remplit) ; l'actualisation, elle, ne parcourt que le dossier actuel.
+- **Dossier changé dans les Réglages** : les entrées de l'ancien dossier restent listées et restent lisibles et supprimables. La lecture et la suppression se font par l'identifiant de l'entrée : le main process lit le chemin en base et vérifie sur le disque qu'il n'est pas devenu un lien symbolique ; le renderer n'envoie jamais de chemin. L'actualisation ne parcourt que le dossier actuel.
 
 ### Écran Bibliothèque
 
@@ -101,7 +101,8 @@ Lecture **toujours du fichier local**, sans passer par le fournisseur (fonctionn
 - Garde seulement les extensions vidéo : `.mkv .mp4 .avi .m4v .mov .ts .webm .wmv .mpg .mpeg`. Ignore les `.part`, les fichiers de moins de 1 Mo et **les fichiers en cours d'écriture** (enregistrement du direct en cours, téléchargement en cours).
 - Fichier déjà connu (même chemin) : met à jour sa taille. Fichier nouveau :
   - dans `Films` ou à la racine : essai de reconnaissance d'un film du catalogue par le nom (titre normalisé avec la normalisation de recherche existante `search_norm`, année entre parenthèses si présente). **Une seule correspondance** → `movie` avec son affiche ; sinon → `file`.
-  - dans `Séries` : motif `SxxEyy` dans le nom + nom de série reconnu → `episode` ; sinon → `file`.
+  - dans `Séries` : motif `SxxEyy` dans le nom → `episode`, rattaché à la série du catalogue si son nom est reconnu, sinon groupé sous le nom lu (vignette par défaut, comme pour la reprise) ; pas de motif → `file`.
+  - Un fichier déjà connu garde ses informations (série, affiche, origine) : seule sa taille est mise à jour.
   - dans `Live` : `recording`.
 - Fin : message « N fichiers ajoutés, M retirés ».
 
