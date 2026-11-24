@@ -26,6 +26,7 @@ import { dirname } from 'path'
 
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { appLog } from '../log/logger'
+import { addRecording } from '../library/libraryFeed'
 import { getXtreamClient } from '../xtream'
 import { resolveMpvBinary } from './mpvBinary'
 
@@ -42,6 +43,8 @@ interface ActiveRecording {
   proc: ChildProcess
   token: LockToken
   filePath: string
+  /** Shown in the Bibliothèque ("Chaîne — Programme"). */
+  title: string
 }
 
 export class RecordingController {
@@ -50,6 +53,11 @@ export class RecordingController {
   /** Whether a headless recording is currently running. */
   isRecording(): boolean {
     return this.active !== null
+  }
+
+  /** File being written by the in-progress recording, or null. */
+  activePath(): string | null {
+    return this.active?.filePath ?? null
   }
 
   /** The reminder id of the in-progress recording, or null. */
@@ -72,6 +80,8 @@ export class RecordingController {
     streamId: number
     ext?: string
     filePath: string
+    /** Title of the file in the Bibliothèque. */
+    title: string
     onExit: () => void
   }): Promise<void> {
     if (this.active) {
@@ -121,7 +131,13 @@ export class RecordingController {
       stdio: ['ignore', 'ignore', 'ignore'],
       windowsHide: true
     })
-    this.active = { reminderId: opts.reminderId, proc: child, token, filePath: opts.filePath }
+    this.active = {
+      reminderId: opts.reminderId,
+      proc: child,
+      token,
+      filePath: opts.filePath,
+      title: opts.title
+    }
     appLog.info('recorder', `Enregistrement programmé démarré (rappel #${opts.reminderId})`)
 
     const finalize = (): void => {
@@ -131,6 +147,7 @@ export class RecordingController {
       this.active = null
       connectionLock.release(wasActive.token)
       appLog.info('recorder', `Enregistrement programmé terminé (rappel #${wasActive.reminderId})`)
+      addRecording(wasActive.filePath, wasActive.title)
       opts.onExit()
     }
 
@@ -169,6 +186,8 @@ export class RecordingController {
     const wasActive = this.active
     this.active = null
     if (wasActive) {
+      // The file written so far is kept: list it (finalize will not run).
+      addRecording(wasActive.filePath, wasActive.title)
       const proc = wasActive.proc
       if (proc && proc.exitCode === null && !proc.killed) {
         proc.kill()

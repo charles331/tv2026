@@ -261,6 +261,7 @@ export class ReminderScheduler {
         streamId: r.streamId,
         ext: 'ts',
         filePath,
+        title: `${r.channelName} — ${r.title}`,
         onExit: () => {
           // The recorder stops by being killed at end+padAfter (stopRecording)
           // or by a crash. If we deliberately stopped it, status is already

@@ -266,3 +266,21 @@ export function reconcileOnStartup(): void {
     `UPDATE download_queue SET status = 'queued', error = NULL, updated_at = ? WHERE status = 'retrying'`
   ).run(now)
 }
+
+/** Finished downloads ever made (download_history), for the library backfill. */
+export function listCompletedHistory(): {
+  streamId: number
+  kind: DownloadKind
+  name: string
+  destPath: string
+  totalBytes: number | null
+  completedAt: number
+}[] {
+  return getDb()
+    .prepare(
+      `SELECT stream_id AS streamId, kind, name, dest_path AS destPath,
+              total_bytes AS totalBytes, completed_at AS completedAt
+       FROM download_history WHERE status = 'completed'`
+    )
+    .all() as ReturnType<typeof listCompletedHistory>
+}

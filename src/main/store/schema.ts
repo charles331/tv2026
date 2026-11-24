@@ -299,6 +299,7 @@ export const MIGRATIONS: readonly Migration[] = [
         added_at            INTEGER NOT NULL   -- epoch ms
       );
       CREATE INDEX IF NOT EXISTS idx_library_added ON library_items(added_at);
+      CREATE TABLE IF NOT EXISTS library_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       ALTER TABLE download_queue ADD COLUMN image TEXT;
       ALTER TABLE download_queue ADD COLUMN series_id INTEGER;
       ALTER TABLE download_queue ADD COLUMN series_name TEXT;

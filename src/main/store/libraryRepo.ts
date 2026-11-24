@@ -129,3 +129,20 @@ export function removeLibraryItems(ids: number[]): void {
 export function updateLibraryItemSize(id: number, sizeBytes: number): void {
   getDb().prepare('UPDATE library_items SET size_bytes = ? WHERE id = ?').run(sizeBytes, id)
 }
+
+/** Small flags of the Bibliothèque (e.g. the one-time backfill is done). */
+export function getLibraryFlag(key: string): string | null {
+  const row = getDb().prepare('SELECT value FROM library_meta WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined
+  return row?.value ?? null
+}
+
+export function setLibraryFlag(key: string, value: string): void {
+  getDb()
+    .prepare(
+      `INSERT INTO library_meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    )
+    .run(key, value)
+}

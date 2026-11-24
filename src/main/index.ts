@@ -23,6 +23,7 @@ import { connectionLock } from './lock/ConnectionLock'
 import { downloadManager } from './downloads/DownloadManager'
 import { playerController } from './player/PlayerController'
 import { createProgressSink } from './player/progressTracker'
+import { addRecording, backfillLibraryOnce } from './library/libraryFeed'
 import { reminderScheduler } from './reminders/ReminderScheduler'
 import { initAutoUpdates } from './updater'
 import { appLog } from './log/logger'
@@ -163,6 +164,8 @@ if (!gotLock) {
     // Initialize store + reconcile any download left mid-flight by a crash.
     initDatabase()
     downloadsRepo.reconcileOnStartup()
+    // Bibliothèque: once per install, list the downloads already on disk.
+    void backfillLibraryOnce()
 
     installCsp()
     registerIpcHandlers()
@@ -179,6 +182,7 @@ if (!gotLock) {
     // while the player holds it (handled in DownloadManager via the lock).
     playerController.attach(makeEmitter(getWindows))
     playerController.attachProgress(createProgressSink(makeEmitter(getWindows)))
+    playerController.attachRecordingSink(addRecording)
 
     // Wire + start the reminder/recording scheduler: native notifications at
     // start−lead, scheduled headless recordings (padding + ConnectionLock +
