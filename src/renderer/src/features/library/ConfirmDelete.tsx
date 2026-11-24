@@ -21,6 +21,9 @@ export function ConfirmDelete({
   onConfirm: () => void
 }): ReactElement {
   const [step, setStep] = useState<1 | 2>(1)
+  // A mouse double-click on « Supprimer » must not confirm step 2: its button
+  // sits elsewhere, and it ignores clicks for a moment after it appears.
+  const [armedAt, setArmedAt] = useState(0)
   useReturnFocus()
   useBackHandler(onCancel)
   useEffect(() => {
@@ -50,7 +53,13 @@ export function ConfirmDelete({
               <Button focusKey="library-delete-cancel-1" variant="ghost" onClick={onCancel}>
                 Annuler
               </Button>
-              <Button variant="danger" onClick={() => setStep(2)}>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setArmedAt(Date.now() + 600)
+                  setStep(2)
+                }}
+              >
                 Supprimer
               </Button>
             </div>
@@ -60,11 +69,16 @@ export function ConfirmDelete({
             <h2 className="text-lg font-semibold text-white">Vraiment ?</h2>
             <p className="mt-2 text-sm text-gray-400">Le fichier ira dans la Corbeille.</p>
             <div className="mt-5 flex justify-end gap-3">
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (Date.now() >= armedAt) onConfirm()
+                }}
+              >
+                Oui, supprimer
+              </Button>
               <Button focusKey="library-delete-cancel-2" variant="ghost" onClick={onCancel}>
                 Annuler
-              </Button>
-              <Button variant="danger" onClick={onConfirm}>
-                Oui, supprimer
               </Button>
             </div>
           </>

@@ -104,3 +104,24 @@ export function pickBackfillRows<T extends { destPath: string; completedAt: numb
   }
   return [...latest.values()]
 }
+
+/**
+ * The folder whose presence decides whether a missing entry may be removed:
+ * the download folder for its own files (a deleted subfolder like
+ * "Films/Dune (2021)" must not leave a ghost), else the drive root (an old
+ * folder, or a drive that is unplugged).
+ */
+export function pruneAnchor(
+  filePath: string,
+  downloadDir: string | null,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const p = platform === 'win32' ? path.win32 : path.posix
+  const file = p.resolve(filePath)
+  if (downloadDir) {
+    const dir = p.resolve(downloadDir)
+    const rel = p.relative(dir, file)
+    if (rel !== '' && !rel.startsWith('..') && !p.isAbsolute(rel)) return dir
+  }
+  return p.parse(file).root
+}

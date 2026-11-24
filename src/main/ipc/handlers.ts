@@ -17,7 +17,7 @@ import { execFile } from 'child_process'
 import { isPowerAction, powerCommand } from '../app/power'
 import { isMpvRemoteKey } from '@shared/mpvRemoteKey'
 import { isTvMode, refreshTvMode } from '../app/tvMode'
-import { dirname, join as pathJoin } from 'path'
+import { join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
 import { InvokeChannels, ok, err, episodeNeighbors } from '@shared/index'
@@ -32,7 +32,7 @@ import type {
 import { existsSync } from 'fs'
 import { statfs } from 'fs/promises'
 import { normalizeForSearch } from '../store/searchText'
-import { pathKey } from '../library/libraryLogic'
+import { pathKey, pruneAnchor, shouldPrune } from '../library/libraryLogic'
 import { buildMovieIndex, resolveLibraryFile, scanLibrary } from '../library/scanLibrary'
 import { removeLibraryFile } from '../library/removeLibraryFile'
 import {
@@ -741,8 +741,7 @@ export const handlers: IpcHandlers = {
       .filter(
         (it) =>
           !busy.has(pathKey(it.filePath)) &&
-          !existsSync(it.filePath) &&
-          existsSync(dirname(it.filePath))
+          shouldPrune(existsSync(it.filePath), existsSync(pruneAnchor(it.filePath, downloadDir)))
       )
       .map((it) => it.id)
     libraryRepo.removeLibraryItems(gone)

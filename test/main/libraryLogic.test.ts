@@ -5,7 +5,8 @@ import {
   movieTitleKey,
   shouldPrune,
   pathKey,
-  pickBackfillRows
+  pickBackfillRows,
+  pruneAnchor
 } from '../../src/main/library/libraryLogic'
 import { normalizeForSearch } from '../../src/main/store/searchText'
 
@@ -66,5 +67,17 @@ describe('pickBackfillRows', () => {
         { destPath: '/d/a.mkv', completedAt: 5 }
       ])
     ).toEqual([{ destPath: '/d/a.mkv', completedAt: 5 }])
+  })
+})
+
+describe('pruneAnchor', () => {
+  it('judges an entry of the download folder by that folder, not by its own subfolder', () => {
+    // Films/Dune (2021)/Dune.mkv whose « Dune (2021) » folder was deleted: still prunable.
+    expect(pruneAnchor('/dl/Films/Dune (2021)/Dune.mkv', '/dl', 'linux')).toBe('/dl')
+  })
+  it('judges an entry of an old folder by its drive root', () => {
+    expect(pruneAnchor('/old/Films/a.mkv', '/dl', 'linux')).toBe('/')
+    expect(pruneAnchor('E:\\old\\a.mkv', 'D:\\dl', 'win32')).toBe('E:\\')
+    expect(pruneAnchor('/old/a.mkv', null, 'linux')).toBe('/')
   })
 })

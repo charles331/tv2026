@@ -230,7 +230,9 @@ export class PlayerController {
   /** Wire the watch-progress store (resume positions, recent channels). */
   /** Local file being played, or null (the Bibliothèque must not delete it). */
   currentLocalFile(): string | null {
-    return this.currentReq?.kind === 'local' ? (this.currentReq.filePath ?? null) : null
+    // Only while mpv holds it: an ended or failed file may be deleted.
+    const holding = ['loading', 'reconnecting', 'playing', 'paused'].includes(this.status.state)
+    return holding && this.currentReq?.kind === 'local' ? (this.currentReq.filePath ?? null) : null
   }
 
   /** Reports each finished manual recording (wired to the Bibliothèque). */

@@ -549,6 +549,13 @@ try {
     await closePlayer.click()
     await page.waitForTimeout(800)
   }
+  // Souris : un double-clic sur « Supprimer » ne doit pas valider la 2e confirmation.
+  await page.getByRole('button', { name: 'Supprimer', exact: true }).last().click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Supprimer', exact: true }).dblclick()
+  await page.waitForTimeout(800)
+  check('Bibliothèque : un double-clic sur « Supprimer » ne supprime rien', existsSync(autre), `fichier ${existsSync(autre) ? 'présent' : 'supprimé'}`)
+  if ((await page.getByRole('dialog').count()) > 0) await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
   // Suppression au clavier dans « Autres fichiers ».
   await page.getByRole('button', { name: /^Autres fichiers/ }).click()
   await page.waitForTimeout(300)
@@ -567,9 +574,10 @@ try {
   check('Bibliothèque : un OK distrait ne supprime rien', existsSync(inconnu) && (await page.getByRole('dialog').count()) === 0)
   for (let i = 0; i < 4 && (await focusInfo()).label !== 'Supprimer'; i++) await key('ArrowRight')
   await key('Enter')
-  await key('ArrowRight')
+  await key('ArrowRight') // étape 1 : Annuler → Supprimer
   await key('Enter')
-  await key('ArrowRight')
+  await page.waitForTimeout(700) // l'étape 2 ignore les appuis juste après son ouverture
+  await key('ArrowLeft') // étape 2 : « Oui, supprimer » est à gauche d'Annuler
   await key('Enter')
   await page.waitForTimeout(1200)
   libText = await body()

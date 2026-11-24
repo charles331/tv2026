@@ -14,6 +14,7 @@ import {
   movieTitleKey,
   parseEpisodeName,
   pathKey,
+  pruneAnchor,
   shouldPrune
 } from './libraryLogic'
 
@@ -91,11 +92,18 @@ export async function listVideoFiles(root: string): Promise<ScannedFile[]> {
  */
 export async function resolveLibraryFile(filePath: string): Promise<string | null> {
   try {
-    const info = await lstat(filePath)
+    const file = path.resolve(filePath)
+    const info = await lstat(file)
     if (info.isSymbolicLink() || !info.isFile()) return null
-    const real = await realpath(filePath)
-    if (pathKey(real) !== pathKey(filePath)) return null
-    return filePath
+    // Each folder above it, up to the drive root: none may be a link (or a
+    // Windows junction). Not realpath: it rewrites a mapped network drive
+    // (Z:\ → \\server\share) and would reject every file there.
+    let dir = path.dirname(file)
+    while (dir !== path.dirname(dir)) {
+      if ((await lstat(dir)).isSymbolicLink()) return null
+      dir = path.dirname(dir)
+    }
+    return file
   } catch {
     return null
   }
@@ -204,7 +212,9 @@ export async function scanLibrary(opts: {
   const gone: number[] = []
   for (const entry of known.values()) {
     if (busyKeys.has(pathKey(entry.filePath))) continue
-    if (shouldPrune(existsSync(entry.filePath), existsSync(path.dirname(entry.filePath)))) {
+    if (
+      shouldPrune(existsSync(entry.filePath), existsSync(pruneAnchor(entry.filePath, downloadDir)))
+    ) {
       gone.push(entry.id)
     }
   }

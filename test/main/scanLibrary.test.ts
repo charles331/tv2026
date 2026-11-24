@@ -67,6 +67,22 @@ describe('matchMovie', () => {
   })
 })
 
+describe('scanLibrary pruning', () => {
+  it('removes an entry whose own subfolder was deleted while the download folder is there', async () => {
+    const removed: number[][] = []
+    const ghost = { id: 9, filePath: join(root, 'Films', 'Supprimé (2021)', 'x.mkv'), sizeBytes: 1 }
+    const repo = {
+      list: () => [ghost] as never,
+      upsert: () => undefined,
+      updateSize: () => undefined,
+      remove: (ids: number[]) => void removed.push(ids)
+    }
+    const r = await scanLibrary({ downloadDir: root, busyKeys: new Set(), movieIndex: new Map(), findSeries: () => null, repo })
+    expect(r.removed).toBe(1)
+    expect(removed).toEqual([[9]])
+  })
+})
+
 describe('scanLibrary', () => {
   it('touches nothing when the download folder is missing', async () => {
     let touched = false
