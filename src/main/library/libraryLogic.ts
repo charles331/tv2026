@@ -77,7 +77,7 @@ export function movieTitleKey(fileName: string): { key: string; year: number | n
     }
   }
   const words = normalizeForSearch(title).split(' ').filter(Boolean)
-  while (words.length > 1 && RELEASE_TAGS.has(words[words.length - 1])) words.pop()
+  while (words.length > 1 && RELEASE_TAGS.has(words[words.length - 1] ?? '')) words.pop()
   return { key: words.join(' '), year }
 }
 
