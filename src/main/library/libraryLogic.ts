@@ -49,7 +49,7 @@ export function parseEpisodeName(
   name: string
 ): { series: string; season: number; episode: number } | null {
   const m = EPISODE.exec(withoutVideoExtension(name))
-  if (!m) return null
+  if (!m || !m[1] || !m[2] || !m[3]) return null
   const series = m[1].replace(/[._]+/g, ' ').trim()
   if (!series) return null
   return { series, season: Number(m[2]), episode: Number(m[3]) }
@@ -68,7 +68,7 @@ export function movieTitleKey(fileName: string): { key: string; year: number | n
   let year: number | null = null
   const years = [...title.matchAll(YEAR)]
   const last = years[years.length - 1]
-  if (last && last.index !== undefined) {
+  if (last?.[1] && last.index !== undefined) {
     const before = title.slice(0, last.index)
     // A title that IS a year ("2012", "1917") keeps it.
     if (normalizeForSearch(before) !== '') {
