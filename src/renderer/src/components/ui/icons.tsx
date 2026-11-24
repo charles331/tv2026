@@ -132,6 +132,14 @@ export const IconQueue = (p: IconProps): ReactElement => (
   </svg>
 )
 
+export const IconLibrary = (p: IconProps): ReactElement => (
+  <svg {...base(p)}>
+    <path d="M5 4v16M9 4v16" />
+    <path d="m13 5 4 15" />
+    <path d="M3 20h18" />
+  </svg>
+)
+
 export const IconRefresh = (p: IconProps): ReactElement => (
   <svg {...base(p)}>
     <path d="M20 11A8 8 0 1 0 18.3 16" />
