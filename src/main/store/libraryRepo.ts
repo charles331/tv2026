@@ -106,8 +106,7 @@ export function listLibraryItems(): LibraryItem[] {
 
 export function getLibraryItem(id: number): LibraryItem | null {
   const row = getDb().prepare('SELECT * FROM library_items WHERE id = ?').get(id) as
-    | LibraryRow
-    | undefined
+    LibraryRow | undefined
   return row ? mapRow(row) : null
 }
 
@@ -133,8 +132,7 @@ export function updateLibraryItemSize(id: number, sizeBytes: number): void {
 /** Small flags of the Bibliothèque (e.g. the one-time backfill is done). */
 export function getLibraryFlag(key: string): string | null {
   const row = getDb().prepare('SELECT value FROM library_meta WHERE key = ?').get(key) as
-    | { value: string }
-    | undefined
+    { value: string } | undefined
   return row?.value ?? null
 }
 

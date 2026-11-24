@@ -138,7 +138,8 @@ export async function backfillLibraryOnce(): Promise<number> {
       written++
     }
     libraryRepo.setLibraryFlag(BACKFILL_FLAG, '1')
-    if (written > 0) appLog.info('library', `Bibliothèque : ${written} fichier(s) repris de l’historique`)
+    if (written > 0)
+      appLog.info('library', `Bibliothèque : ${written} fichier(s) repris de l’historique`)
     return written
   } catch (e) {
     appLog.warn('library', `Reprise de la bibliothèque interrompue : ${(e as Error).message}`)

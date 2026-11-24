@@ -280,7 +280,8 @@ export const MIGRATIONS: readonly Migration[] = [
   },
   {
     version: 10,
-    description: 'Bibliothèque: files on disk (library_items) + poster/series kept with a queued download',
+    description:
+      'Bibliothèque: files on disk (library_items) + poster/series kept with a queued download',
     up: /* sql */ `
       CREATE TABLE IF NOT EXISTS library_items (
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,

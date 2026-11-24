@@ -26,7 +26,10 @@ export async function removeLibraryFile(id: number, deps: RemoveDeps): Promise<R
   if (!item) return { code: 'NOT_FOUND', message: 'Ce fichier n’est plus dans la bibliothèque.' }
   const filePath = await deps.resolveFile(item.filePath)
   if (!filePath) {
-    return { code: 'INVALID_INPUT', message: 'Fichier introuvable ou remplacé : rien n’a été supprimé.' }
+    return {
+      code: 'INVALID_INPUT',
+      message: 'Fichier introuvable ou remplacé : rien n’a été supprimé.'
+    }
   }
   // Checked last, right before the Recycle Bin, to keep the window small.
   if (deps.isBusy(pathKey(filePath))) {
