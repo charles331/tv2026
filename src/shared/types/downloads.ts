@@ -62,6 +62,13 @@ export interface DownloadItem {
   progress: number | null
   /** Position in the queue (lower runs first); for reordering. */
   queuePosition: number
+  /** Poster / cover given when queued (Bibliothèque). */
+  image: string | null
+  /** For an episode: its series and numbers, when given (Bibliothèque). */
+  seriesId: number | null
+  seriesName: string | null
+  season: number | null
+  episodeNum: number | null
   /** Last error message if status === 'failed'. */
   error: string | null
   /** Unix epoch ms. */
@@ -78,6 +85,13 @@ export interface AddDownloadRequest {
   kind?: DownloadKind
   /** Optional override of the destination filename. */
   fileName?: string
+  /** Poster / cover, kept for the Bibliothèque. */
+  image?: string | null
+  /** For an episode: its series, its name and its numbers (Bibliothèque). */
+  seriesId?: number
+  seriesName?: string
+  season?: number
+  episodeNum?: number
 }
 
 /** Reorder request: full ordered list of queue item ids. */

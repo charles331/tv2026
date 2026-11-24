@@ -712,7 +712,13 @@ export const handlers: IpcHandlers = {
       name,
       containerExtension: cleanExt,
       fileName: safeName,
-      destPath
+      destPath,
+      // Kept for the Bibliothèque (poster, series grouping); all optional.
+      image: optionalString(req, 'image', 2048) ?? null,
+      seriesId: optionalNumber(req, 'seriesId'),
+      seriesName: optionalString(req, 'seriesName', 512),
+      season: optionalNumber(req, 'season'),
+      episodeNum: optionalNumber(req, 'episodeNum')
     })
     return ok(item)
   },

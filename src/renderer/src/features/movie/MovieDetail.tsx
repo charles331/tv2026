@@ -163,7 +163,8 @@ export function MovieDetail({
       await add({
         streamId: stream.streamId,
         name: info?.name ?? stream.name,
-        containerExtension: info?.containerExtension ?? stream.containerExtension
+        containerExtension: info?.containerExtension ?? stream.containerExtension,
+        image: info?.posterUrl ?? stream.streamIcon ?? null
       })
       setActionMessage('Ajouté à la file de téléchargement.')
     } catch (e) {

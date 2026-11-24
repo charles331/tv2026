@@ -240,15 +240,13 @@ export class DownloadManager {
     containerExtension: string
     fileName: string
     destPath: string
+    image?: string | null
+    seriesId?: number
+    seriesName?: string
+    season?: number
+    episodeNum?: number
   }): DownloadItem {
-    const item = downloadsRepo.addDownload({
-      streamId: opts.streamId,
-      kind: opts.kind,
-      name: opts.name,
-      fileName: opts.fileName,
-      destPath: opts.destPath,
-      containerExtension: opts.containerExtension
-    })
+    const item = downloadsRepo.addDownload(opts)
     // Emit the item's actual status: a fresh insert is 'queued', but addDownload
     // may return an existing (e.g. already-downloading) item when deduping.
     this.emitState(item.id, item.streamId, item.status)
