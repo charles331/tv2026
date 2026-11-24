@@ -7,10 +7,10 @@
  * The XTREAM_* environment variables take priority over the repo's .env in dev
  * builds (see src/main/secrets/credentials.ts), so the app talks to the fake.
  */
-/* global process, console, document, window */
+/* global process, console, document, window, Buffer */
 import { _electron as electron } from 'playwright'
 import Database from 'better-sqlite3'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync, copyFileSync, writeFileSync, appendFileSync, existsSync, renameSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,7 +46,9 @@ const env = {
   XTREAM_URL: provider.url,
   XTREAM_USER: 'demo',
   XTREAM_PASS: 'demo',
-  DISPLAY: process.env.DISPLAY || ':0'
+  DISPLAY: process.env.DISPLAY || ':0',
+  // Linux Recycle Bin inside the throw-away profile (Bibliothèque deletion).
+  XDG_DATA_HOME: join(profile, 'xdg')
 }
 delete env.ELECTRON_RUN_AS_NODE
 const launch = () =>
@@ -520,6 +522,68 @@ try {
     if (await closePlayer.isVisible()) await closePlayer.click()
     await page.waitForTimeout(600)
   }
+
+  // Bibliothèque : Actualiser retrouve les fichiers ajoutés à la main ; lecture
+  // locale ; suppression avec double confirmation ; dossier débranché.
+  const dl = join(profile, 'dl')
+  mkdirSync(join(dl, 'Films'), { recursive: true })
+  const autre = join(dl, 'Films', 'FR - Autre Film (2025) CAM.mp4')
+  const inconnu = join(dl, 'Films', 'Inconnu total.mkv')
+  // The test video is tiny: pad it past the 1 MB minimum (mpv ignores the tail).
+  if (realPlayback) copyFileSync(videoPath, autre)
+  appendFileSync(autre, Buffer.alloc(2_000_000))
+  writeFileSync(inconnu, Buffer.alloc(2_000_000))
+  await page.evaluate((dir) => window.api.settings.set({ downloadDir: dir }), dl)
+  await page.getByRole('button', { name: /^Bibliothèque/ }).first().click()
+  await page.waitForTimeout(600)
+  await page.getByRole('button', { name: 'Actualiser' }).click()
+  await page.waitForFunction(() => /ajoutés?, \d+ retiré/.test(document.body.innerText), null, { timeout: 15_000 })
+  let libText = await body()
+  check('Bibliothèque : Actualiser trouve les 2 fichiers ajoutés à la main', /2 ajoutés, 0 retiré/.test(libText), libText.slice(0, 300))
+  check('Bibliothèque : le film reconnu malgré « CAM », rangé dans Films', /Films\s*1/.test(libText) && /Autre Film \(2025\) CAM/.test(libText), libText.replace(/\n+/g, ' | ').slice(0, 400))
+  check('Bibliothèque : le fichier inconnu va dans « Autres fichiers »', /Autres fichiers\s*1/.test(libText))
+  if (realPlayback) {
+    await page.locator('.remote-card').filter({ visible: true }).first().click()
+    await waitPlaying()
+    check('Bibliothèque : OK lit le fichier local', (await playerStatus()).source === 'local')
+    await closePlayer.click()
+    await page.waitForTimeout(800)
+  }
+  // Suppression au clavier dans « Autres fichiers ».
+  await page.getByRole('button', { name: /^Autres fichiers/ }).click()
+  await page.waitForTimeout(300)
+  await key('ArrowDown') // onglets → grille
+  await key('ArrowDown') // grille → barre d'actions
+  for (let i = 0; i < 4 && (await focusInfo()).label !== 'Supprimer'; i++) await key('ArrowRight')
+  await key('Enter')
+  let fi = await focusInfo()
+  check('Bibliothèque : 1re confirmation ouverte sur « Annuler »', fi.label === 'Annuler' && fi.zone === 'library-delete', JSON.stringify(fi))
+  await key('ArrowRight')
+  await key('Enter')
+  fi = await focusInfo()
+  check('Bibliothèque : 2e confirmation ouverte sur « Annuler »', fi.label === 'Annuler' && /Vraiment/.test(await body()), JSON.stringify(fi))
+  await key('Enter') // un OK de trop : annule
+  await page.waitForTimeout(400)
+  check('Bibliothèque : un OK distrait ne supprime rien', existsSync(inconnu) && (await page.getByRole('dialog').count()) === 0)
+  for (let i = 0; i < 4 && (await focusInfo()).label !== 'Supprimer'; i++) await key('ArrowRight')
+  await key('Enter')
+  await key('ArrowRight')
+  await key('Enter')
+  await key('ArrowRight')
+  await key('Enter')
+  await page.waitForTimeout(1200)
+  libText = await body()
+  check('Bibliothèque : « Oui, supprimer » met le fichier à la Corbeille', !existsSync(inconnu) && !/Autres fichiers/.test(libText), libText.match(/(mis à la Corbeille|Impossible[^\n]*)/)?.[0] ?? '')
+  // Dossier débranché : rien n'est retiré.
+  renameSync(dl, `${dl}-off`)
+  await page.getByRole('button', { name: 'Catalogue' }).first().click()
+  await page.getByRole('button', { name: /^Bibliothèque/ }).first().click()
+  await page.waitForTimeout(800)
+  libText = await body()
+  check('Bibliothèque : dossier introuvable → bandeau, entrées gardées', /introuvable/.test(libText) && /Autre Film \(2025\) CAM/.test(libText))
+  renameSync(`${dl}-off`, dl)
+  await page.getByRole('button', { name: 'Catalogue' }).first().click()
+  await page.waitForTimeout(300)
 
   // Nouveautés : 3 versions, les autres repliées.
   await page.getByRole('button', { name: /^Réglages/ }).first().click()
