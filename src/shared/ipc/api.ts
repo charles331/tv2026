@@ -10,6 +10,7 @@
 
 import type { MpvRemoteKey } from '../mpvRemoteKey'
 import type { Result } from '../types/common'
+import type { LibraryListing, LibraryRefreshResult } from '../types/library'
 import type { Page } from '../types/common'
 import type {
   AppInfo,
@@ -262,6 +263,15 @@ export interface DownloadsApi {
   onState(cb: (e: DownloadStateEvent) => void): Unsubscribe
 }
 
+export interface LibraryApi {
+  /** Files on disk (entries whose file is gone are dropped first, unless the folder is missing). */
+  list(): Promise<Result<LibraryListing>>
+  /** Scan the download folder for video files added by hand. */
+  refresh(): Promise<Result<LibraryRefreshResult>>
+  /** Send one entry's file to the Recycle Bin (never deleted for good). */
+  remove(id: number): Promise<Result<void>>
+}
+
 export interface PlayerApi {
   play(req: PlayRequest): Promise<Result<PlayerStatus>>
   pause(): Promise<Result<PlayerStatus>>
@@ -312,6 +322,7 @@ export interface RendererApi {
   reminders: RemindersApi
   logs: LogsApi
   downloads: DownloadsApi
+  library: LibraryApi
   player: PlayerApi
   connectionLock: ConnectionLockApi
 }

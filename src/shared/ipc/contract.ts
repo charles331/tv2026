@@ -14,6 +14,7 @@
 
 import type { MpvRemoteKey } from '../mpvRemoteKey'
 import type { Result } from '../types/common'
+import type { LibraryListing, LibraryRefreshResult } from '../types/library'
 import type {
   AppInfo,
   AppSettings,
@@ -200,6 +201,11 @@ export interface IpcContract {
     request: { streamId: number; kind: DownloadKind }
     response: DownloadSource
   }
+
+  // bibliothèque
+  [InvokeChannels.LIBRARY_LIST]: { request: void; response: LibraryListing }
+  [InvokeChannels.LIBRARY_REFRESH]: { request: void; response: LibraryRefreshResult }
+  [InvokeChannels.LIBRARY_DELETE]: { request: { id: number }; response: void }
 
   // player
   [InvokeChannels.PLAYER_PLAY]: { request: PlayRequest; response: PlayerStatus }

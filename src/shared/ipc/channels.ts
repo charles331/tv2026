@@ -100,6 +100,11 @@ export const InvokeChannels = {
   DOWNLOAD_COMPLETED_IDS: 'download:completedIds', // persistent "already downloaded" set
   DOWNLOAD_FIND_SOURCE: 'download:findSource', // movie / series page of a download
 
+  // --- bibliothèque ---
+  LIBRARY_LIST: 'library:list',
+  LIBRARY_REFRESH: 'library:refresh', // scan the download folder
+  LIBRARY_DELETE: 'library:delete', // to the Recycle Bin
+
   // --- player ---
   PLAYER_PLAY: 'player:play',
   PLAYER_PAUSE: 'player:pause',

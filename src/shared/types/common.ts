@@ -32,6 +32,8 @@ export type ErrorCode =
   | 'DISK_ERROR'
   | 'DB_ERROR'
   | 'PLAYER_ERROR'
+  | 'BUSY'
+  | 'TRASH_FAILED'
   | 'UNKNOWN'
 
 /** Generic pagination request. */

@@ -258,3 +258,10 @@ export function seriesCounts(): { categories: number; series: number } {
     series: (db.prepare('SELECT COUNT(*) AS n FROM series').get() as { n: number }).n
   }
 }
+
+/** Every series (id, name, cover), to recognise a series name read in a file name. */
+export function listSeriesNames(): { seriesId: number; name: string; cover: string | null }[] {
+  return getDb()
+    .prepare('SELECT series_id AS seriesId, name, cover FROM series')
+    .all() as ReturnType<typeof listSeriesNames>
+}

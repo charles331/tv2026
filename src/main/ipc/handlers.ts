@@ -17,7 +17,7 @@ import { execFile } from 'child_process'
 import { isPowerAction, powerCommand } from '../app/power'
 import { isMpvRemoteKey } from '@shared/mpvRemoteKey'
 import { isTvMode, refreshTvMode } from '../app/tvMode'
-import { join as pathJoin } from 'path'
+import { dirname, join as pathJoin } from 'path'
 import { app, dialog, shell } from 'electron'
 import type { IpcHandlers } from '@shared/index'
 import { InvokeChannels, ok, err, episodeNeighbors } from '@shared/index'
@@ -30,6 +30,11 @@ import type {
   XtreamCredentials
 } from '@shared/index'
 import { existsSync } from 'fs'
+import { statfs } from 'fs/promises'
+import { normalizeForSearch } from '../store/searchText'
+import { pathKey } from '../library/libraryLogic'
+import { buildMovieIndex, resolveLibraryFile, scanLibrary } from '../library/scanLibrary'
+import { removeLibraryFile } from '../library/removeLibraryFile'
 import {
   settingsRepo,
   catalogRepo,
@@ -38,7 +43,8 @@ import {
   favoritesRepo,
   progressRepo,
   downloadsRepo,
-  remindersRepo
+  remindersRepo,
+  libraryRepo
 } from '../store'
 import { reminderScheduler } from '../reminders/ReminderScheduler'
 import { recordingController } from '../player/RecordingController'
@@ -725,6 +731,83 @@ export const handlers: IpcHandlers = {
 
   [InvokeChannels.DOWNLOAD_LIST]: () => ok(downloadManager.list()),
 
+  [InvokeChannels.LIBRARY_LIST]: async () => {
+    const downloadDir = settingsRepo.getSettings().downloadDir
+    const folderMissing = !!downloadDir && !existsSync(downloadDir)
+    const busy = libraryBusyKeys()
+    // Drop entries whose file is gone — never while their folder is unreachable.
+    const gone = libraryRepo
+      .listLibraryItems()
+      .filter(
+        (it) =>
+          !busy.has(pathKey(it.filePath)) &&
+          !existsSync(it.filePath) &&
+          existsSync(dirname(it.filePath))
+      )
+      .map((it) => it.id)
+    libraryRepo.removeLibraryItems(gone)
+    const items = libraryRepo.listLibraryItems()
+    let freeBytes: number | null = null
+    if (downloadDir && !folderMissing) {
+      try {
+        const fsStat = await statfs(downloadDir)
+        freeBytes = fsStat.bavail * fsStat.bsize
+      } catch {
+        freeBytes = null
+      }
+    }
+    const usedBytes = items.reduce((sum, it) => sum + (it.sizeBytes ?? 0), 0)
+    return ok({ items, freeBytes, usedBytes, folderMissing })
+  },
+
+  [InvokeChannels.LIBRARY_REFRESH]: async () => {
+    const downloadDir = settingsRepo.getSettings().downloadDir
+    if (!downloadDir) {
+      return err('INVALID_INPUT', 'Aucun dossier de téléchargement n’est configuré (Réglages → Téléchargements).')
+    }
+    // Series names read in file names → the catalogue series, when unique.
+    const seriesByName = new Map<string, { seriesId: number; image: string | null }[]>()
+    for (const s of seriesRepo.listSeriesNames()) {
+      const key = normalizeForSearch(s.name)
+      const list = seriesByName.get(key) ?? []
+      list.push({ seriesId: s.seriesId, image: s.cover })
+      seriesByName.set(key, list)
+    }
+    const result = await scanLibrary({
+      downloadDir,
+      busyKeys: libraryBusyKeys(),
+      movieIndex: buildMovieIndex(catalogRepo.listMovieCandidates()),
+      findSeries: (name) => {
+        const found = seriesByName.get(normalizeForSearch(name)) ?? []
+        return found.length === 1 ? found[0]! : null
+      },
+      repo: {
+        list: libraryRepo.listLibraryItems,
+        upsert: libraryRepo.upsertLibraryItem,
+        updateSize: libraryRepo.updateLibraryItemSize,
+        remove: libraryRepo.removeLibraryItems
+      }
+    })
+    appLog.info('library', `Actualiser : ${result.added} ajouté(s), ${result.removed} retiré(s)`)
+    return ok(result)
+  },
+
+  [InvokeChannels.LIBRARY_DELETE]: async (req) => {
+    assert(isObject(req), 'request must be an object')
+    const id = requireInt(req, 'id')
+    const busy = libraryBusyKeys()
+    const outcome = await removeLibraryFile(id, {
+      getItem: libraryRepo.getLibraryItem,
+      resolveFile: resolveLibraryFile,
+      isBusy: (key) => busy.has(key) || libraryBusyKeys().has(key),
+      trash: (p) => shell.trashItem(p),
+      removeRow: (rowId) => libraryRepo.removeLibraryItems([rowId])
+    })
+    if (outcome.code) return err(outcome.code, outcome.message ?? 'Suppression impossible.')
+    appLog.info('library', 'Fichier mis à la Corbeille depuis la bibliothèque')
+    return ok(undefined)
+  },
+
   [InvokeChannels.DOWNLOAD_PAUSE]: (req) => {
     assert(isObject(req), 'request must be an object')
     const id = requireInt(req, 'id')
@@ -813,6 +896,18 @@ export const handlers: IpcHandlers = {
         start: requireString(req.archive, 'start', 32),
         durationMin: requireNumber(req.archive, 'durationMin')
       }
+    }
+    const libraryId = optionalNumber(req, 'libraryId')
+    if (kind === 'local' && libraryId !== undefined) {
+      // Bibliothèque: the path comes from the database, checked on disk now
+      // (exists, not a link) — the renderer sends no path.
+      const entry = libraryRepo.getLibraryItem(Math.trunc(libraryId))
+      const filePath = entry ? await resolveLibraryFile(entry.filePath) : null
+      if (!filePath) {
+        return err('NOT_FOUND', 'Fichier introuvable : il a peut-être été déplacé ou supprimé.')
+      }
+      playReq.filePath = filePath
+      return ok(await playerController.play(playReq))
     }
     if (kind === 'local') {
       assert(playReq.filePath !== undefined, 'filePath is required for local playback')
@@ -911,4 +1006,18 @@ export const handlers: IpcHandlers = {
   },
 
   [InvokeChannels.PLAYER_STOP_RECORDING]: async () => ok(await playerController.stopRecording())
+}
+
+/** Files being played, recorded or downloaded right now (pathKey). */
+function libraryBusyKeys(): Set<string> {
+  const paths: (string | null | undefined)[] = [
+    playerController.currentLocalFile(),
+    playerController.getStatus().recordingPath,
+    recordingController.activePath(),
+    ...downloadManager
+      .list()
+      .filter((d) => d.status === 'downloading' || d.status === 'retrying' || d.status === 'queued' || d.status === 'paused')
+      .map((d) => d.destPath)
+  ]
+  return new Set(paths.filter((p): p is string => !!p).map((p) => pathKey(p)))
 }

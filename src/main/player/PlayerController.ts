@@ -228,6 +228,11 @@ export class PlayerController {
   }
 
   /** Wire the watch-progress store (resume positions, recent channels). */
+  /** Local file being played, or null (the Bibliothèque must not delete it). */
+  currentLocalFile(): string | null {
+    return this.currentReq?.kind === 'local' ? (this.currentReq.filePath ?? null) : null
+  }
+
   /** Reports each finished manual recording (wired to the Bibliothèque). */
   attachRecordingSink(sink: (filePath: string, title: string) => void): void {
     this.recordingSink = sink
