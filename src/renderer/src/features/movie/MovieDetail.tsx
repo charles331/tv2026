@@ -54,11 +54,33 @@ export function MovieDetail({
   const [actionError, setActionError] = useState<string | null>(null)
 
   const alreadyQueued = downloadedStreamIds.has(stream.streamId)
-  // Strong signal that a local file exists -> "Lire" will play offline (the
-  // backend confirms file presence via downloads.localPath at play time).
-  const completedLocally = items.some(
-    (it) => it.streamId === stream.streamId && it.status === 'completed'
+  // The file on disk right now (a finished download, or a Bibliothèque file
+  // found by « Actualiser »): "Lire" plays it offline and there is nothing to
+  // download. Asked again when a download finishes.
+  const [onDisk, setOnDisk] = useState(false)
+  const completedCount = items.filter((it) => it.status === 'completed').length
+  useEffect(() => {
+    let alive = true
+    api()
+      .downloads.localPath(stream.streamId)
+      .then((r) => {
+        if (alive) setOnDisk(r.ok && r.data.path != null)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [stream.streamId, completedCount])
+  const inQueue = items.some(
+    (it) =>
+      it.streamId === stream.streamId &&
+      (it.status === 'queued' ||
+        it.status === 'downloading' ||
+        it.status === 'retrying' ||
+        it.status === 'paused')
   )
+  const completedLocally =
+    onDisk || items.some((it) => it.streamId === stream.streamId && it.status === 'completed')
 
   // --- file quality (real size via a 1-byte request, see main/quality) ---
   const [fileState, setFileState] = useState<FilePillState>({ kind: 'checking' })
@@ -337,6 +359,7 @@ export function MovieDetail({
                     Depuis le début
                   </Button>
                 )}
+                {!completedLocally && !inQueue && (
                 <Button
                   focusKey="movie-detail-download"
                   variant="secondary"
@@ -354,6 +377,7 @@ export function MovieDetail({
                     </span>
                   )}
                 </Button>
+                )}
                 <FavoriteButton
                   size="lg"
                   req={{

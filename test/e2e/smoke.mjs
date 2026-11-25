@@ -551,6 +551,10 @@ try {
     (await sheet.count()) > 0 && /Autre Film/.test(await sheet.first().innerText()) && !['loading', 'playing'].includes((await playerStatus()).state),
     `dialogues ${await sheet.count()}, lecteur ${(await playerStatus()).state}`
   )
+  check(
+    'Bibliothèque : la fiche d’un film déjà sur le disque ne propose pas « Télécharger »',
+    (await sheet.count()) > 0 && (await sheet.getByRole('button', { name: /^Télécharger/ }).count()) === 0 && /hors-ligne/.test(await sheet.first().innerText())
+  )
   if (realPlayback && (await sheet.count()) > 0) {
     // Fichier trouvé par « Actualiser » (pas un téléchargement) : la fiche lit quand même le local.
     await sheet.getByRole('button', { name: /^Lire/ }).first().click()
