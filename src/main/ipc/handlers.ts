@@ -844,7 +844,7 @@ export const handlers: IpcHandlers = {
   [InvokeChannels.DOWNLOAD_CLEAR_COMPLETED]: () =>
     ok({ removed: downloadManager.clearCompleted() }),
 
-  [InvokeChannels.DOWNLOAD_LOCAL_PATH]: (req) => {
+  [InvokeChannels.DOWNLOAD_LOCAL_PATH]: async (req) => {
     assert(isObject(req), 'request must be an object')
     const streamId = requireInt(req, 'streamId')
     const kind: 'movie' | 'series' = optionalString(req, 'kind') === 'series' ? 'series' : 'movie'
@@ -852,7 +852,14 @@ export const handlers: IpcHandlers = {
     // Only report a path if a completed download is recorded AND the file is
     // still present on disk; otherwise the caller falls back to streaming.
     if (recorded && existsSync(recorded)) return ok({ path: recorded })
-    return ok({ path: null })
+    // A file of the Bibliothèque found by « Actualiser » (copied by hand): same
+    // checks as playing it from the Bibliothèque.
+    const entry = libraryRepo.findLibraryItemByStream(
+      streamId,
+      kind === 'series' ? 'episode' : 'movie'
+    )
+    const file = entry ? await resolveLibraryFile(entry.filePath) : null
+    return ok({ path: file })
   },
 
   [InvokeChannels.DOWNLOAD_COMPLETED_IDS]: () =>

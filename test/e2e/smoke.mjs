@@ -542,12 +542,25 @@ try {
   check('Bibliothèque : Actualiser trouve les 2 fichiers ajoutés à la main', /2 ajoutés, 0 retiré/.test(libText), libText.slice(0, 300))
   check('Bibliothèque : le film reconnu malgré « CAM », rangé dans Films', /Films\s*1/.test(libText) && /Autre Film \(2025\) CAM/.test(libText), libText.replace(/\n+/g, ' | ').slice(0, 400))
   check('Bibliothèque : le fichier inconnu va dans « Autres fichiers »', /Autres fichiers\s*1/.test(libText))
-  if (realPlayback) {
-    await page.locator('.remote-card').filter({ visible: true }).first().click()
+  // Un clic sur un film ouvre sa fiche, il ne le lance pas.
+  await page.locator('.remote-card').filter({ visible: true }).first().click()
+  await page.waitForTimeout(1000)
+  const sheet = page.getByRole('dialog')
+  check(
+    'Bibliothèque : un clic sur un film ouvre sa fiche (pas la lecture)',
+    (await sheet.count()) > 0 && /Autre Film/.test(await sheet.first().innerText()) && !['loading', 'playing'].includes((await playerStatus()).state),
+    `dialogues ${await sheet.count()}, lecteur ${(await playerStatus()).state}`
+  )
+  if (realPlayback && (await sheet.count()) > 0) {
+    // Fichier trouvé par « Actualiser » (pas un téléchargement) : la fiche lit quand même le local.
+    await sheet.getByRole('button', { name: /^Lire/ }).first().click()
     await waitPlaying()
-    check('Bibliothèque : OK lit le fichier local', (await playerStatus()).source === 'local')
+    check('Bibliothèque : « Lire » dans la fiche lit le fichier local', (await playerStatus()).source === 'local')
     await closePlayer.click()
     await page.waitForTimeout(800)
+  } else if ((await sheet.count()) > 0) {
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(400)
   }
   // Souris : un double-clic sur « Supprimer » ne doit pas valider la 2e confirmation.
   await page.getByRole('button', { name: 'Supprimer', exact: true }).last().click()

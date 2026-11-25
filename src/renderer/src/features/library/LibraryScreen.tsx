@@ -28,6 +28,7 @@ import {
   cn
 } from '../../components/ui'
 import { WatchProgressBar } from '../progress/ProgressBar'
+import { episodeWatch, seriesWatchSummary, type WatchState } from './libraryWatch'
 import { LibraryEpisodes } from './LibraryEpisodes'
 import { ConfirmDelete } from './ConfirmDelete'
 
@@ -48,6 +49,8 @@ interface Card {
   meta: string
   item: LibraryItem | null
   episodes: LibraryItem[]
+  /** Series: episodes not watched to the end yet. */
+  left: number
 }
 
 function seriesKey(it: LibraryItem): string {
@@ -55,7 +58,11 @@ function seriesKey(it: LibraryItem): string {
   return `name:${(it.seriesName ?? it.title).toLowerCase()}`
 }
 
-function buildCards(items: LibraryItem[], tab: Tab): Card[] {
+function buildCards(
+  items: LibraryItem[],
+  tab: Tab,
+  watchOf: (it: LibraryItem) => WatchState = () => 'new'
+): Card[] {
   if (tab !== 'series') {
     const kind = tab === 'movie' ? 'movie' : tab
     return items
@@ -66,7 +73,8 @@ function buildCards(items: LibraryItem[], tab: Tab): Card[] {
         image: it.image,
         meta: formatBytes(it.sizeBytes),
         item: it,
-        episodes: []
+        episodes: [],
+        left: 0
       }))
   }
   const groups = new Map<string, LibraryItem[]>()
@@ -79,14 +87,15 @@ function buildCards(items: LibraryItem[], tab: Tab): Card[] {
   }
   return [...groups.entries()].map(([key, eps]) => {
     const first = eps[0]!
-    const n = eps.length
+    const states = eps.map(watchOf)
     return {
       key: `series:${key}`,
       title: displayName(first.seriesName ?? first.title),
       image: eps.find((e) => e.image)?.image ?? null,
-      meta: `${n} épisode${n > 1 ? 's' : ''}`,
+      meta: seriesWatchSummary(states),
       item: null,
-      episodes: eps
+      episodes: eps,
+      left: states.filter((st) => st !== 'watched').length
     }
   })
 }
@@ -136,10 +145,15 @@ export function LibraryScreen({
   }, [items])
   const tabs: Tab[] =
     counts.file > 0 ? ['movie', 'series', 'recording', 'file'] : ['movie', 'series', 'recording']
-  const cards = useMemo(() => buildCards(items, tab), [items, tab])
+  const watchOf = useCallback(
+    (it: LibraryItem): WatchState =>
+      it.streamId == null ? 'new' : episodeWatch(progress.get('series', it.streamId)).state,
+    [progress]
+  )
+  const cards = useMemo(() => buildCards(items, tab, watchOf), [items, tab, watchOf])
   const active = cards[Math.min(activeIndex, cards.length - 1)] ?? null
   const seriesOpen = openSeries
-    ? (buildCards(items, 'series').find((c) => c.key === openSeries) ?? null)
+    ? (buildCards(items, 'series', watchOf).find((c) => c.key === openSeries) ?? null)
     : null
 
   useFocusWhenReady('library-grid', cards.length > 0, 'screen-library')
@@ -149,12 +163,29 @@ export function LibraryScreen({
     if (openSeries && listing && !seriesOpen) setOpenSeries(null)
   }, [openSeries, seriesOpen, listing])
 
+  const openSheet = useCallback(
+    async (item: LibraryItem): Promise<void> => {
+      if (item.streamId == null) return onPlay(item)
+      try {
+        const source = unwrap(await api().downloads.findSource(item.streamId, 'movie'))
+        if (source?.kind === 'movie') return onOpenMovie(source.stream)
+        toast.show('Ce film n’est plus dans le catalogue : lecture directe.', 'info')
+      } catch (e) {
+        toast.show(describeError(e), 'error')
+      }
+      onPlay(item)
+    },
+    [onOpenMovie, onPlay, toast]
+  )
+
+  // OK / click: a movie opens its sheet, a series its episodes, anything else plays.
   const activate = useCallback(
     (card: Card) => {
-      if (card.item) onPlay(card.item)
-      else setOpenSeries(card.key)
+      if (!card.item) setOpenSeries(card.key)
+      else if (card.item.kind === 'movie') void openSheet(card.item)
+      else onPlay(card.item)
     },
-    [onPlay]
+    [onPlay, openSheet]
   )
 
   const refresh = async (): Promise<void> => {
@@ -185,17 +216,6 @@ export function LibraryScreen({
       toast.show(describeError(e), 'error')
     }
     await load()
-  }
-
-  const openSheet = async (item: LibraryItem): Promise<void> => {
-    if (item.streamId == null) return
-    try {
-      const source = unwrap(await api().downloads.findSource(item.streamId, 'movie'))
-      if (source?.kind === 'movie') onOpenMovie(source.stream)
-      else toast.show('Ce film n’est plus dans le catalogue du fournisseur.', 'info')
-    } catch (e) {
-      toast.show(describeError(e), 'error')
-    }
   }
 
   return (
@@ -288,6 +308,16 @@ export function LibraryScreen({
                           progress={progress.get('movie', card.item.streamId)}
                           className="pointer-events-none absolute inset-x-0 bottom-0 rounded-none bg-black/60"
                         />
+                      )}
+                      {!card.item && (
+                        <span
+                          className={cn(
+                            'pointer-events-none absolute left-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-xs font-semibold shadow',
+                            card.left > 0 ? 'bg-accent text-white' : 'bg-black/70 text-gray-300'
+                          )}
+                        >
+                          {card.left > 0 ? `${card.left} à voir` : '✓ Vu'}
+                        </span>
                       )}
                     </div>
                     <CardCaption title={card.title} meta={card.meta} />

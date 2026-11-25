@@ -110,6 +110,19 @@ export function getLibraryItem(id: number): LibraryItem | null {
   return row ? mapRow(row) : null
 }
 
+/** Most recent entry of a catalogue movie or episode (by its stream id). */
+export function findLibraryItemByStream(
+  streamId: number,
+  kind: 'movie' | 'episode'
+): LibraryItem | null {
+  const row = getDb()
+    .prepare(
+      'SELECT * FROM library_items WHERE stream_id = ? AND kind = ? ORDER BY added_at DESC, id DESC LIMIT 1'
+    )
+    .get(streamId, kind) as LibraryRow | undefined
+  return row ? mapRow(row) : null
+}
+
 /** Entry of a file, compared with pathKey (case-insensitive on Windows). */
 export function findLibraryItemByPath(filePath: string): LibraryItem | null {
   const key = pathKey(filePath)
