@@ -31,7 +31,7 @@
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.8.11",
-    "undici": "^8.12.3"
+    "undici": "^8.12.4"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -42,16 +42,16 @@
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/github": "^12.0.10",
     "@semantic-release/release-notes-generator": "^14.1.1",
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "dmg-builder": "26.18.0",
-    "electron": "^44.9.3",
+    "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
     "electron-builder-squirrel-windows": "26.18.0",
     "electron-vite": "^6.0.0",
@@ -59,18 +59,18 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.13.0",
-    "playwright": "1.64.1",
+    "globals": "^17.14.0",
+    "playwright": "1.65.0",
     "postcss": "^8.5.32",
-    "prettier": "^3.9.10",
+    "prettier": "^3.10.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "semantic-release": "^25.0.9",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.1",
-    "vite": "^7.3.7",
-    "vitest": "^5.0.5"
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   },
   "pnpm": {
     "neverBuiltDependencies": [
