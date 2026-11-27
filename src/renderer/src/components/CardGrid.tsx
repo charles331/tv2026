@@ -13,12 +13,15 @@ export function CardGrid<T>({
   focusKey,
   minCardWidth,
   onActivate,
+  onActiveChange,
   renderCard
 }: {
   items: T[]
   focusKey: string
   minCardWidth: number
   onActivate: (item: T) => void
+  /** The card the remote selection is on (kept when the selection leaves the grid). */
+  onActiveChange?: (index: number) => void
   renderCard: (item: T, index: number, active: boolean, onPointerSelect: () => void) => ReactElement
 }): ReactElement {
   const [width, setWidth] = useState(0)
@@ -49,6 +52,10 @@ export function CardGrid<T>({
     if (!focused) return
     ref.current?.children[activeIndex]?.scrollIntoView({ block: 'nearest' })
   }, [activeIndex, focused, ref])
+
+  useEffect(() => {
+    onActiveChange?.(activeIndex)
+  }, [activeIndex, onActiveChange])
 
   return (
     <div

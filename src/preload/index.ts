@@ -343,6 +343,20 @@ const api: RendererApi = {
     onState: (cb) => subscribe(EventChannels.DOWNLOAD_STATE, cb)
   },
 
+  library: {
+    list: () =>
+      invoke(InvokeChannels.LIBRARY_LIST) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIBRARY_LIST>>
+      >,
+    refresh: () =>
+      invoke(InvokeChannels.LIBRARY_REFRESH) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIBRARY_REFRESH>>
+      >,
+    remove: (id) =>
+      invoke(InvokeChannels.LIBRARY_DELETE, { id }) as Promise<
+        Result<IpcResponse<typeof InvokeChannels.LIBRARY_DELETE>>
+      >
+  },
   player: {
     play: (req) =>
       invoke(InvokeChannels.PLAYER_PLAY, req) as Promise<

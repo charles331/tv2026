@@ -144,6 +144,15 @@ describe('PlayerController — watch progress', () => {
     expect(reports).toEqual([{ id: 7, pos: 5990, dur: 6000, ended: true, final: true }])
   })
 
+  it('no longer holds a local file once it has ended (the Bibliothèque may delete it)', async () => {
+    await player.play({ kind: 'local', filePath: '/dl/Films/a.mkv', mediaKind: 'movie', streamId: 7, title: 'A' })
+    const ipc = h.ipcs[0]
+    playing(ipc, 100)
+    expect(player.currentLocalFile()).toBe('/dl/Films/a.mkv')
+    ipc.emit('property-change', { name: 'eof-reached', data: true })
+    expect(player.currentLocalFile()).toBeNull()
+  })
+
   it('never saves the previous film’s position under the next one', async () => {
     await player.play(MOVIE)
     playing(h.ipcs[0], 2592)

@@ -277,6 +277,36 @@ export const MIGRATIONS: readonly Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_watch_progress_updated ON watch_progress(updated_at);
     `
+  },
+  {
+    version: 10,
+    description:
+      'Bibliothèque: files on disk (library_items) + poster/series kept with a queued download',
+    up: /* sql */ `
+      CREATE TABLE IF NOT EXISTS library_items (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind                TEXT NOT NULL,     -- 'movie' | 'episode' | 'recording' | 'file'
+        source              TEXT NOT NULL,     -- 'download' | 'recording' | 'scan' | 'torrent'
+        stream_id           INTEGER,           -- movie stream id / episode id
+        series_id           INTEGER,
+        series_name         TEXT,
+        season              INTEGER,
+        episode             INTEGER,
+        title               TEXT NOT NULL,     -- raw name (shown through displayName)
+        image               TEXT,
+        file_path           TEXT NOT NULL UNIQUE,
+        size_bytes          INTEGER,
+        container_extension TEXT,
+        added_at            INTEGER NOT NULL   -- epoch ms
+      );
+      CREATE INDEX IF NOT EXISTS idx_library_added ON library_items(added_at);
+      CREATE TABLE IF NOT EXISTS library_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      ALTER TABLE download_queue ADD COLUMN image TEXT;
+      ALTER TABLE download_queue ADD COLUMN series_id INTEGER;
+      ALTER TABLE download_queue ADD COLUMN series_name TEXT;
+      ALTER TABLE download_queue ADD COLUMN season INTEGER;
+      ALTER TABLE download_queue ADD COLUMN episode_num INTEGER;
+    `
   }
 ]
 

@@ -119,6 +119,11 @@ export class PlayerController {
   private currentReq: PlayRequest | null = null
   /** Where watch progress is reported (wired from main/index.ts; null in tests). */
   private progress: PlaybackProgressSink | null = null
+  /** Where finished manual recordings are reported (Bibliothèque). */
+  private recordingSink: ((filePath: string, title: string) => void) | null = null
+  /** The manual recording in progress, kept apart from recordingPath/currentReq,
+   *  which are cleared before mpv has finished (teardown, reconnect, stop). */
+  private manualRecording: { path: string; title: string } | null = null
   private lastProgressReport = 0
   /** Consecutive live-reconnect attempts (drives the backoff; reset on success). */
   private retryAttempt = 0
@@ -223,6 +228,25 @@ export class PlayerController {
   }
 
   /** Wire the watch-progress store (resume positions, recent channels). */
+  /** Local file being played, or null (the Bibliothèque must not delete it). */
+  currentLocalFile(): string | null {
+    // Only while mpv holds it: an ended or failed file may be deleted.
+    const holding = ['loading', 'reconnecting', 'playing', 'paused'].includes(this.status.state)
+    return holding && this.currentReq?.kind === 'local' ? (this.currentReq.filePath ?? null) : null
+  }
+
+  /** Reports each finished manual recording (wired to the Bibliothèque). */
+  attachRecordingSink(sink: (filePath: string, title: string) => void): void {
+    this.recordingSink = sink
+  }
+
+  /** A manual recording ended (any path): report it once. */
+  private endManualRecording(): void {
+    const rec = this.manualRecording
+    this.manualRecording = null
+    if (rec) this.recordingSink?.(rec.path, rec.title)
+  }
+
   attachProgress(sink: PlaybackProgressSink): void {
     this.progress = sink
   }
@@ -713,6 +737,7 @@ export class PlayerController {
       // Recording (if any) stops with the stream — clear the flag BEFORE emitting
       // 'ended' so the renderer never briefly shows "ended" while still REC.
       this.recordingPath = null
+      this.endManualRecording()
       this.status.recording = false
       this.status.recordingPath = null
       this.setState('ended')
@@ -799,6 +824,7 @@ export class PlayerController {
     // killed). Clear the flag so the UI stops showing REC and can warn the user.
     if (this.recordingPath || this.status.recording) {
       this.recordingPath = null
+      this.endManualRecording()
       this.status.recording = false
       this.status.recordingPath = null
     }
@@ -969,6 +995,7 @@ export class PlayerController {
     // produce a malformed file (acceptable for the Xtream MPEG-TS live streams).
     await this.ipc.setProperty('stream-record', filePath)
     this.recordingPath = filePath
+    this.manualRecording = { path: filePath, title: this.currentReq?.title ?? 'Enregistrement' }
     this.status.recording = true
     this.status.recordingPath = filePath
     // Re-emit state so the renderer reflects the recording flag immediately.
@@ -985,6 +1012,7 @@ export class PlayerController {
       await this.ipc.setProperty('stream-record', '').catch(() => undefined)
     }
     this.recordingPath = null
+    this.endManualRecording()
     this.status.recording = false
     this.status.recordingPath = null
     this.emit(EventChannels.PLAYER_STATE, {
@@ -1027,6 +1055,7 @@ export class PlayerController {
     this.proc = null
     // A killed mpv stops recording on its own; just clear our flag.
     this.recordingPath = null
+    this.endManualRecording()
     this.status.recording = false
     this.status.recordingPath = null
 
@@ -1061,6 +1090,7 @@ export class PlayerController {
     this.ipc = null
     this.proc = null
     this.recordingPath = null
+    this.endManualRecording()
     if (proc && proc.exitCode === null && !proc.killed) {
       proc.kill()
       // Synchronous best-effort hard kill on quit.

@@ -43,6 +43,7 @@ import { downloadsRepo, settingsRepo } from '../store'
 import { connectionLock, type LockToken } from '../lock/ConnectionLock'
 import { getXtreamClient } from '../xtream'
 import { appLog } from '../log/logger'
+import { addCompletedDownload } from '../library/libraryFeed'
 import {
   HttpStatusError,
   IntegrityError,
@@ -240,15 +241,13 @@ export class DownloadManager {
     containerExtension: string
     fileName: string
     destPath: string
+    image?: string | null
+    seriesId?: number
+    seriesName?: string
+    season?: number
+    episodeNum?: number
   }): DownloadItem {
-    const item = downloadsRepo.addDownload({
-      streamId: opts.streamId,
-      kind: opts.kind,
-      name: opts.name,
-      fileName: opts.fileName,
-      destPath: opts.destPath,
-      containerExtension: opts.containerExtension
-    })
+    const item = downloadsRepo.addDownload(opts)
     // Emit the item's actual status: a fresh insert is 'queued', but addDownload
     // may return an existing (e.g. already-downloading) item when deduping.
     this.emitState(item.id, item.streamId, item.status)
@@ -824,6 +823,9 @@ export class DownloadManager {
     // ---- complete: atomic rename .part -> final (retry transient Win locks) ----
     await renameWithRetry(part, dest)
     downloadsRepo.updateStatus(item.id, 'completed')
+    // Into the Bibliothèque BEFORE telling the renderer, so a reload on the
+    // 'completed' event finds the entry (never throws).
+    addCompletedDownload(downloadsRepo.getDownload(item.id) ?? { ...item, destPath: dest })
     this.emitState(item.id, item.streamId, 'completed', { destPath: dest })
     downloadsRepo.archiveToHistory(item.id, 'completed')
   }

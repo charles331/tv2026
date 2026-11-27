@@ -21,6 +21,11 @@ interface QueueRow {
   error: string | null
   created_at: number
   updated_at: number
+  image: string | null
+  series_id: number | null
+  series_name: string | null
+  season: number | null
+  episode_num: number | null
 }
 
 function mapItem(r: QueueRow): DownloadItem {
@@ -43,7 +48,12 @@ function mapItem(r: QueueRow): DownloadItem {
     queuePosition: r.queue_position,
     error: r.error,
     createdAt: r.created_at,
-    updatedAt: r.updated_at
+    updatedAt: r.updated_at,
+    image: r.image ?? null,
+    seriesId: r.series_id ?? null,
+    seriesName: r.series_name ?? null,
+    season: r.season ?? null,
+    episodeNum: r.episode_num ?? null
   }
 }
 
@@ -54,6 +64,11 @@ export interface NewDownload {
   fileName: string
   destPath: string
   containerExtension: string
+  image?: string | null
+  seriesId?: number
+  seriesName?: string
+  season?: number
+  episodeNum?: number
 }
 
 export function addDownload(d: NewDownload): DownloadItem {
@@ -83,10 +98,26 @@ export function addDownload(d: NewDownload): DownloadItem {
     .prepare(
       `INSERT INTO download_queue
          (stream_id, kind, name, file_name, dest_path, container_extension, status,
-          received_bytes, queue_position, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?)`
+          received_bytes, queue_position, created_at, updated_at,
+          image, series_id, series_name, season, episode_num)
+       VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(d.streamId, d.kind, d.name, d.fileName, d.destPath, d.containerExtension, nextPos, now, now)
+    .run(
+      d.streamId,
+      d.kind,
+      d.name,
+      d.fileName,
+      d.destPath,
+      d.containerExtension,
+      nextPos,
+      now,
+      now,
+      d.image ?? null,
+      d.seriesId ?? null,
+      d.seriesName ?? null,
+      d.season ?? null,
+      d.episodeNum ?? null
+    )
   return getDownload(Number(info.lastInsertRowid))!
 }
 
@@ -234,4 +265,22 @@ export function reconcileOnStartup(): void {
   db.prepare(
     `UPDATE download_queue SET status = 'queued', error = NULL, updated_at = ? WHERE status = 'retrying'`
   ).run(now)
+}
+
+/** Finished downloads ever made (download_history), for the library backfill. */
+export function listCompletedHistory(): {
+  streamId: number
+  kind: DownloadKind
+  name: string
+  destPath: string
+  totalBytes: number | null
+  completedAt: number
+}[] {
+  return getDb()
+    .prepare(
+      `SELECT stream_id AS streamId, kind, name, dest_path AS destPath,
+              total_bytes AS totalBytes, completed_at AS completedAt
+       FROM download_history WHERE status = 'completed'`
+    )
+    .all() as ReturnType<typeof listCompletedHistory>
 }

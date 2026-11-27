@@ -20,6 +20,11 @@ export interface PlayRequest {
   /** For kind === 'local': absolute file path. */
   filePath?: string
   /**
+   * For kind === 'local' from the Bibliothèque: the entry to play. The main
+   * process reads its path from the database (the renderer sends no path).
+   */
+  libraryId?: number
+  /**
    * The movie stream id, episode id or channel id. Required for kind ===
    * 'stream' (it builds the URL); also set for a local file, so its watch
    * progress is saved under the same id.

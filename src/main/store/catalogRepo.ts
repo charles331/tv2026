@@ -327,3 +327,15 @@ export function catalogCounts(): { categories: number; streams: number } {
     streams: (db.prepare('SELECT COUNT(*) AS n FROM vod_streams').get() as { n: number }).n
   }
 }
+
+/** Every movie as a match candidate for the Bibliothèque scan (id, name, year, poster). */
+export function listMovieCandidates(): {
+  streamId: number
+  name: string
+  year: number | null
+  image: string | null
+}[] {
+  return getDb()
+    .prepare('SELECT stream_id AS streamId, name, year, stream_icon AS image FROM vod_streams')
+    .all() as ReturnType<typeof listMovieCandidates>
+}

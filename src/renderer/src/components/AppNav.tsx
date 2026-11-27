@@ -9,6 +9,7 @@ import {
   IconSearch,
   IconTv,
   IconBroadcast,
+  IconLibrary,
   IconQueue,
   IconRecord,
   IconRefresh,
@@ -17,7 +18,7 @@ import {
 } from './ui'
 
 export type Route =
-  'search' | 'catalog' | 'series' | 'live' | 'scheduled' | 'downloads' | 'settings'
+  'search' | 'catalog' | 'series' | 'live' | 'library' | 'scheduled' | 'downloads' | 'settings'
 
 export function AppNav({
   route,
@@ -76,6 +77,13 @@ export function AppNav({
           active={route === 'live'}
           onClick={() => onNavigate('live')}
           icon={<IconBroadcast size={20} />}
+        />
+        <NavButton
+          focusKey="nav-library"
+          label="Bibliothèque (fichiers téléchargés)"
+          active={route === 'library'}
+          onClick={() => onNavigate('library')}
+          icon={<IconLibrary size={20} />}
         />
         <NavButton
           focusKey="nav-scheduled"

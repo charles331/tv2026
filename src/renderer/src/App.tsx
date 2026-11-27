@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import type {
   EpgEntry,
+  LibraryItem,
   Episode,
   CredentialsStatus,
   LiveStream,
@@ -32,6 +33,8 @@ import { SeriesScreen } from './features/series/SeriesScreen'
 import { SeriesDetail } from './features/series/SeriesDetail'
 import { LiveScreen } from './features/live/LiveScreen'
 import { DownloadsScreen } from './features/downloads/DownloadsScreen'
+import { LibraryScreen } from './features/library/LibraryScreen'
+import { displayName } from '@shared/displayName'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { ScheduledScreen } from './features/reminders/ScheduledScreen'
 import { ConflictDialog } from './features/reminders/ConflictDialog'
@@ -255,6 +258,34 @@ function AppShell(): ReactElement {
       )
     },
     [playItem]
+  )
+
+  /**
+   * Bibliothèque: always the file on disk (never the provider). The main
+   * process finds the path from the entry id. Movies and episodes resume.
+   */
+  const playLibraryItem = useCallback(
+    (item: LibraryItem) => {
+      const progressKind =
+        item.kind === 'movie' ? 'movie' : item.kind === 'episode' ? 'series' : null
+      const streamId = progressKind && item.streamId != null ? item.streamId : undefined
+      const startSecs =
+        progressKind && streamId !== undefined
+          ? (resumeStart(progress.get(progressKind, streamId)) ?? undefined)
+          : undefined
+      setPlayRequest({
+        kind: 'local',
+        libraryId: item.id,
+        mediaKind: progressKind ?? 'movie',
+        streamId,
+        containerExtension: item.containerExtension ?? undefined,
+        title: displayName(item.title),
+        image: item.image,
+        seriesId: item.seriesId ?? undefined,
+        startSecs
+      })
+    },
+    [progress]
   )
 
   /** "Reprendre": replay an item from its stored snapshot. */
@@ -588,6 +619,15 @@ function AppShell(): ReactElement {
                 onPlayChannel={handlePlayChannel}
                 onPlayArchive={handlePlayArchive}
                 onGoToSettings={() => setRoute('settings')}
+              />
+            </ScreenSlot>
+          )}
+          {route === 'library' && (
+            <ScreenSlot id="library" active>
+              <LibraryScreen
+                onPlay={playLibraryItem}
+                onOpenMovie={setSelected}
+                onGoToCatalog={() => navigate('catalog')}
               />
             </ScreenSlot>
           )}

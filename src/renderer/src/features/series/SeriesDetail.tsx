@@ -77,6 +77,17 @@ export function SeriesDetail({
   const title = info?.name || series.name
   const rating = info?.rating ?? series.rating
   const poster = info?.cover ?? series.cover
+  // Poster, series and numbers kept with a queued episode, for the Bibliothèque.
+  const episodeLibraryInfo = useCallback(
+    (ep: Episode) => ({
+      image: poster ?? null,
+      seriesId: series.seriesId,
+      seriesName: title,
+      season: ep.season,
+      episodeNum: ep.episodeNum
+    }),
+    [poster, series.seriesId, title]
+  )
   const backdrop = info?.backdropUrls?.[0] ?? null
   const season = useMemo(
     () => info?.seasons.find((s) => s.seasonNumber === selectedSeason) ?? null,
@@ -109,7 +120,8 @@ export function SeriesDetail({
           streamId: ep.episodeId,
           kind: 'series',
           name: `${title} ${tag(ep.season, ep.episodeNum)}`,
-          containerExtension: ep.containerExtension
+          containerExtension: ep.containerExtension,
+          ...episodeLibraryInfo(ep)
         })
       } catch (e) {
         setActionError(describeError(e))
@@ -117,7 +129,7 @@ export function SeriesDetail({
         setBusyEpisodeId(null)
       }
     },
-    [add, title]
+    [add, title, episodeLibraryInfo]
   )
 
   // Enqueue every episode in `episodes` that isn't already downloaded or queued.
@@ -139,7 +151,8 @@ export function SeriesDetail({
             streamId: ep.episodeId,
             kind: 'series',
             name: `${title} ${tag(ep.season, ep.episodeNum)}`,
-            containerExtension: ep.containerExtension
+            containerExtension: ep.containerExtension,
+            ...episodeLibraryInfo(ep)
           })
           added++
         }
@@ -152,7 +165,7 @@ export function SeriesDetail({
         setBulkBusy(null)
       }
     },
-    [add, downloadedStreamIds, title, toast]
+    [add, downloadedStreamIds, title, toast, episodeLibraryInfo]
   )
 
   /** Count of not-yet-downloaded/queued episodes in a list (for button labels). */
